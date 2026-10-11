@@ -722,8 +722,11 @@ def test_an_answer_that_turns_ambiguous_once_the_links_settle_is_dropped(eras, f
     assert (got.get("KORS@2012-06-29"), got.get("KORS@2014-12-31")) == (None, None)
 
 
-def test_an_era_linked_to_two_issuers_takes_neither(eras, ftd, no_frequency):
+def test_an_era_linked_to_two_issuers_takes_the_one_its_cusip_issuer_code_names_over_its_dates(eras, ftd, no_frequency):
     issuers = {**DATA["issuers"], "999999": DATA["issuers"]["1530721"]}   # a second issuer passing the guard
     got = _infer(eras, ftd, list(eras), {**RESOLVED, "KORS@2014-12-31": 1530721, "CPRI@2018-12-31": 999999},
                  edgar=_Edgar(issuers))
-    assert "KORS@2012-06-29" not in got
+    # rule C's links give it two issuers, so C takes neither; rule D (FB-004 part c) is other evidence: its CUSIP's
+    # issuer code, G60754, is held over its dates only by KORS@2014, whose issuer the first pass gave (CPRI@2018's
+    # 999999 holds the code later, not over its dates)
+    assert got["KORS@2012-06-29"] == (1530721, "cusip_issuer")

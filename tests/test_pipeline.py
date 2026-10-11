@@ -1138,6 +1138,76 @@ def test_two_eras_of_one_security_give_one_security_and_one_ticker_range(fake_ed
     assert [(r["ticker"], r["valid_from"], r["valid_to"]) for r in th] == [("RS", "2009-06-01", "2013-07-01")]
 
 
+def _gone_universe(fake_edgar, rows, *, listed=False):
+    """GONE INC: observed 2012-06-29 to 2013-06-28, its issuer with no filing, no Form 25 and no way to end it."""
+    fake_edgar.company_map["GONE"] = {"cik_str": 4444, "ticker": "GONE", "title": "GONE INC"}
+    fake_edgar.submissions_by_cik[4444] = []
+    obs = [Observation("GONE", d, "GONE INC") for d in ("2012-06-29", "2012-12-31", "2013-06-28")]
+    answers = {("ID_CUSIP", "11111A101"): _figi_answer("BBGGONE0001", "GONE", "GONE INC")}
+    if listed:
+        answers[("COMPOSITE_ID_BB_GLOBAL", "BBGGONE0001")] = {"data": [{
+            "figi": "BBGGONE0002", "compositeFIGI": "BBGGONE0001", "exchCode": "UN", "ticker": "GONE",
+            "name": "GONE INC"}]}
+        fake_edgar.listings[4444] = [("GONE", "NYSE")]
+    return _index_clients(fake_edgar, obs, rows, answers)
+
+
+def test_a_closed_history_with_no_ending_gets_an_unknown_ending_the_verdict_doubts(fake_edgar, tmp_path):
+    """FB-004 part d: not listed today and nothing ends it, so it gets the agreed blank-kind ending (end-of-era branch
+    6: nothing found), dated by the last day its own CUSIP's fails rows show it trading, unconfirmed and unpublished,
+    flagged `unexplained_ending`; its history ends there and the contract's verdict is uncertain."""
+    rows = _ftd("GONE", "11111A101", "GONE INC", ["2012-07-02", "2012-09-04", "2013-01-02", "2013-04-02"])
+    for i, r in enumerate(rows):
+        rows[i] = FtdRow(r.date, r.cusip, r.symbol, r.description, 10.0 + i)
+    index, clients = _gone_universe(fake_edgar, rows)
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+
+    (d,) = read_table("delistings", table_path(tmp_path, "delistings"))
+    assert (d["sec_id"], d["bucket"], d["crsp_code"], d["delist_date"]) == ("BBGGONE0001", "unknown", "", "2013-04-01")
+    assert (d["last_trade_date"], d["last_trade_date_source"]) == ("2013-04-01", "fails_rows")
+    assert {"unexplained_ending", "last_trade_date_unconfirmed"} <= set(d["review_flags"].split(";"))
+    (c,) = read_table("contract_delistings", tmp_path / "contract" / "delistings.csv")
+    assert (c["sec_id"], c["exit_kind"], c["last_trade_date"], c["verdict"]) == ("BBGGONE0001", "", "", "uncertain")
+    assert [(r["valid_from"], r["valid_to"]) for r in ticker_history(tmp_path)] == [("2012-06-29", "2013-04-01")]
+    review = read_table("review", table_path(tmp_path, "review"))
+    assert not any(r["review_flags"] == "ended_without_delisting" for r in review)     # the ending replaces its row
+    assert any("unexplained_ending" in r["review_flags"] for r in review)
+
+
+def test_a_security_listed_today_gets_no_unexplained_ending(fake_edgar, tmp_path):
+    rows = _ftd("GONE", "11111A101", "GONE INC", ["2012-07-02", "2013-01-02", "2013-04-02"])
+    index, clients = _gone_universe(fake_edgar, rows, listed=True)
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+    assert read_table("delistings", table_path(tmp_path, "delistings")) == []
+
+
+def test_a_security_sighted_at_the_fails_data_edge_gets_no_unexplained_ending(monkeypatch):
+    """DIS: not listed by the issuer's CIK, but its fails rows run to the last day the files cover: it trades on. Its
+    finder row `ended_without_delisting` goes too: the history is open."""
+    from delist_detection.identity.history import SecurityEnd
+    from delist_detection.sources.ftd import FtdIndex
+    from delist_detection.outputs.manifest import StageMeter
+    from delist_detection.outputs.review_triage import ReviewItem
+    from types import SimpleNamespace
+    secs = {sid: Security(sid, 1, "COMMON", sid, "Common Stock", True, "cusip") for sid in
+            ("OPEN", "UNKNOWN", "ENDED", "CLOSED", "LISTED")}
+    ends = {"OPEN": SecurityEnd(listed=True), "LISTED": SecurityEnd(listed=True), "UNKNOWN": SecurityEnd(),
+            "ENDED": SecurityEnd("2013-01-02", True, False), "CLOSED": SecurityEnd()}
+    history = SimpleNamespace(end=lambda sid: ends[sid])
+    asked = []
+    monkeypatch.setattr(pipeline, "unexplained_ending",
+                        lambda dating, record, cik: asked.append(record.security.sec_id) or f"ending:{cik}")
+    search = SimpleNamespace(listed={"OPEN": False, "LISTED": True, "UNKNOWN": None, "ENDED": False, "CLOSED": False},
+                             sightings={}, finder=None)
+    review = [ReviewItem(sid, sid, 1, "ended_without_delisting", "x", last_seen="2013-01-01") for sid in
+              ("OPEN", "CLOSED")] + [ReviewItem("UNKNOWN", "UNKNOWN", 1, "listing_status_unknown", "x")]
+    ctx = SimpleNamespace(log=lambda *_: None, meter=StageMeter(lambda *_: None))
+    made = pipeline._unexplained_endings(ctx, history, secs, search, {}, FtdIndex([]), review, None)
+    assert made == ["ending:1"] and asked == ["CLOSED"]      # not listed, no ending, listing status known: only CLOSED
+    assert [(r.sec_id, r.flag) for r in review] == [("UNKNOWN", "listing_status_unknown")]    # OPEN's and CLOSED's go
+    assert "unexplained endings" in ctx.meter.stages
+
+
 def test_cusip_history_keeps_a_retired_cusip_closed_and_the_current_one_open(fake_edgar, tmp_path):
     """A reverse split: FTD rows carry the old CUSIP, the latest observation the
     new one (its own FTD rows are too few to split the era). Both map to the
@@ -2020,7 +2090,9 @@ def _retired_cusip_run(fake_edgar, tmp_path, tail_symbol, tail_dates=("2025-12-3
         ("ID_CUSIP", "53230X101"): _figi_answer("BBGLLYKNEW1", "LLYK", "LIBERTY LIVE HOLDINGS INC")})
     fake_edgar.full_text_search = lambda q, forms, lo, hi: []
     run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
-    d = {r["sec_id"]: r for r in read_table("delistings", table_path(tmp_path, "delistings"))}
+    # (the old line, not listed today, also gets FB-004 part d's unexplained ending once it stops: not a row of the finder)
+    d = {r["sec_id"]: r for r in read_table("delistings", table_path(tmp_path, "delistings"))
+         if "unexplained_ending" not in r["review_flags"]}
     return d, ticker_history(tmp_path)
 
 
@@ -2208,7 +2280,9 @@ def test_an_era_under_its_issuers_old_name_is_accepted_on_the_ticker_by_the_edga
     assert [(r["sec_id"], r["issuer_cik"]) for r in secs] == [("BBG000BQ87N0", "72741")]
     th = ticker_history(tmp_path)
     assert [(r["sec_id"], r["ticker"], r["valid_from"]) for r in th] == [("BBG000BQ87N0", "ES", "2012-06-29")]
-    assert read_table("delistings", table_path(tmp_path, "delistings")) == []
+    # no rename delisting; the line is not listed in this world, so its closed history gets only the unexplained ending
+    assert [r["review_flags"] for r in read_table("delistings", table_path(tmp_path, "delistings"))
+            if "unexplained_ending" not in r["review_flags"]] == []
 
 
 def _holdco_run(fake_edgar, tmp_path, search=None, filings=()):

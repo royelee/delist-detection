@@ -11,7 +11,8 @@ import dataclasses
 import pytest
 
 import delist_detection.endings.delistings as delistings
-from delist_detection.endings.delistings import SecurityContexts
+from delist_detection.endings.last_trade import Dating
+from delist_detection.endings.delistings import SecurityContexts, unexplained_ending
 from tests import form25_cases as fc
 
 # The rules of sub-plan 5b built so far; each task adds its own (the cases it moves change then, and only then)
@@ -176,6 +177,18 @@ STAY = {
     'CIK48898-CLASS-B': ([('2016-01-03', 'exchange_transfer', 304, '2015-12-23', False, '0000876661-15-000665', 48898)], ['form25_unmatched']),   # HUB-B 2015
     'CIK65873-COMMON': ([('2007-11-30', 'merger', 231, '2007-11-16', False, '0000876661-07-000891', 65873)], []),   # AT 2007
     'BBG000QN4GY3': ([], ['ended_without_delisting']),   # HOUS 2026 under the LLC's CIK 1355001, as the run had it
+    # FB-004 part c, under the issuer CIK the run had (the old registrant's, or none): see the test below for the right one
+    'BBG000BB41G8': ([], ['ended_without_delisting']),   # ACV 2011 under the old registrant's CIK 3327
+    'BBG006N7RYV7': ([], ['ended_without_delisting']),   # FNFV 2017, no issuer CIK
+    'BBG000BH13K9': ([], ['ended_without_delisting']),   # DD 2017, no issuer CIK
+    'BBG001KS9450': ([], ['ended_without_delisting']),   # TWOU 2024, no issuer CIK
+    'BBG009CKXW23': ([], ['ended_without_delisting']),   # PTHN 2017 under the Canadian Patheon Inc.'s CIK 1400431
+    # FB-004 part d: banks that filed with the FDIC; MIDAS dates the drop (CRSP 500, no filing to give a reason)
+    'BBG000M6TR37': ([('2023-03-10', 'compliance_failure', 500, '2023-03-10', False, '', 1288784)], []),   # SBNY 2023
+    'BBG0019LSQ49': ([('2023-04-28', 'compliance_failure', 500, '2023-04-28', False, '', 1132979)], []),   # FRCB 2023
+    # the vendor's ticker for a security that traded under another (no CUSIP, no fails row): the fallback's relabel
+    'CIK1308161-CLASS-A': ([('2013-06-28', 'merger', 231, '2013-06-28', False, '', 1308161)], []),   # NCRA 2013
+    'CIK1409012-COMMON': ([], ['ended_without_delisting']),   # ABBI 2009: no ending of any rule
 }
 
 
@@ -277,3 +290,56 @@ def test_the_form25_of_anywhere_real_estate_inc_is_reached_through_its_own_cik_n
     _, review = fc.finder().find(ctx)
     assert [(r.flag, r.filing.accession) for r in review if r.filing is not None] == [
         ("form25_unreadable", "0000876661-26-000018")]
+
+
+# FB-004 part c: the finder under the issuer CIK the resolver now gives (ACV 1368457 by the name in force, FNFV 1331875 by
+# its CUSIP's issuer code, DD 30554 by the name's letters, TWOU 1459417 by the name tier, PTHN 1643848 by the exact
+# holder): delisting tuples as `fc.outcome`'s, and the Form 25s a live run must fetch (in no cache)
+RIGHT = {
+    'BBG000BB41G8': (1368457, [('2011-05-21', 'merger', 231, '2011-05-10', False, '0000876661-11-000210', 1368457)], []),
+    'BBG006N7RYV7': (1331875, [('2017-11-30', 'merger', 231, '2017-11-17', False, '0000876661-17-000713', 1331875)], []),
+    'BBG000BH13K9': (30554, [], [('ended_without_delisting', ''), ('form25_unreadable', '0000876661-17-000494')]),
+    'BBG001KS9450': (1459417, [('2024-06-14', 'unknown', None, '2024-06-12', False, '', 1459417)],
+                     [('form25_unreadable', '0001354457-24-000658')]),
+    'BBG009CKXW23': (1643848, [], [('ended_without_delisting', ''), ('form25_unreadable', '0001104659-17-055224')]),
+}
+
+
+@pytest.mark.parametrize("sec_id", sorted(RIGHT), ids=lambda s: fc.DATA["cases"][s]["note"].split(":")[0])
+def test_the_right_registrants_form25_is_reached_once_the_issuer_is_right(sec_id):
+    """ACV: the old registrant (3327) had only the 2006 spin-off's 25-NSE; the spin-off's (1368457) is Unilever's
+    acquisition. FNFV: Fidelity National Financial's 25-NSE of the Cannae split-off. DD, TWOU and PTHN: the Form 25's
+    raw is in no cache, so it is `form25_unreadable` here (a live run fetches it and decides)."""
+    cik, delistings, review = RIGHT[sec_id]
+    securities, cusips, ftd = fc.world()
+    sec = dataclasses.replace(securities[sec_id], issuer_cik=cik)
+    ctx = SecurityContexts.observed({sec.sec_id: sec}, cusips, ftd)(sec, False)
+    found, items = fc.finder().find(ctx)
+    assert [(d.delist_date, d.record.bucket.value, d.record.crsp_code,
+             d.last_trade.day.isoformat() if d.last_trade.day else "", d.record.successor_sec_id == sec_id,
+             d.form25_sub.accession if d.form25_sub else "", d.cik) for d in found] == delistings
+    assert sorted({(r.flag, r.filing.accession if r.filing else "") for r in items}) == review
+
+
+# FB-004 part d, the unexplained ending on real securities no rule ends: dated from SEC data (the fails rows, else MIDAS,
+# else the last sighting), never from the caller's observations
+def _unexplained(sec_id):
+    return unexplained_ending(Dating(fc.FixtureEdgar(), midas=fc.FixtureMidas(), halts=fc.FixtureHalts()),
+                              fc.context(sec_id).record, fc.DATA["securities"][sec_id]["issuer_cik"])
+
+
+def test_abraxis_with_no_cusip_and_no_volume_ends_on_its_last_sighting():
+    """ABBI: the snapshot ticker is not what the fails files carry (ABII), so it has no CUSIP, no fails row and no MIDAS
+    day under ABBI: the only evidence is the last snapshot that listed it, 2009-06-08."""
+    d = _unexplained("CIK1409012-COMMON")
+    assert (d.delist_date, d.last_trade.source, d.record.bucket.value, d.cik) == (
+        "2009-06-08", "last_sighting", "unknown", 1409012)
+    assert d.flags == ["last_trade_date_unconfirmed", "unexplained_ending"] and not d.last_trade.publishable(None)
+
+
+def test_alberto_culver_under_the_wrong_issuer_ends_on_the_last_day_its_fails_rows_show_it_trading():
+    """ACV (issuer CIK 3327, the old registrant): its CUSIP's fails rows run to 2011-05-09, the trading day before the
+    row that opens the last run of one price is 2011-05-06; the snapshots (to 2009-06-08) are not read."""
+    d = _unexplained("BBG000BB41G8")
+    assert (d.delist_date, d.last_trade.day.isoformat(), d.last_trade.source) == ("2011-05-06", "2011-05-06", "fails_rows")
+    assert d.record.bucket.value == "unknown" and d.ending.real

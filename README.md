@@ -71,6 +71,7 @@ penny-stock delist and 585 protection-of-investors → `compliance_failure`).
 | 300–303 | `exchange_transfer` | Moved to a different exchange / market | Range fallthrough (3xx) |
 | 304 | `exchange_transfer` | Dropped by the exchange but the issuer keeps filing (OTC continuation / spin-off), or a rename / listing transfer while the company keeps reporting | Periodic 10-K/Q/20-F filed >180 days after the delist date, when the end-of-era resolver finds no better reading (in order: still trading after the end, 304; a successor registration 8-K12B/8-K12G3, 304; a change in control 8-K 5.01, 231 `merger` (231, or the window's own 8-K merger code, 200/233); a completed acquisition 8-K 2.01 with a merger filing or a Form 25, 231 `merger` (same caveat); a 3.01 notice citing a listing deficiency, 570 `compliance_failure`; else 304); or a rename near the delisting, or a 3.01 notice that reads as a listing transfer |
 | 470 | `liquidation` | **Bankruptcy / receivership** | 8-K item 1.03, or items 2.04 + 3.01 |
+| 500 | `compliance_failure` | Delisted by the exchange, reason unavailable | A drop no filing documents (FB-004, Signature Bank and First Republic Bank, which filed with the FDIC): the issuer made no SEC filing (its holders' ownership reports about it do not count) within 180 days of the last day SEC MIDAS shows exchange volume, and the security's own CUSIPs trade on afterward at changing prices (over the counter). Dated by that MIDAS day (`midas`, confirmed); drop reason none, so the harsh mark applies |
 | 570 | `compliance_failure` | Delisted by the exchange (price/standards), no M&A | A 3.01 notice that cites a listing deficiency (positive evidence required; a bare 3.01 no longer defaults to compliance failure) |
 | 573 | `compliance_failure` | **SEC revocation** of registration | EDGAR form `REVOKED` present |
 | 580 | `compliance_failure` | **Delinquent in filings** | An NT 10-K / NT 10-Q filed in the prior year, alone or alongside a 570-qualifying deficiency notice |
@@ -264,6 +265,13 @@ A blank `exit_kind` means no kind is asserted (today's `unknown` bucket); such
 a row's verdict is always `uncertain`, so a reader must not filter it away as
 "no ending".
 
+The library writes such a row itself for a security whose history closes with no ending of any rule (FB-004 part d:
+not listed today, not sighted at the fails data's last day, no Form 25, drop or filing that ends it): kind blank,
+`last_trade_date` blank (the library's day is a guess and is never published; delistings.csv holds it, unconfirmed,
+dated by the last day the security's own CUSIPs' fails rows show it trading, else SEC MIDAS's last day of exchange
+volume, else its last sighting), flag `unexplained_ending`, verdict `uncertain`. A reader that filters on an ending
+therefore finds one for every closed security, and the uncertain verdict says the ending is a placeholder.
+
 `security_history.csv` holds every ticker range (the run's in-memory `ticker_history`) except those of the
 merger acquirers the run adds, split where the issuer in force changes (the
 CIK that carried the security's name that day; MRK 2008 moves from old Merck &
@@ -412,7 +420,8 @@ the fallback filing that ended trading when no Form 25 exists.
 `raw_payout_*` is the extraction before the last-close gate (see *Payout
 reconciliation* below); `last_trade_date_source` is `ex99_notice`, `8k_301`,
 `midas`, `nasdaq_halt`, `closing_day` (a worked-out closing day, never published), `last_sighting` (a handoff
-row's), or empty. `resolution_source` records the resolver
+row's, or an unexplained ending's when no fails row and no MIDAS day dates it), `fails_rows` (an unexplained ending's:
+the last day the security's own CUSIPs' fails rows show it trading), or empty. `resolution_source` records the resolver
 tier that found the security's CIK (`cik_map` for an observation's `cik` pin,
 `manual`, `company_tickers`, `efts`, `name_search`, …), taken from the
 security's latest era that has a CIK (`security_master` when none has one);
@@ -545,6 +554,8 @@ The full flag vocabulary (from `endings/classifier.py`, `identity/ticker_resolve
 | `submissions_stale` | A refetch of the company's EDGAR submissions failed; a cached copy was used instead |
 | `distress_at_normal_price` | A compliance-failure or liquidation row whose last trade close was still ≥ $5 |
 | `no_form25` | No Form 25 was found; the classifier's fallback path (8-K completion, Form 15, `REVOKED`, SPAC trust liquidation) found and dated the delisting |
+| `unexplained_ending` | (`fix`) The security's history closes (not listed today, not sighted at the fails data's last day) and no rule gave it an ending, so the library wrote one of kind `unknown`, unconfirmed and unpublished; replaces the finder's `ended_without_delisting` row for it |
+| `midas_drop` | (`info`) A drop no filing documents, dated by SEC MIDAS's last day of exchange volume (CRSP 500); with `no_form25` |
 | `delist_date_approx` | The fallback delisting date is the security's last sighting, not a filing date (see *Where each date and price comes from* below) |
 | `observed_after_delisting` | The delisting's Form 25 was filed before the security's first observation, and no fails-to-deliver row under its own tickers shows it trading after that: the observations that follow are stale (a snapshot kept listing A.G. Edwards, acquired 2007-10-01, through 2009) |
 | `successor_unknown` | An exchange-transfer delisting whose successor security could not be found. Before the successor issuer's 8-K12B is searched, a security of the run whose first sighting falls within [last trade − 5 d, last trade + 15 d] and that shares the issuer CIK or the ticker is taken when it is the only one (a holdco reorganization's new line, a rename's new FIGI); the reason then ends "successor by same issuer" / "successor by same ticker" |
@@ -554,7 +565,7 @@ The full flag vocabulary (from `endings/classifier.py`, `identity/ticker_resolve
 | `ftd_close_lagged` | The last-trade close is from a fails-to-deliver row more than one trading day after the last trade (no row on the next day) |
 | `ftd_close_prior:<n>` | No fails-to-deliver row follows the last trade day (fails stop once trading stops), so the close is the latest one known on it: the price on a row dated the last trade day or up to 10 trading days earlier, which is the close of the trading day before that row. `<n>` is that close's age in trading days before the last trade (1 = the day before); the row's date is kept in the evidence (`ftd_close_row_date`) |
 | `acquirer_close_lagged` | The acquirer price used in the merger's cash+stock / stock-only terms is from a fails-to-deliver row more than one trading day after the target's last trade |
-| `ended_without_delisting` | Not listed today and no Form 25 or fallback delisting filing was found, or none matched the security (it then sits next to that Form 25's `form25_*` row) |
+| `ended_without_delisting` | Not listed today and no Form 25 or fallback delisting filing was found, or none matched the security (it then sits next to that Form 25's `form25_*` row). A security whose history then closes gets an `unexplained_ending` row instead (the review item is dropped); one the history keeps open (sighted at the fails data's last day) loses it |
 | `listing_status_unknown` | Listing status could not be confirmed and no delisting was found |
 | `no_figi`, `observation_unresolved` | FIGI resolution fell back to a placeholder, or (with no CIK either) could not resolve at all |
 | `form25_unmatched`, `form25_unclassified`, `form25_unreadable` | A Form 25 could not be matched to one security's class, its class text was unreadable, or its filing text could not be fetched |

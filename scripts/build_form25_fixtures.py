@@ -125,12 +125,39 @@ CASES = {
     "BBG00JR5MM31": "LNWO 2025: Light & Wonder's voluntary Nasdaq withdrawal; EDGAR lists LNWO on the OTC market",
     "BBG00L31HTW0": "RVIC 2022: Retail Value's voluntary NYSE move to the OTC, an Item 2.01 after it, no exchange on the cover",
     "BBG000QN4GY3": "HOUS 2026: Realogy Holdings, issuer CIK 1355001 (the LLC) in the run; the listed registrant is 1398987",
+    # FB-004 part c: the issuer CIK in the run was the old registrant's, or none; the right registrant's Form 25 is cached
+    "BBG000BB41G8": "ACV 2011: Alberto-Culver, issuer CIK 3327 (the old registrant, renamed 2006) in the run; the 25-NSE "
+                    "of Unilever's acquisition is CIK 1368457's",
+    "BBG006N7RYV7": "FNFV 2017: FNFV Group, a tracking stock, no issuer CIK in the run; the 25-NSE of the Cannae "
+                    "split-off is Fidelity National Financial's, CIK 1331875",
+    "BBG000BH13K9": "DD 2017: E I du Pont de Nemours, no issuer CIK in the run; the 25-NSE of the DowDuPont merger is "
+                    "CIK 30554's (its raw is in no cache)",
+    "BBG001KS9450": "TWOU 2024: 2U Inc, no issuer CIK in the run; the 25-NSE of 2024-09-06 is CIK 1459417's "
+                    "(its raw is in no cache)",
+    "BBG009CKXW23": "PTHN 2017: Patheon N.V., issuer CIK 1400431 (the Canadian Patheon Inc.) in the run; the Form 25 "
+                    "of Thermo Fisher's acquisition is CIK 1643848's (its raw is in no cache)",
+    # FB-004 part d: a bank that filed with the FDIC, so EDGAR holds nothing; MIDAS and the fails rows date its end
+    "BBG000M6TR37": "SBNY 2023: Signature Bank, closed by the FDIC; no EDGAR filing, MIDAS volume to 2023-03-10, the "
+                    "fails rows go on over the counter",
+    "BBG0019LSQ49": "FRCB 2023: First Republic Bank, closed by the FDIC; no EDGAR filing, MIDAS volume (FRC) to "
+                    "2023-04-28, the fails rows go on as FRCB at about $0.40",
+    # ... and the closed histories no rule ends (the unexplained ending: dated by the fails rows, else the last sighting)
+    "CIK1308161-CLASS-A": "NCRA 2013: the vendor's ticker for the old News Corp's class A, which traded as NWSA; no CUSIP "
+                          "of its own, so no fails row and no MIDAS day (CIK 1308161 renamed Twenty-First Century Fox)",
+    "CIK1409012-COMMON": "ABBI 2009: Abraxis BioScience, whose fails rows are under ABII; no CUSIP, no fails row, no MIDAS "
+                         "day under ABBI",
 }
+# cases whose MIDAS days are kept over their whole life, not near a Form 25 or the last sighting: the drop rule
+# (FB-004 part d) reads the last day of exchange volume wherever it falls
+WHOLE_LIFE_MIDAS = {"BBG000M6TR37", "BBG0019LSQ49"}
 
 
 # CIKs whose filings are kept though no case reads them: Perrigo Company's (in force for PRGO until 2013), to show
 # what reading it would do
-EXTRA_CIKS = (820096, 1398987)
+EXTRA_CIKS = (820096, 1398987, 1368457, 1331875, 30554, 1459417, 1643848)
+# the issuer a case should have had (FB-004 part c): its Form 25 days make the MIDAS and halt windows the case reads
+RIGHT_CIK = {"BBG000BB41G8": 1368457, "BBG006N7RYV7": 1331875, "BBG000BH13K9": 30554, "BBG001KS9450": 1459417,
+             "BBG009CKXW23": 1643848}
 # CUSIPs no case security holds whose fails rows are kept: a plan exchange's new line (WOLF's 97785W106, sub-plan 5g)
 EXTRA_CUSIPS: tuple[str, ...] = ()
 
@@ -297,12 +324,15 @@ def main(argv: list[str] | None = None) -> int:
         own = {k.split("@")[0] for k in eras[sid]} | set(_line_tickers(eras[sid], history[sid]))
         syms = own | {r.symbol for c in cusips.get(sid, []) for r in ftd.by_cusip(c)}
         symbols[sid] = {x for x in syms if x and any(ch.isalpha() for ch in x)}
-        days = [d for cik in {int(s["issuer_cik"])} | ({others[sid]} if sid in others else set())
+        days = [d for cik in ({int(s["issuer_cik"])} if s["issuer_cik"] else set())
+                | ({others[sid]} if sid in others else set()) | ({RIGHT_CIK[sid]} if sid in RIGHT_CIK else set())
                 for d in form25_days.get(cik, [])]
         last = max([o[1] for obs in eras[sid].values() for o in obs]
                    + [r.date for c in cusips.get(sid, []) for r in ftd.by_cusip(c) if r.symbol in own])
         windows[sid] = ([(d - timedelta(days=MIDAS_BEFORE), d + timedelta(days=MIDAS_AFTER)) for d in days]
                         + [(_day(last) - timedelta(days=SEEN_BEFORE), _day(last) + timedelta(days=SEEN_AFTER))])
+        if sid in WHOLE_LIFE_MIDAS:
+            windows[sid].append((date(2012, 1, 1), AS_OF))
     midas_dir = repo / "cache/sec_data/midas"
     quarters = sorted(p.name[:7] for p in midas_dir.glob("*_q*.json.gz"))
     midas: dict[str, dict[str, list[str]]] = {}

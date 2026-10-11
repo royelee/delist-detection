@@ -15,7 +15,7 @@ from delist_detection.filings.form25 import parse_form25
 from delist_detection.sources.ftd import FtdIndex, FtdRow
 from delist_detection.identity.history import Sighting
 from delist_detection.endings.last_trade import (
-    CLOSING_DAY, EIGHTK_301, EX99_NOTICE, LAST_SIGHTING, MIDAS, NASDAQ_HALT, NO_DAY, UNCONFIRMED, UNSOURCED,
+    CLOSING_DAY, EIGHTK_301, EX99_NOTICE, FAILS_ROWS, LAST_SIGHTING, MIDAS, NASDAQ_HALT, NO_DAY, UNCONFIRMED, UNSOURCED,
     Dating, LastTrade, anchor_day, at_handoff, closing_day, decide_last_trade, eightk_last_trade,
     first_day_after, handoff_day, sections_3_01,
 )
@@ -680,3 +680,117 @@ def test_a_fallback_merger_ends_on_the_closing_day_its_completion_8k_states(fake
     before = Dating(fake_edgar).of_fallback(1, filings, ticker="FCL", ended_by=date(2009, 7, 30),
                                             last_seen=date(2009, 7, 30), trading=_trading(), merger=True)
     assert before.day == date(2009, 7, 30) and before.source == UNSOURCED
+
+
+# -- a drop dated by MIDAS when the issuer filed nothing (FB-004 part d: SBNY, FRCB) ---------------------------------
+def _otc_rows(after="2023-03-10", n=30, cusip="OWNCUSIP1", symbol="SBNY"):
+    """The own CUSIP's fails rows after `after`: one every other day over `n` rows, at changing prices (it trades on
+    over the counter)."""
+    from datetime import timedelta
+    start = date.fromisoformat(after)
+    return [FtdRow((start + timedelta(days=2 * i + 1)).isoformat(), cusip, symbol, "SIGNATURE BANK",
+                   0.5 + 0.01 * (i % 7)) for i in range(n)]
+
+
+def test_a_drop_is_dated_by_the_last_day_of_exchange_volume_when_the_issuer_filed_nothing(fake_edgar):
+    """SBNY 2023: no EDGAR filing, MIDAS volume to March 10, the own CUSIP's fails rows go on at changing prices."""
+    trading = _trading(cusips=["OWNCUSIP1"], fails=FtdIndex(_otc_rows()))
+    lt = Dating(fake_edgar, midas=_Midas(days={"SBNY": date(2023, 3, 10)})).midas_drop(
+        [], ticker="SBNY", trading=trading, last_seen=date(2023, 5, 1))
+    assert lt == LastTrade(date(2023, 3, 10), MIDAS, ()) and lt.publishable(None)
+
+
+def test_a_drop_reads_every_ticker_the_security_carried(fake_edgar):
+    """FRCB 2023: MIDAS knows the exchange symbol FRC, not the OTC symbol FRCB the rows go on under."""
+    rows = [FtdRow("2023-04-20", "OWNCUSIP1", "FRC", "FIRST REPUBLIC BANK", 3.5)] + _otc_rows(
+        "2023-04-28", symbol="FRCB")
+    trading = TradingRecord(_SECURITY, [Sighting("2023-04-20", "FRC", "ftd"), Sighting("2023-05-12", "FRCB", "ftd")],
+                            ("OWNCUSIP1",), FtdIndex(rows))
+    lt = Dating(fake_edgar, midas=_Midas(days={"FRC": date(2023, 4, 28)})).midas_drop(
+        [], ticker="FRCB", trading=trading, last_seen=date(2023, 6, 30))
+    assert (lt.day, lt.source) == (date(2023, 4, 28), MIDAS)
+
+
+@pytest.mark.parametrize("why, filing_day", [("a filing the month of the end", "2023-03-20"),
+                                              ("a filing half a year before it", "2022-10-01"),
+                                              ("a filing half a year after it", "2023-09-01")])
+def test_a_drop_is_none_when_the_issuer_filed_around_its_end(fake_edgar, why, filing_day):
+    trading = _trading(cusips=["OWNCUSIP1"], fails=FtdIndex(_otc_rows()))
+    filings = [EdgarSubmission("x1", "8-K", filing_day, filing_day, "8.01", "k.htm")]
+    assert Dating(fake_edgar, midas=_Midas(days={"SBNY": date(2023, 3, 10)})).midas_drop(
+        filings, ticker="SBNY", trading=trading, last_seen=date(2023, 5, 1)) is None, why
+
+
+@pytest.mark.parametrize("form", ["SC 13G/A", "SC 13G", "SC 13D", "SCHEDULE 13G/A", "4", "144", "SC TO-T", "UPLOAD"])
+def test_a_drop_ignores_what_others_file_about_the_issuer(fake_edgar, form):
+    """FRCB 2023: EDGAR lists under First Republic Bank the ownership reports its holders filed about it (an SC 13G/A on
+    February 9, 78 days before its last trade); the bank itself filed nothing with the SEC."""
+    trading = _trading(cusips=["OWNCUSIP1"], fails=FtdIndex(_otc_rows()))
+    filings = [EdgarSubmission("x1", form, "2023-02-09", "", "", "x.htm")]
+    lt = Dating(fake_edgar, midas=_Midas(days={"SBNY": date(2023, 3, 10)})).midas_drop(
+        filings, ticker="SBNY", trading=trading, last_seen=date(2023, 5, 1))
+    assert lt is not None and lt.day == date(2023, 3, 10)
+
+
+def test_a_drop_ignores_a_filing_far_from_its_end(fake_edgar):
+    trading = _trading(cusips=["OWNCUSIP1"], fails=FtdIndex(_otc_rows()))
+    filings = [EdgarSubmission("x1", "10-K", "2022-01-01", "2021-12-31", "", "k.htm")]
+    lt = Dating(fake_edgar, midas=_Midas(days={"SBNY": date(2023, 3, 10)})).midas_drop(
+        filings, ticker="SBNY", trading=trading, last_seen=date(2023, 5, 1))
+    assert lt is not None and lt.day == date(2023, 3, 10)
+
+
+def test_a_drop_needs_the_own_cusip_to_trade_on_at_changing_prices(fake_edgar):
+    """Fails still settling at the last close (one price), a few rows, or no CUSIP of its own: no drop."""
+    midas = _Midas(days={"SBNY": date(2023, 3, 10)})
+    settling = [FtdRow(r.date, r.cusip, r.symbol, r.description, 9.0) for r in _otc_rows()]
+    few = _otc_rows(n=5)
+    for trading in (_trading(cusips=["OWNCUSIP1"], fails=FtdIndex(settling)),
+                    _trading(cusips=["OWNCUSIP1"], fails=FtdIndex(few)), _trading()):
+        assert Dating(fake_edgar, midas=midas).midas_drop(
+            [], ticker="SBNY", trading=trading, last_seen=date(2023, 5, 1)) is None
+
+
+# -- the unexplained ending's last trade (FB-004 part d): SEC data, never the caller's observations ----------------------
+def _rows(*days, cusip="OWNCUSIP1", symbol="GONE"):
+    return [FtdRow(d, cusip, symbol, "GONE INC", 5.0 + i) for i, d in enumerate(days)]
+
+
+def test_an_unexplained_ending_is_dated_by_the_last_day_the_own_fails_rows_show_it_trading(fake_edgar):
+    """The trading day before the row that opens the last one-price run (`TradingRecord.trades_until`): the rows
+    1 to 3 differ, so the run opens at the last row (2013-04-08), and the day before it is Friday the fifth."""
+    trading = _trading([Sighting("2013-04-02", "GONE", "ftd"), Sighting("2013-06-28", "GONE", "observation")],
+                       cusips=["OWNCUSIP1"], fails=FtdIndex(_rows("2013-04-02", "2013-04-04", "2013-04-08")))
+    lt = Dating(fake_edgar, midas=_Midas(day=date(2013, 3, 1))).unexplained(trading, "GONE", date(2013, 6, 28))
+    assert lt == LastTrade(date(2013, 4, 5), FAILS_ROWS, (UNCONFIRMED,)) and not lt.publishable(None)
+
+
+def test_fails_rows_at_one_price_throughout_show_no_stop(fake_edgar):
+    """The run of fails settling at the last close is all the rows there are: the day before it is before the
+    security's first sighting, so it is no day at all (MIDAS, then the last sighting, date it)."""
+    trading = _trading([Sighting("2013-04-02", "GONE", "ftd"), Sighting("2013-06-28", "GONE", "observation")],
+                       cusips=["OWNCUSIP1"], fails=FtdIndex([FtdRow(d, "OWNCUSIP1", "GONE", "GONE INC", 5.0)
+                                                             for d in ("2013-04-02", "2013-04-04", "2013-04-08")]))
+    assert trading.trades_until() == "2013-04-01"
+    lt = Dating(fake_edgar).unexplained(trading, "GONE", date(2013, 6, 28))
+    assert (lt.day, lt.source) == (date(2013, 6, 28), LAST_SIGHTING)
+
+
+def test_an_unexplained_ending_falls_to_midas_when_the_fails_rows_show_nothing(fake_edgar):
+    trading = _trading([Sighting("2013-06-28", "GONE", "observation")])
+    lt = Dating(fake_edgar, midas=_Midas(days={"GONE": date(2013, 3, 1)})).unexplained(trading, "GONE", date(2013, 6, 28))
+    assert lt == LastTrade(date(2013, 3, 1), MIDAS, (UNCONFIRMED,)) and not lt.publishable(None)
+
+
+def test_an_unexplained_ending_falls_to_the_last_sighting_only_with_no_fails_row_and_no_midas_day(fake_edgar):
+    trading = _trading([Sighting("2013-06-28", "GONE", "observation")])
+    for dating in (Dating(fake_edgar), Dating(fake_edgar, midas=_Midas())):
+        assert dating.unexplained(trading, "GONE", date(2013, 6, 28)) == LastTrade(
+            date(2013, 6, 28), LAST_SIGHTING, (UNCONFIRMED,))
+
+
+def test_a_drop_needs_midas_to_have_a_last_day(fake_edgar):
+    trading = _trading(cusips=["OWNCUSIP1"], fails=FtdIndex(_otc_rows()))
+    assert Dating(fake_edgar, midas=_Midas()).midas_drop(
+        [], ticker="SBNY", trading=trading, last_seen=date(2023, 5, 1)) is None
+    assert Dating(fake_edgar).midas_drop([], ticker="SBNY", trading=trading, last_seen=date(2023, 5, 1)) is None

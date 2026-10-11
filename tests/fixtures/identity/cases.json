@@ -14,6 +14,9 @@
   "CHK@2022-06-30": 895126,
   "ERA@2013-06-28": 73887,
   "EXE@2024-12-31": 895126,
+  "FNF@2008-01-16": 1331875,
+  "FNF@2014-12-31": 1331875,
+  "FNF@2016-06-30": 1331875,
   "FWONA@2017-06-30": 1560385,
   "FWONA@2023-12-31": 1560385,
   "FWONK@2017-06-30": 1560385,
@@ -4704,6 +4707,228 @@
    "CCU",
    "2009-06-08",
    "CLEAR CHANNEL COMM INC",
+   ""
+  ],
+  [
+   "FNF",
+   "2008-01-16",
+   "FIDELITY NATIONAL FINL",
+   ""
+  ],
+  [
+   "FNF",
+   "2008-05-31",
+   "FIDELITY NATIONAL FINL",
+   ""
+  ],
+  [
+   "FNF",
+   "2008-07-25",
+   "FIDELITY NATIONAL FINL",
+   ""
+  ],
+  [
+   "FNF",
+   "2008-11-18",
+   "FIDELITY NATIONAL FINL",
+   ""
+  ],
+  [
+   "FNF",
+   "2009-01-23",
+   "FIDELITY NATIONAL FINL",
+   ""
+  ],
+  [
+   "FNF",
+   "2009-03-20",
+   "FIDELITY NATIONAL FINL",
+   ""
+  ],
+  [
+   "FNF",
+   "2009-06-08",
+   "FIDELITY NATIONAL FINL",
+   ""
+  ],
+  [
+   "FNF",
+   "2012-06-29",
+   "FIDELITY NATIONAL FINANCIAL INC CL",
+   ""
+  ],
+  [
+   "FNF",
+   "2012-12-31",
+   "FIDELITY NATIONAL FINANCIAL INC CL",
+   ""
+  ],
+  [
+   "FNF",
+   "2013-06-28",
+   "FIDELITY NATIONAL FINANCIAL INC CL",
+   ""
+  ],
+  [
+   "FNF",
+   "2013-12-31",
+   "FIDELITY NATIONAL FINANCIAL INC CL",
+   ""
+  ],
+  [
+   "FNF",
+   "2014-06-30",
+   "FIDELITY NATIONAL FINANCIAL INC CL",
+   ""
+  ],
+  [
+   "FNF",
+   "2014-12-31",
+   "FNF GROUP INC",
+   "1331875"
+  ],
+  [
+   "FNF",
+   "2015-06-30",
+   "FNF GROUP INC",
+   "1331875"
+  ],
+  [
+   "FNF",
+   "2015-12-31",
+   "FNF GROUP INC",
+   "1331875"
+  ],
+  [
+   "FNF",
+   "2016-06-30",
+   "FIDELITY NATIONAL FINANCIAL INC",
+   ""
+  ],
+  [
+   "FNF",
+   "2016-12-30",
+   "FIDELITY NATIONAL FINANCIAL INC",
+   ""
+  ],
+  [
+   "FNF",
+   "2017-06-30",
+   "FIDELITY NATIONAL FINANCIAL INC",
+   ""
+  ],
+  [
+   "FNF",
+   "2017-12-31",
+   "FIDELITY NATIONAL FINANCIAL INC",
+   ""
+  ],
+  [
+   "FNF",
+   "2018-06-30",
+   "FIDELITY NATIONAL FINANCIAL INC",
+   ""
+  ],
+  [
+   "FNF",
+   "2018-12-31",
+   "FIDELITY NATIONAL FINANCIAL INC",
+   ""
+  ],
+  [
+   "FNF",
+   "2019-06-30",
+   "FIDELITY NATIONAL FINANCIAL INC",
+   ""
+  ],
+  [
+   "FNF",
+   "2019-12-31",
+   "FIDELITY NATIONAL FINANCIAL INC",
+   ""
+  ],
+  [
+   "FNF",
+   "2020-06-30",
+   "FIDELITY NATIONAL FINANCIAL INC",
+   ""
+  ],
+  [
+   "FNF",
+   "2020-12-31",
+   "FIDELITY NATIONAL FINANCIAL INC",
+   ""
+  ],
+  [
+   "FNF",
+   "2021-06-30",
+   "FIDELITY NATIONAL FINANCIAL INC",
+   ""
+  ],
+  [
+   "FNF",
+   "2021-12-31",
+   "FIDELITY NATIONAL FINANCIAL INC",
+   ""
+  ],
+  [
+   "FNF",
+   "2022-06-30",
+   "FIDELITY NATIONAL FINANCIAL INC",
+   ""
+  ],
+  [
+   "FNF",
+   "2022-12-31",
+   "FIDELITY NATIONAL FINANCIAL INC",
+   ""
+  ],
+  [
+   "FNF",
+   "2023-06-30",
+   "FIDELITY NATIONAL FINANCIAL INC",
+   ""
+  ],
+  [
+   "FNF",
+   "2023-12-31",
+   "FIDELITY NATIONAL FINANCIAL INC",
+   ""
+  ],
+  [
+   "FNF",
+   "2024-06-30",
+   "FIDELITY NATIONAL FINANCIAL INC",
+   ""
+  ],
+  [
+   "FNF",
+   "2024-12-31",
+   "FIDELITY NATIONAL FINANCIAL INC",
+   ""
+  ],
+  [
+   "FNF",
+   "2025-06-30",
+   "FIDELITY NATIONAL FINANCIAL INC",
+   ""
+  ],
+  [
+   "FNF",
+   "2025-12-31",
+   "FIDELITY NATIONAL FINANCIAL INC",
+   ""
+  ],
+  [
+   "FNF",
+   "2026-06-30",
+   "FIDELITY NATIONAL FINANCIAL INC",
+   ""
+  ],
+  [
+   "FNFV",
+   "2014-12-31",
+   "FNFV GROUP INC",
    ""
   ]
  ]

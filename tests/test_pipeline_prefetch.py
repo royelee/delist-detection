@@ -721,7 +721,10 @@ def test_one_worker_and_n_give_the_same_bytes_from_the_same_starting_caches(tmp_
     proxy = [t for u, t in secn.calls if u == AET_PROXY_URL]
     assert len(proxy) == 1 and proxy[0].startswith("sec-warm")      # the payout warm pass fetched it, stage 8 read it
     rows = {d["sec_id"]: d for d in read_table("delistings", table_path(tmp_path / "out1", "delistings"))}
-    assert set(rows) == {"BBG000FJLFX8", "CIK3333-COMMON"}
+    # (OLD CO, observed to 2018 with a Form 15 and nothing that ends it, gets FB-004 part d's unexplained ending)
+    assert set(rows) == {"BBG000FJLFX8", "CIK3333-COMMON", "CIK2222-COMMON"}
+    assert (rows["CIK2222-COMMON"]["bucket"], rows["CIK2222-COMMON"]["last_trade_date_source"]) == ("unknown", "last_sighting")
+    assert "unexplained_ending" in rows["CIK2222-COMMON"]["review_flags"].split(";")
     assert (rows["BBG000FJLFX8"]["bucket"], rows["BBG000FJLFX8"]["last_trade_date_source"]) == ("merger", "midas")
     assert rows["CIK3333-COMMON"]["bucket"] == "exchange_transfer"
     assert "successor_unknown" in rows["CIK3333-COMMON"]["review_flags"].split(";")

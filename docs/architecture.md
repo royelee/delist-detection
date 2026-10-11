@@ -85,7 +85,7 @@ delisting's `last_close` request, `price_requests.PriceAnswers`, in its place), 
 into `merger_value.value_mergers`, which answers one `MergerValue` per merger ending, its acquirer and requests on
 the run's own closes; the module map has its steps), `_r1_continuations` (stage 8b: a merger whose published terms are one share and no cash (`exchange_terms.one_share_no_cash`, a special dividend set aside: `OwnShares.consideration`), whose registrant's filings say the same of its own shares (the ending's own-share reading, `own_shares.of`: the one the delisting carries, else one made at its anchor), into a new issuer (`own_shares.new_issuer`, `NEW_ISSUER_DAYS`) or the same issuer (`successors.successor_by_terms` over the reading's statement, else the new issuer's 8-K12B), is an exchange transfer to that successor, flagged `r1_continuation`, its payout reads dropped (`rewrites.continuation`, `Rule.R1`, with the run's merger values); the LLM's final terms must agree; the new issuer is named by the R1 statement's target (the name tie, `own_shares.names_target`), its 8-K12B candidate included; a degraded read, now or when the carried reading was made (`OwnShares.degraded`), keeps the merger and flags the row; the run logs `role refusal: N rows (...)`, the delistings whose end-of-era reading refused a merger on the registrant's role; metered as "R1 continuations"),
 `_find_successors` (stage 9, with sub-plan 5c's `_terms_links` before the 8-K12B search, over the ending's own-share reading (`own_shares.of`): the same issuer's class, a new issuer, or the security's own same-CIK 8-K12B line via OpenFIGI and R2 (the CUSIP the reading's texts name); a name tie for any 8-K12B link; sub-plan 5h: `_own_registration_link` takes a text-named CUSIP with no fails row
-yet when the fails data ends before the day, OKE 2026: the added successor starts on the next trading day, as every successor the run adds does (`last_trade.first_day_after`), and a Form 25 that already owns a delisting of the run raises no unmatched row in stage 9d; the stage ends by recording its links as rewrites, `_link_successors`), `_handoffs` (stage 9b: first `rewrites.mark_going_on` over `history.Histories.going_on`, the clip check's merger or transfer that does not end its security goes on as itself, here and only here, so the handoffs see it; then the handoffs), `_date_from_notices` (stage 9c: `last_trade.Dating.from_notice`, a handoff continuation row's last trade day from its own Form 25's confirmed EX-99.25 notice, when before the successor's first sighting, the handoff rewrite's typed `successor_from`, and no later than the effective date; the stage keeps the failed-read watch; metered as "handoff notice dates"), `_successor_endings` (stage 9d: the Form 25 search, matches only, for the line and 8-K12B successors the run added, each searched from its own trading record (`TradingRecord.added`: its ticker, its span, to the run date when it has no fails rows, and its CUSIPs; no era or observation is made up for it, and its issuer's lookup tier is none) beside the run's securities of its issuer; the finder's items about a Form 25 that already owns a delisting are dropped by their typed `ReviewItem.filing`; metered as "successor endings"), `_distress` (stage 9e,
+yet when the fails data ends before the day, OKE 2026: the added successor starts on the next trading day, as every successor the run adds does (`last_trade.first_day_after`), and a Form 25 that already owns a delisting of the run raises no unmatched row in stage 9d; the stage ends by recording its links as rewrites, `_link_successors`), `_handoffs` (stage 9b: first `rewrites.mark_going_on` over `history.Histories.going_on`, the clip check's merger or transfer that does not end its security goes on as itself, here and only here, so the handoffs see it; then the handoffs), `_date_from_notices` (stage 9c: `last_trade.Dating.from_notice`, a handoff continuation row's last trade day from its own Form 25's confirmed EX-99.25 notice, when before the successor's first sighting, the handoff rewrite's typed `successor_from`, and no later than the effective date; the stage keeps the failed-read watch; metered as "handoff notice dates"), `_successor_endings` (stage 9d: the Form 25 search, matches only, for the line and 8-K12B successors the run added, each searched from its own trading record (`TradingRecord.added`: its ticker, its span, to the run date when it has no fails rows, and its CUSIPs; no era or observation is made up for it, and its issuer's lookup tier is none) beside the run's securities of its issuer; the finder's items about a Form 25 that already owns a delisting are dropped by their typed `ReviewItem.filing`; metered as "successor endings"), `_unexplained_endings` (stage 9h, FB-004 part d, after 9e and 9g and before the history rows: an observed security the history over every earlier stage's delistings closes with no ending (`Histories.end`: no day, not listed, not sighted at the fails data's last day) and whose listing status is known gets the spec's end-of-era branch 6 ending, `unknown`, `delistings.unexplained_ending`, dated by `Dating.unexplained`, flag `unexplained_ending` (fix); the finder's `ended_without_delisting` item is dropped for it and for a security the history keeps open; the history is built again over the result; metered as "unexplained endings"), `_distress` (stage 9e,
 sub-plan 5g: for each liquidation, compliance-failure or unknown delisting with no successor, a bankruptcy plan's
 stock rule (R6), a price-only removal's code 552, and the OTC symbol of its first off-exchange print, anchored on the
 last trade day stage 5 dated; `dlret.DistressTerms` for the contract; metered as "distress notices"; at stage 10a a
@@ -360,7 +360,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `issuer_exchange()` the exchange EDGAR's submissions JSON lists for a ticker.
 - `filings/evidence.py` — pure predicates over one issuer's EDGAR record: its names over time (`edgar_names`, `name_at`,
   `names_near`, `names_between`, `names_until`, `renamed_near`), its filings (`first_filing`, `bankruptcy_8ks`,
-  `filed_operating_between`, `still_operating`, `merger_evidence`, `is_spac`) and an 8-K's item text
+  `filed_operating_between`, `still_operating`, `merger_evidence`, `is_spac`, `own_filings`: the list without
+  `FILED_BY_OTHERS`, the forms EDGAR lists under an issuer that another party filed about it, ownership schedules,
+  insider forms 3/4/5 and 144, a bidder's tender offer, the SEC staff's UPLOAD) and an 8-K's item text
   (`item_mention`, `item_sections`, `item_text`, `mentions_bankruptcy`, `says_listing_transfer`,
   `cites_listing_deficiency`). The identity stages read its name readers, so it sits below them.
 
@@ -632,7 +634,11 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   days up to that row or by the name the switch renamed it from, no
   other CUSIP of its own and of the same class, begun before the switch,
   trading at it). Answers are checked again at the fixed point; each carries
-  the check flag `issuer_inferred`. Rule C also runs over first-pass answers:
+  the check flag `issuer_inferred`. Rule D (FB-004 part c, `cusip_issuer`, after the fixed point, on the answers
+  the others made): the one issuer of the other eras holding a CUSIP of the era's issuer code (its first six
+  characters) over the same dates, when it had filed by the era's first sighting; no name check, the code is the
+  evidence (FNFV Group, a tracking stock, on Fidelity National Financial's 31620R105; UHALB on U-Haul Holding);
+  eras of two issuers or none give nothing. Rule C also runs over first-pass answers:
   where the CUSIP evidence points elsewhere, the first pass's answer stands
   and the check flag `issuer_cusip_disagrees` names both CIKs. Sub-plan 5h: `check_names` (stage 2b, never
   saved): a first-pass name-search answer is replaced by the one other CIK SEC's name index lists under exactly the
@@ -886,7 +892,16 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   SAVE and its OTC SAVEQ; the halt feed around the text days, else the Form 25 day, PHLY 2008), `of_fallback` (no
   Form 25: the 3.01 8-Ks up to the last sighting + 5 d, VRM 2024, MIDAS anchored on the dating filing; a merger
   left undated ends on the closing day its latest 2.01/5.01 8-K near the last sighting states, FCL, SGP 2009, never
-  after the last sighting; else the last sighting, unsourced and unconfirmed) and `from_notice` (stage 9c: a
+  after the last sighting; else the last sighting, unsourced and unconfirmed), `midas_drop` (FB-004 part d: the last
+  day MIDAS shows exchange volume under any ticker the security carried, `midas_last`, when the issuer made no filing
+  of any form within `MIDAS_DROP_QUIET_DAYS` (180) of it (what others filed about it, its holders' SC 13G/As, does not
+  count: `evidence.own_filings`) and the security's own CUSIPs go on trading after it at
+  changing prices, `TradingRecord.trades_after`: source `midas`, confirmed, so published; Signature Bank, First
+  Republic Bank, which filed with the FDIC), `unexplained` (FB-004 part d: an unexplained ending's last trade
+  from SEC data only: the last day the security's own CUSIPs' fails rows show it trading, `TradingRecord.trades_until`
+  and not before the first row of the CUSIP it held last (rows at one price throughout show no stop), source
+  `fails_rows`; else `midas_last`, source `midas`; else the last sighting, source `last_sighting`; always
+  `UNCONFIRMED`, so never published) and `from_notice` (stage 9c: a
   handoff row dated by its last sighting takes its own Form 25 notice's confirmed day, before the successor's first
   sighting and no later than the effective date). MIDAS and the Nasdaq halt feed are its two adapters
   (`last_trade_day`; `deletion_halt`, `failed_days`), each a real client or a fixture-backed double; a halt-feed
@@ -950,7 +965,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
 - `endings/rewrites.py` — architecture step 3: the one owner of a delisting's kind and successor after its record is built.
   Every rewrite names its rule (`Rule`, a closed set: `ISSUER_MOVE` the finder's R7, `CONTINUED` the finder's continued
   transfer, `TRADES_ON` the clip check at stage 9b's start, `R1` stage 8b, `LINE_FOLLOW` and `SUCCESSOR_LINK` stage 9,
-  `HANDOFF` stage 9b, `PLAN_BANKRUPTCY` and `PRICE_DEFICIENCY` stage 9e, `MOVED_OTC` the finder's CRSP 520) and is recorded as typed provenance on the
+  `HANDOFF` stage 9b, `PLAN_BANKRUPTCY` and `PRICE_DEFICIENCY` stage 9e, `MOVED_OTC` the finder's CRSP 520, `MIDAS_DROP` the finder's CRSP 500; the unexplained ending is no rewrite: it is built, not changed) and is recorded as typed provenance on the
   delisting (`Delisting.rewrites`, one `Rewrite` each: the rule, the successor, how it was found, the evidence,
   a handoff's `successor_from`). `continuation(d, successor, rule, ...)` sets CRSP `crsp_codes.CONTINUATION_CODE` (304)
   and the bucket together and drops what a continuation cannot carry, one rule for all: `no_evidence_default`,
@@ -1015,7 +1030,13 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   (`SecurityContext.record`: its sightings, own CUSIPs, their trading fails rows and the fails index); a worked-out
   closing day (`LastTrade.worked_out`) is not the classification's anchor or the delisting's ticker day, which stay
   the Form 25's. Sub-plan 5h: `TradingRecord.has_cusips`: a security with no CUSIP gets no continued-filings
-  ending dated by its last sighting alone (`ended_without_delisting` instead: WW 2013, NCRA 2013). The finder's R7 and
+  ending dated by its last sighting alone (`ended_without_delisting` instead: WW 2013, NCRA 2013). FB-004 part d,
+  `_dropped_without_filings`: where the classifier finds nothing (`unknown`, no deregistration) and `Dating.midas_drop`
+  dates a drop, the delisting is CRSP 500 (compliance failure, reason unavailable: the exchange's removal is measured
+  and nothing filed says why, so no drop reason and the harsh mark applies; 520 would be no mark, 574 a bankruptcy
+  nothing states), rewrite `Rule.MIDAS_DROP`, flags `no_form25` and `midas_drop` (info); stage 9e then reads its OTC
+  symbol from the fails rows (First Republic's FRCB; Signature's SBNY has too few rows in the 60 days after its last
+  day, so none). The finder's R7 and
   its continued transfer's successor are rewrites (`rewrites.continuation`, `security_goes_on`); each `form25_*` review
   item carries the Form 25 typed (`review_triage.FilingRef`, `ReviewItem.filing`): the handoff stage and stage 9d read
   its form and accession there, never from the reason.

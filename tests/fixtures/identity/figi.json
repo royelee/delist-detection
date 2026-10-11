@@ -18857,6 +18857,51 @@
   "{\"idType\": \"ID_CUSIP\", \"idValue\": \"26885G109\", \"includeUnlistedEquities\": true}": {
    "data": []
   },
+  "{\"idType\": \"ID_CUSIP\", \"idValue\": \"31620R105\", \"includeUnlistedEquities\": true}": {
+   "data": [
+    {
+     "compositeFIGI": "BBG000JBSJZ4",
+     "exchCode": "US",
+     "figi": "BBG000JBSJZ4",
+     "marketSector": "Equity",
+     "name": "FIDELITY NATIONAL FINANCIAL",
+     "securityDescription": "1023761D",
+     "securityType": "Common Stock",
+     "securityType2": "Common Stock",
+     "ticker": "1023761D"
+    }
+   ]
+  },
+  "{\"idType\": \"ID_CUSIP\", \"idValue\": \"31620R303\", \"includeUnlistedEquities\": true}": {
+   "data": [
+    {
+     "compositeFIGI": "BBG006N7S6K9",
+     "exchCode": "US",
+     "figi": "BBG006N7S6K9",
+     "marketSector": "Equity",
+     "name": "FIDELITY NATIONAL FINANCIAL",
+     "securityDescription": "FNF",
+     "securityType": "Common Stock",
+     "securityType2": "Common Stock",
+     "ticker": "FNF"
+    }
+   ]
+  },
+  "{\"idType\": \"ID_CUSIP\", \"idValue\": \"31620R402\", \"includeUnlistedEquities\": true}": {
+   "data": [
+    {
+     "compositeFIGI": "BBG006N7RYV7",
+     "exchCode": "US",
+     "figi": "BBG006N7RYV7",
+     "marketSector": "Equity",
+     "name": "FNFV GROUP",
+     "securityDescription": "FNFV",
+     "securityType": "Tracking Stk",
+     "securityType2": "Common Stock",
+     "ticker": "FNFV"
+    }
+   ]
+  },
   "{\"idType\": \"ID_CUSIP\", \"idValue\": \"365558105\", \"includeUnlistedEquities\": true}": {
    "data": [
     {
@@ -19653,6 +19698,36 @@
      "securityType": "Common Stock",
      "securityType2": "Common Stock",
      "ticker": "EXE"
+    }
+   ]
+  },
+  "{\"idType\": \"TICKER\", \"idValue\": \"FNF\", \"includeUnlistedEquities\": true}": {
+   "data": [
+    {
+     "compositeFIGI": "BBG006N7S6K9",
+     "exchCode": "US",
+     "figi": "BBG006N7S6K9",
+     "marketSector": "Equity",
+     "name": "FIDELITY NATIONAL FINANCIAL",
+     "securityDescription": "FNF",
+     "securityType": "Common Stock",
+     "securityType2": "Common Stock",
+     "ticker": "FNF"
+    }
+   ]
+  },
+  "{\"idType\": \"TICKER\", \"idValue\": \"FNFV\", \"includeUnlistedEquities\": true}": {
+   "data": [
+    {
+     "compositeFIGI": "BBG006N7RYV7",
+     "exchCode": "US",
+     "figi": "BBG006N7RYV7",
+     "marketSector": "Equity",
+     "name": "FNFV GROUP",
+     "securityDescription": "FNFV",
+     "securityType": "Tracking Stk",
+     "securityType2": "Common Stock",
+     "ticker": "FNFV"
     }
    ]
   },

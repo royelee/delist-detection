@@ -109,6 +109,17 @@ CATALOG: dict[str, FlagInfo] = {
         "after confirming the security really still trades (e.g. under another ticker) or is out of scope -- "
         "there is no override to add a missing delisting."),
 
+    "unexplained_ending": FlagInfo(
+        "fix", "The security's history closes (not listed today, not sighted at the fails data's last day) and no "
+               "rule gave it an ending, so the library wrote one of kind unknown (the spec's end-of-era branch 6: "
+               "nothing found, no kind asserted), dated by the last day its own CUSIPs' fails rows show it trading, "
+               "else MIDAS's last day of volume, else its last sighting. The date is a guess and is never published; "
+               "the verdict is uncertain, and the row has no DLRET.",
+        "Find what ended it (a Form 25 under another CIK or class, a merger, a bankruptcy, a drop to the OTC "
+        "market) in the issuer's filings and the fails rows; if the identity is wrong, pin the right cik/sec_id on "
+        "the observations. Accept it only once you've confirmed the security really ended on about that day or is "
+        "out of scope."),
+
     # --- check: a rule could not settle the answer ---
     # merger terms and payouts
     "merger_at_par": FlagInfo(
@@ -190,6 +201,11 @@ CATALOG: dict[str, FlagInfo] = {
         "check", "No Form 25 was found, so the delisting was dated and classified from other filings (a "
                  "bankruptcy or anchor 8-K, an SEC revocation or a Form 15).",
         f"Check the delisting date and bucket against the cited filing; {_ACCEPT}."),
+    "midas_drop": FlagInfo(
+        "info", "A drop no filing documents: the issuer has no SEC filing around the last day SEC MIDAS shows "
+                "exchange volume (a bank that filed with the FDIC), and the security's own CUSIPs traded on over "
+                "the counter after it. The last trade is that MIDAS day (CRSP 500, reason unavailable).",
+        "Nothing to do unless the date or the kind looks wrong; read the receivership or delisting notice."),
     "delist_date_approx": FlagInfo(
         "check", "No filing dated the delisting near the last observation, so delist_date is the last "
                  "observation itself.",
@@ -302,7 +318,8 @@ CATALOG: dict[str, FlagInfo] = {
     "issuer_inferred": FlagInfo(
         "check", "The resolver found no issuer CIK for this ticker era by its ticker or name, so it inferred one "
                  "from SEC fails-to-deliver CUSIP evidence (the issuer of an era sharing its CUSIP, shared_cusip, "
-                 "or of the new CUSIP its own switched to after a rename, cusip_handoff) or from the ranking of "
+                 "or of the new CUSIP its own switched to after a rename, cusip_handoff; the issuer code of its "
+                 "CUSIP, cusip_issuer) or from the ranking of "
                  "8-Ks naming the ticker (efts_frequency_renamed); the reason says which. Such an answer is never "
                  "saved in the resolver cache.",
         "Confirm the issuer named in the reason is the company that traded under the ticker then (its EDGAR "

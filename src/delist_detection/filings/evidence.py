@@ -130,6 +130,19 @@ def names_until(sub: dict, on: date) -> list[str]:
     return out
 
 
+# Forms EDGAR lists under an issuer that another party filed about it: its holders' ownership reports, its insiders'
+# reports, a bidder's tender offer and the SEC staff's own letters (FB-004: First Republic Bank filed nothing with the
+# SEC, yet its holders' SC 13G/As stand on its list, one 78 days before its last trade).
+FILED_BY_OTHERS = frozenset({
+    "SC 13D", "SC 13D/A", "SC 13G", "SC 13G/A", "SCHEDULE 13D", "SCHEDULE 13D/A", "SCHEDULE 13G", "SCHEDULE 13G/A",
+    "3", "3/A", "4", "4/A", "5", "5/A", "144", "144/A", "SC TO-T", "SC TO-T/A", "SC 14D1", "SC 14D1/A", "UPLOAD"})
+
+
+def own_filings(filings: list[EdgarSubmission]) -> list[EdgarSubmission]:
+    """The filings the issuer made itself: its EDGAR list without what others filed about it (`FILED_BY_OTHERS`)."""
+    return [f for f in filings if f.form not in FILED_BY_OTHERS]
+
+
 def first_filing(filings: list[EdgarSubmission]) -> date | None:
     days = [d for f in filings if (d := parse_day(f.filing_date))]
     return min(days) if days else None
