@@ -18,7 +18,7 @@ src/delist_detection/
                 contract, dlret, payout_rule, price_requests, reconstruction
   identity/     a security's identity, stages 1 to 4c: observations, figi_resolution, security_master,
                 ticker_resolver, issuer_record, issuer_in_force, identity, history, added_securities,
-                ticker_evidence, line_follow, derived_lines
+                ticker_evidence, line_follow, derived_lines, carried_price
   endings/      every delisting, found, dated and classified, stages 5 to 9g: delistings, trading_record, classifier,
                 end_of_era, distress, exchange_terms, own_shares, continuation_evidence, last_trade, rewrites,
                 registrants, successors, handoffs
@@ -551,8 +551,10 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   that neither side's name confirms as continuous (the class letter a name states is
   `identifiers.name_class_letter`). `identifiers.regular_way` maps a when-issued ticker to its regular-way one
   (EHAB-WI is EHAB): `ObservationIndex` groups by it and each era carries it, while each observation keeps the
-  caller's ticker. It no longer spells tickers itself, and imports nothing of FIGI's rules (step 13 removed the
-  cycle). The second split, on the fails rows, is `identity.refine_eras`; `identity.identify` is the one
+  caller's ticker. A derived era carries the step it came from (`TickerEra.derived_from`, a `DerivedFrom(sec_id,
+  issuer_cik, why, old_cusip, first)`: the refused security, its issuer, the refusal, the step's old CUSIP and first
+  day), which `identify` sets and checks the era against. It no longer spells tickers itself, and imports nothing of
+  FIGI's rules (step 13 removed the cycle). The second split, on the fails rows, is `identity.refine_eras`; `identity.identify` is the one
   place both run.
   `Observation.derived` marks an observation the library made from the fails rows, not the caller; `TickerEra.derived`
   (every observation derived) and `TickerEra.caller_observations` (those not derived) are what a reader of the
@@ -580,7 +582,12 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
 - `identity/ticker_resolver.py` — the memoized (ticker, date, observed name) → CIK lookup the identity stage asks
   (`identity.IssuerLookup`: `resolve`, `is_degraded`, `frequency_candidates` (its 8-K frequency tier's candidates
   and whether the search failed, for the second pass's rule B; its own state left as it was), `shadow`, `flush`);
-  it imports no `security_master`. It states the issuer record it reads through (`issuers`), which `pipeline.Clients`
+  it imports no `security_master`. `resolve(..., exclude=)` never answers an excluded CIK from any tier (the company-ticker
+  map, the Form 25 search, the company-name search and its agreeing-issuer fallback, the 8-K frequency rank), for a
+  derived era asked without the old line's issuer (`identity.identify`, rule X); its answer has a memo key of its own
+  (`_key`, the one place a key is built: the usual key and `|!` and the CIKs), so it is never read by a lookup without
+  the exclusion, nor the other way, and `is_degraded(..., exclude=)` builds the same key. It states the issuer record
+  it reads through (`issuers`), which `pipeline.Clients`
   takes as the run's and the classifier as its own. 6 strategies in order of
   precision (caller's `cik` pin → manual override → `company_tickers.json` →
   EFTS Form-25/15 → observation-name company search → 8-K frequency rank),
@@ -625,12 +632,24 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   and former). The era-level passes, which read the run's other eras and its fails rows and are never saved,
   are `identity.EraIssuers`.
 - `identity/identity.py` — architecture step 6: a security's identity, stages 1 to 4 behind one interface.
-  `identify(index, clients, as_of=, limit=, log=, workers=, meter=, derive=, ftd=)` gives `Identity`: the refined eras
+  `identify(index, clients, as_of=, limit=, log=, workers=, meter=, derive=, ftd=, verdicts=)` gives `Identity`: the refined eras
   (`refine_eras`, the second split after `observations.split_eras`: a CUSIP switch under the ticker, or a gap over
   `ERA_GAP_DAYS` no fails row bridges; its `derive` pairs (ticker, CUSIP) keep a part with no observation as an era
   of one derived observation, `_derived_era`, when it follows an era of its gap group and its CUSIP has no rows
-  under the ticker from the next era's first day on; `identify`'s `derive` is the same set and its `ftd` an index an earlier call opened, read in
-  place of a new one) and the run's fails index, opened by stage 1 over the fails files (`ftd`;
+  under the ticker from the next era's first day on; `identify`'s `derive` is the same pairs, each with the step it
+  came from (`DerivedFrom`), and its `ftd` an index an earlier call opened, read in place of a new one). After stage 3
+  `identify` checks every derived era that has no verdict yet against its step (`_check_derived`). Rule J: an era whose
+  security is the one its step was refused from is made only when the price carried over across the step
+  (`carried_price.step_price_ratio` within `CARRIED_PRICE`, or either price missing); else the verdict is `not_made` and
+  the step stays refused (Uniti 2025: 4.91 to 8.09; IR 2020, ENR 2015, CFFN 2010, WE 2023). Rule X: an era from a
+  `merged_out` step whose issuer answer is the origin's issuer while its security is another one, with no pin and no
+  given answer (`manual`, `cik_map`), is asked again with the origin's issuer excluded from every resolver tier (and
+  from an answer 2b or the second pass gives): verdict `without_old_issuer` (Coca-Cola Enterprises 2016, Aaron's 2020,
+  IGT 2015); what that lookup answers stands, another issuer or none. A new verdict sends stages 1 to 3 around again
+  with it, at most `MAX_VERDICT_PASSES` (3) times, and the result equals a fresh call given the verdicts
+  (`verdicts=`, `Identity.verdicts`; a pair with a verdict is not judged again). It logs `derived eras not made: N whose
+  price did not carry over onto the line they came from (...)` and `derived eras asked without the old line's issuer:
+  N (...)` and the run's fails index, opened by stage 1 over the fails files (`ftd`;
   `ftd_lo`, its `opened_from`; later stages ask it for more rows), each era's issuer (`issuers`, by era key, the one source of an era's CIK: asked at its capped date and at its last sighting,
   `era_capped_seen` and `era_last_seen`, with its own pin, name and first sighting; `choose_first_pass` takes one answer), each era's FIGI resolution, the securities, each
   security's CUSIPs over its whole life (`cusips`, their rows followed to the run date), the identity review items, and the
@@ -856,7 +875,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   it refused (`Lines.refused`, a `RefusedStep(sec_id, step, why)` each; its `sec_id` follows a fold, like the review
   items'), which `derived_lines` reads.
 - `identity/derived_lines.py` — seeds-only parity S2: which refused steps are lines of the run. `derivable(refused,
-  securities, profile)` gives the `(ticker, new CUSIP)` pairs (the ticker as the security's eras spell it, `BF-B`
+  securities, profile)` gives the `(ticker, new CUSIP)` pairs, each with its origin, a `DerivedFrom` (the first step
+  that names a pair wins; the ticker as the security's eras spell it, `BF-B`
   not the fails files' `BFB`; one pair per ticker of its eras, never a line ticker learned from the fails rows) of the refused SWITCH steps whose
   reason is in `DERIVABLE` (`merged_out`, `other_registrant`, `name`) and whose new rows' descriptions name the old
   line's issuer: `names.description_names_issuer` against `old_line_names` (the line's observed names and every
@@ -870,6 +890,13 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   returns the last round's identity and lines, so a derived line is a security of the run like any other: the FIGI
   stage resolves it by its own CUSIP, the handoff stage pairs it with the line before it, the finder searches its
   Form 25. The step stage 4b refused is held by the derived security in the next round, so it is not refused again.
+  Each round's `Identity.verdicts` (`not_made`, `without_old_issuer`) go to the next round's `identify`, and a pair
+  with `not_made` is never counted as new.
+- `identity/carried_price.py` — whether a share became one share across a CUSIP change: `CARRIED_PRICE` (2/3 to 3/2,
+  the one band), `price_carried(ratio)` (None is carried) and `step_price_ratio(ftd, ticker, old_cusip, new_cusip)` (the
+  new CUSIP's first fails price under the ticker over the old CUSIP's last on or before it; None when a side has no
+  row or a price is missing or not above zero). `identity.identify` (rule J) and `endings.handoffs` (a continuation by
+  timing across two issuers) both read it; `handoffs` defines no band of its own.
 - `identity/ticker_evidence.py` — decision 1: what ties a placeholder's ticker to its
   CIK. A resolver tier that names the ticker (`TICKER_TIERS`), else one
   EDGAR full-text search of the CIK's own filings (`full_text_search(...,
@@ -943,7 +970,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   successor issuer's 8-K12B/8-K12G3 `continuation_filing`, found by the full-text
   search for the predecessor's name, else in the successor issuer's own filing list,
   `own_continuation_filing`, unless the old issuer carries on in another line; else by timing and
-  the same CIK or a `cusip_switch` whose price carried over (`switch_price_ratio` within `CARRIED_PRICE`, 0.5 to 2.0, or
+  the same CIK or a `cusip_switch` whose price carried over (`switch_price_ratio` within `carried_price.CARRIED_PRICE`, 2/3 to 3/2, or
   unknown; a same-issuer pair does not read it); else a takeover when the new line traded
   before), `apply_handoffs` (a continuation's missing `exchange_transfer` row
   or its successor, `handoff_continuation`/`handoff_rebucketed`/

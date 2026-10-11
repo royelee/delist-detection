@@ -383,6 +383,17 @@
   era of the same ticker and its CUSIP is not the ticker's next era's: the identity stage keeps those fails rows as an
   era with one derived observation (`Observation.derived`), named by its fails description, looked up under it and its
   CUSIP, `observed=false`, in no echo table. A chain is followed up to `MAX_DERIVE_ROUNDS` rounds.
+  A derived era knows the step it came from (`TickerEra.derived_from`) and `identify` checks it against that step
+  after stage 3. It joins the security its step was refused from only when the price carried over across the step (rule
+  J: the new CUSIP's first fails price within `CARRIED_PRICE`, 2/3 to 3/2, of the old CUSIP's last, or either missing;
+  a continuation is "same holders, same claim, one for one": Uniti 2025 is 1.65, a merger at 0.6029 share per share);
+  otherwise the era is not made and the step stays refused. An era from a `merged_out` step never takes the old
+  line's issuer under a composite of its own (rule X: stage 4b found that issuer files no periodic report after the
+  step): it is asked again with that issuer excluded from every resolver tier, and what that answers stands, another
+  issuer or none. A `other_registrant` or `name` step keeps the origin's issuer (CHTR 2016). The verdicts
+  (`not_made`, `without_old_issuer`) go from round to round (`Identity.verdicts`); the lookup that excludes a CIK has a
+  memo key of its own. `CARRIED_PRICE` is defined once, in `identity/carried_price.py`, and the handoff stage's
+  continuation by timing across two issuers reads the same band.
 
 ## `ticker_history` is clipped only at the delisting that actually ends the security
 

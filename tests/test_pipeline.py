@@ -2797,7 +2797,7 @@ MERGER_F25 = EdgarSubmission("0000876661-14-000300", "25-NSE", "2014-06-10", "",
 
 
 def _line_run(fake_edgar, tmp_path, *, filings, figi, new_rows, old_figi=True, listings=(), id_baseline=(),
-              extra_obs=(), llm=None):
+              extra_obs=(), llm=None, log=lambda *_: None):
     """RS (CIK 4242), observed 2008-2009, its old CUSIP failing weekly under RS until 2012-09-17, then `new_rows`;
     `figi`: OpenFIGI's answers beyond the old CUSIP's (BBGRS01 unless `old_figi` is False)."""
     fake_edgar.company_map["RS"] = {"cik_str": 4242, "ticker": "RS", "title": "REVERSE SPLIT CO"}
@@ -2813,7 +2813,7 @@ def _line_run(fake_edgar, tmp_path, *, filings, figi, new_rows, old_figi=True, l
         answers[("ID_CUSIP", RS_OLD)] = _figi_answer("BBGRS01", "RS", "REVERSE SPLIT CO")
     index, clients = _index_clients(fake_edgar, [*obs, *extra_obs], rows, answers)
     clients.llm_extractor = llm
-    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None, id_baseline=id_baseline)
+    run(index, clients, Overrides(), out_dir=tmp_path, log=log, id_baseline=id_baseline)
     return {name: read_table(name, table_path(tmp_path, name)) for name in (
         "securities", "cusip_history", "delistings", "contract_delistings", "id_changes",
         "review_summary", "uncertain")} | {"ticker_history": ticker_history(tmp_path)}
@@ -2862,17 +2862,43 @@ def test_a_registrant_that_merged_out_at_the_switch_is_not_followed(fake_edgar, 
     assert _flag_count(t, "line_follow_refused") == "0"     # the derived line holds the new CUSIP: no step to refuse
 
 
+OLD_MERGER_8K = EdgarSubmission("0000004242-12-000040", "8-K", "2012-09-24", "2012-09-24", "2.01,3.01,5.01,9.01", "m.htm")
+OLD_F25 = EdgarSubmission("0000876661-12-000300", "25-NSE", "2012-09-24", "", "", "primary_doc.xml")
+
+
+def _new_registrant(fake_edgar):
+    """The registrant of the line after RS's reverse-split-like switch is another company, CIK 4343 (as Coca-Cola
+    European Partners is of Coca-Cola Enterprises): the lookup finds it by the name its fails rows carry, and it files
+    the merger and the Form 25 that end the line."""
+    fake_edgar.company_map["RSNEW"] = {"cik_str": 4343, "ticker": "RSNEW", "title": "REVERSE SPLIT CO NEW"}
+    fake_edgar.submissions_by_cik[4343] = [
+        EdgarSubmission("0000004343-12-000001", "10-K", "2012-03-01", "2011-12-31", "", "k.htm"),
+        EdgarSubmission("0000004343-13-000004", "10-Q", "2013-02-08", "2012-12-31", "", "q.htm"),
+        replace(MERGER_8K, accession="0000004343-14-000020"), MERGER_F25]
+    fake_edgar.texts["0000004343-14-000020"] = ("Item 3.01. trading suspended prior to the opening of trading on "
+                                                "June 20, 2014 " + "x" * 300)
+    fake_edgar.texts["0000004242-12-000040"] = ("Item 3.01. trading suspended prior to the opening of trading on "
+                                                "September 25, 2012 " + "x" * 300)
+    fake_edgar.raws["0000876661-12-000300"] = LINE_F25
+    hit = {"cik": 4343, "name": "REVERSE SPLIT CO NEW", "form": "25-NSE", "filing_date": "2014-06-10"}
+    fake_edgar.company_search_atom = lambda name, form_type="25-NSE": (
+        [hit] if form_type == "25-NSE" and name.upper().startswith("REVERSE SPLIT CO NEW") else [])
+
+
 def test_the_line_after_a_registrant_that_merged_out_is_a_derived_security(fake_edgar, tmp_path):
     """S2 (seeds-only parity): RS's observations stop in 2009 and its registrant merged out at the 2012 switch (no 10-Q
     after it), so stage 4b refuses the step; the new CUSIP's rows, named for RS, are a line of the run. It is an
-    ordinary security to every later stage -- the old line hands over to it, its own merger is found -- and the
-    caller's tables hold the caller's rows only."""
-    t = _line_run(fake_edgar, tmp_path, filings=[SPLIT_8K, MERGER_8K, MERGER_F25],
+    ordinary security to every later stage -- each line's own merger is found -- and the caller's tables hold the
+    caller's rows only. The old registrant ended its line at the switch (its Form 25), so it is not the issuer of the
+    line after it: that line's issuer is another company, CIK 4343 (rule X: the lookup answers 4242 first and is asked
+    again without it)."""
+    _new_registrant(fake_edgar)
+    t = _line_run(fake_edgar, tmp_path, filings=[SPLIT_8K, OLD_MERGER_8K, OLD_F25],
                   figi={("ID_CUSIP", RS_NEW): _figi_answer("BBGRSNEW1", "RS", "REVERSE SPLIT CO")},
                   new_rows=_rs_new_rows())
     secs = {r["sec_id"]: r for r in t["securities"]}
     assert {k: (v["observed"], v["issuer_cik"]) for k, v in secs.items()} == {
-        "BBGRS01": ("true", "4242"), "BBGRSNEW1": ("false", "4242")}
+        "BBGRS01": ("true", "4242"), "BBGRSNEW1": ("false", "4343")}
     assert secs["BBGRSNEW1"]["name"] == "REVERSE SPLIT CO NEW"            # named by its own fails description
     assert {r["sec_id"]: r["cusip"] for r in t["cusip_history"]} == {"BBGRS01": RS_OLD, "BBGRSNEW1": RS_NEW}
     assert ("BBGRSNEW1", "2012-10-01", "ftd") in {(r["sec_id"], r["valid_from"], r["source"])
@@ -2883,7 +2909,28 @@ def test_the_line_after_a_registrant_that_merged_out_is_a_derived_security(fake_
     seeds = read_table("seeds", table_path(tmp_path, "seeds"))
     assert sorted((r["ticker"], r["as_of"], r["sec_id"]) for r in seeds) == caller
     assert {(r["sec_id"], r["bucket"], r["successor_sec_id"]) for r in t["delistings"]} == {
-        ("BBGRS01", "exchange_transfer", "BBGRSNEW1"), ("BBGRSNEW1", "merger", "")}
+        ("BBGRS01", "merger", ""), ("BBGRSNEW1", "merger", "")}
+
+
+def test_a_derived_line_on_its_origins_composite_whose_price_did_not_carry_over_is_not_made(
+        fake_edgar, tmp_path, monkeypatch):
+    """Uniti 2025: the registrant merged out at the switch, and OpenFIGI gives the new CUSIP the composite the old
+    line holds (RS: 10 to 40 a share, not one share for one). The line after the step is not a line of the run: the
+    tables are those of a run that derives no line, the old security keeps its one CUSIP and its history, and the
+    step stays refused (`line_follow_refused`)."""
+    import delist_detection.identity.derived_lines as derived_lines
+    same = {("ID_CUSIP", RS_NEW): _figi_answer("BBGRS01", "RS", "REVERSE SPLIT CO")}
+    logs = []
+    t = _line_run(fake_edgar, tmp_path / "derived", filings=[SPLIT_8K, MERGER_8K, MERGER_F25], figi=same,
+                  new_rows=_rs_new_rows(), log=logs.append)
+    monkeypatch.setattr(derived_lines, "derivable", lambda *a, **kw: {})
+    none = _line_run(fake_edgar, tmp_path / "none", filings=[SPLIT_8K, MERGER_8K, MERGER_F25], figi=same,
+                     new_rows=_rs_new_rows())
+    assert t == none
+    assert [r["sec_id"] for r in t["securities"]] == ["BBGRS01"] and [r["cusip"] for r in t["cusip_history"]] == [RS_OLD]
+    assert _flag_count(t, "line_follow_refused") == "1"
+    assert any(line.startswith("derived eras not made: 1 whose price did not carry over onto the line they came from "
+                               "(RS@") for line in logs)
 
 
 def test_a_new_cusip_another_issuers_security_holds_is_never_followed(fake_edgar, tmp_path):

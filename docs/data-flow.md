@@ -854,8 +854,9 @@ ticker and another starting under it within days (CONTEXT.md).
    continuation by timing and identity (at most `CONTINUATION_DAYS` = 10
    days apart, B sighted under no ticker before then, and the same issuer CIK
    or the ticker's CUSIP switching from A's to B's in the fails data,
-   `cusip_switch`, at about the same price: B's first fails price is 0.5 to
-   2.0 times A's last, `CARRIED_PRICE` and `switch_price_ratio`, or either
+   `cusip_switch`, at about the same price: B's first fails price is 2/3 to
+   3/2 times A's last, `CARRIED_PRICE` (`identity/carried_price.py`, the band
+   the identity stage reads for a derived era too) and `switch_price_ratio`, or either
    price is missing. A bankruptcy plan's new shares (Seadrill 2018, 0.10 to
    18.50) and a spin-off that takes the ticker (The Aaron's Company 2020,
    62.93 to 18.41) fail it; a same-issuer pair never reads the price: LMCA

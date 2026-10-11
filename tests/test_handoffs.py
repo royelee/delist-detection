@@ -259,8 +259,8 @@ def test_the_price_across_a_cusip_switch_is_bs_first_over_as_last():
     (185.0, None),            # Seadrill 2018: a bankruptcy plan's new shares
     (0.29, None),             # The Aaron's Company 2020: a spin-off that took the ticker
     (0.46, None),             # NWS-A 2013
-    (0.49, None), (2.01, None),
-    (0.5, "continuation"), (2.0, "continuation"),
+    (0.66, None), (1.51, None),
+    (0.67, "continuation"), (1.5, "continuation"),
     (0.89, "continuation"),   # GGP 2010
     (None, "continuation"),   # no price on one side (WEN 2009): as before
 ])

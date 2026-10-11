@@ -107,6 +107,19 @@ def write_observations(obs: Iterable[Observation], path: str | Path) -> int:
     return len(rows)
 
 
+@dataclass(frozen=True)
+class DerivedFrom:
+    """The step a derived era came from (`derived_lines.derivable`): the id of the security whose step stage 4b refused
+    and that security's issuer CIK (as that round's securities give them), the refusal (`merged_out`,
+    `other_registrant`, `name`), the step's old CUSIP and its first day. `identity.identify` checks the era's answers
+    against it."""
+    sec_id: str
+    issuer_cik: int | None
+    why: str
+    old_cusip: str
+    first: str
+
+
 @dataclass
 class TickerEra:
     ticker: str
@@ -121,6 +134,8 @@ class TickerEra:
     # eras starting the same day (one ticker seen under two names on one date),
     # so `key` stays unique while every other key stays "TICKER@DATE".
     seq: int = 0
+    # The step a derived era came from; set by identity.identify, matched on the era's ticker and one of its CUSIPs
+    derived_from: DerivedFrom | None = None
 
     @property
     def caller_observations(self) -> list[Observation]:

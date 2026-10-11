@@ -33,6 +33,7 @@ from ..filings.evidence import names_near
 from ..vocabulary.exit_kind import SUCCESSOR_FORMS, TIMING_CIK, TIMING_CUSIP, continuation_reason, successor_note
 from ..filings.filing_search import successor_query
 from ..sources.ftd import FtdIndex, FtdRow
+from ..identity.carried_price import CARRIED_PRICE, price_carried
 from ..identity.history import TAKEOVER_DAYS, Sighting
 from ..vocabulary.identifiers import bare_ticker, strip_class_words
 from .last_trade import NO_DAY, at_handoff
@@ -165,9 +166,6 @@ def predecessor_names(sub: dict | None, a_last: str, observed: str | None) -> li
     return out
 
 
-CARRIED_PRICE = (0.5, 2.0)   # B's first fails price over A's last: a share for a share keeps the price about there
-
-
 def _switch_rows(ftd: FtdIndex, pair: HandoffPair, a_cusips: Sequence[str],
                  b_cusips: Sequence[str]) -> tuple[FtdRow, FtdRow] | None:
     """A's last fails row and B's first under the pair's ticker, where the ticker switches CUSIP at the handoff
@@ -247,7 +245,7 @@ def decide_handoff(pair: HandoffPair, *, filing: tuple[str, str, str] | None, sa
         form, accession, _ = filing
         return HandoffDecision(pair, "continuation", f"{form} {accession}".strip(), True)
     existed = _days(pair.b_first_any, pair.a_last) > CONTINUATION_DAYS
-    carried = price_ratio is None or CARRIED_PRICE[0] <= price_ratio <= CARRIED_PRICE[1]
+    carried = price_carried(price_ratio)
     if (abs(pair.gap) <= CONTINUATION_DAYS and not existed and not lived_on and not issuer_carries_on
             and (same_issuer or (cusip_switch and carried))):
         return HandoffDecision(pair, "continuation", TIMING_CIK if same_issuer else TIMING_CUSIP, False)

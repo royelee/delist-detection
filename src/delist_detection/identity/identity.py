@@ -39,19 +39,21 @@ from collections import Counter, defaultdict
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
+from types import MappingProxyType
 from typing import Any, Protocol
 
 from ..outputs.degraded import degraded_item
 from ..filings.evidence import bankruptcy_8ks, names_between, parse_day, renamed_near
 from ..sources.ftd import FTD_START, FtdIndex, FtdRow
 from ..vocabulary.identifiers import is_placeholder, name_class_letter, placeholder_id, share_class_from_name
+from .carried_price import price_carried, step_price_ratio
 from .issuer_record import IssuerRecord
 from ..outputs.manifest import StageMeter
 from ..vocabulary.names import (
     description_matches, description_name, description_names, names_agree, names_an_issuer,
 )
 from .observations import (
-    ERA_GAP_DAYS, Observation, ObservationError, ObservationIndex, TickerEra, eras_by_key, number_eras,
+    ERA_GAP_DAYS, DerivedFrom, Observation, ObservationError, ObservationIndex, TickerEra, eras_by_key, number_eras,
 )
 from ..sources.prefetch import warm
 from ..outputs.review_triage import ReviewItem
@@ -61,6 +63,10 @@ from .security_master import (
     resolve_with_identity_guard, ticker_unconfirmed_review, trades_at_switch,
 )
 from .ticker_resolver import TickerResolution, TickerResolver
+
+MAX_VERDICT_PASSES = 3   # passes that add a verdict on a derived era: stages 1 to 3 again with the new ones
+NOT_MADE = "not_made"                          # a verdict: the derived era is not made (rule J)
+WITHOUT_OLD_ISSUER = "without_old_issuer"      # a verdict: the derived era is asked without the old line's issuer (rule X)
 
 ERA_MIN_RUN = 3          # an FTD CUSIP run shorter than this is noise, not a CUSIP switch
 ERA_MIN_ROWS = 3         # an era with fewer fails rows of its own gets no second-pass answer
@@ -77,12 +83,14 @@ class IssuerLookup(Protocol):
     `resolve` is its first pass, `is_degraded` whether an answer rested on a failed request or a stale copy,
     `frequency_candidates` its 8-K frequency tier's ranked candidates (CIK, name) for a ticker before a day and
     whether that search failed (the second pass's rule B reads them), `shadow` a copy for a warm pass, and `flush`
-    writes its memo."""
+    writes its memo. A lookup `exclude`s CIKs (rule X: a derived era asked without the old line's issuer) only where
+    `identify` passes the argument; `is_degraded` is then asked with the same `exclude`."""
 
     def resolve(self, ticker: str, observed_date: str | None = None, *, pin: Any = ..., name: Any = ...,
-                since: str | None = None) -> TickerResolution: ...
+                since: str | None = None, exclude: Collection[int] = ...) -> TickerResolution: ...
 
-    def is_degraded(self, ticker: str, observed_date: str | None = None, *, name: Any = ...) -> bool: ...
+    def is_degraded(self, ticker: str, observed_date: str | None = None, *, name: Any = ...,
+                    exclude: Collection[int] = ...) -> bool: ...
 
     def frequency_candidates(self, ticker: str, day: str) -> tuple[list[tuple[int, str]], bool]: ...
 
@@ -108,7 +116,8 @@ class Identity:
     the securities, each security's CUSIPs over its whole life (`cusips`), the identity review items, each era's
     lookup tier (`tiers`: the first pass's, or the source of the 2b or second-pass rule that answered it) and the
     eras whose ticker's fails rows decided their issuer (`rows_decided`, 2b's `ticker_rows`: their observed name
-    was refuted, so the issuer in force keeps their CIK)."""
+    was refuted, so the issuer in force keeps their CIK), and `verdicts`, what the check of the derived eras found
+    (`identify`): by (ticker, new CUSIP) pair, `NOT_MADE` or `WITHOUT_OLD_ISSUER`."""
     eras: list[TickerEra]
     era_by_key: dict[str, TickerEra]
     ftd: FtdIndex
@@ -119,6 +128,7 @@ class Identity:
     review: list[ReviewItem] = field(default_factory=list)
     tiers: dict[str, str] = field(default_factory=dict)
     rows_decided: frozenset[str] = frozenset()
+    verdicts: Mapping[tuple[str, str], str] = field(default_factory=dict)
 
     @property
     def ftd_lo(self) -> date | None:
@@ -165,25 +175,114 @@ def _quiet(*_: Any) -> None:
     return None
 
 
+_NO_PAIRS: Mapping[tuple[str, str], Any] = MappingProxyType({})
+
+
 def identify(index: ObservationIndex, clients: Sources, *, as_of: date, limit: int | None = None,
              log: Callable[[str], None] = _quiet, workers: int = 1, meter: StageMeter | None = None,
-             derive: Collection[tuple[str, str]] = (), ftd: FtdIndex | None = None) -> Identity:
+             derive: Mapping[tuple[str, str], DerivedFrom] = _NO_PAIRS, ftd: FtdIndex | None = None,
+             verdicts: Mapping[tuple[str, str], str] = _NO_PAIRS) -> Identity:
     """Stages 1 to 4 over the observations of `index` (its first `limit` eras under `limit`), every window ending on
     the run date `as_of`; `log` takes one line per step, `meter` the SEC traffic of issuer resolution, and `workers`
     > 1 fills the EDGAR caches ahead on that many threads. Raises `ObservationError` when there is no observation;
     a refusal (`fatal.FATAL`) or an OpenFIGI outage stops it.
 
-    `derive` and `ftd`: the derived-line pairs (`derived_lines.identify_with_lines`) and the fails index an earlier call
-    opened, which a repeat reads in place of opening its own (the rows `follow_lines` added to it stay)."""
+    `derive`, `ftd` and `verdicts`: the derived-line pairs with the step each came from
+    (`derived_lines.derivable`), the fails index an earlier call opened, which a repeat reads in place of opening its
+    own (the rows `follow_lines` added to it stay), and the verdicts an earlier round gave on derived pairs.
+
+    A derived era is checked against its step (`_check_derived`) after stage 3. Rule J: an era on the security its
+    step was refused from is made only when the price carried over across the step (`carried_price`); a pair judged
+    otherwise is `NOT_MADE`. Rule X: an era from a `merged_out` step that took the origin's issuer under a composite
+    of its own is asked again without that issuer in any resolver tier; the pair is `WITHOUT_OLD_ISSUER`. A new verdict
+    sends stages 1 to 3 around again with it (at most `MAX_VERDICT_PASSES` times: the result equals a fresh call given
+    the verdicts, and a pair with a verdict is not judged again). `Identity.verdicts` holds the final mapping."""
     meter = meter if meter is not None else StageMeter(log)
-    eras, era_by_key, ftd = _refine(index, clients.ftd_client, as_of, limit, log, derive, ftd)          # 1
-    handoffs = cusip_handoffs(eras, ftd)        # the CUSIP links between the eras: the second pass and stage 3 read them
-    found = _resolve_issuers(eras, ftd, handoffs, clients, log, workers, meter)                          # 2, 2b
-    resolutions, securities, review = _resolve_securities(eras, era_by_key, ftd, handoffs, found, clients, log)  # 3
+    verdicts = dict(verdicts)
+    found_keys: dict[str, dict[tuple[str, str], str]] = {NOT_MADE: {}, WITHOUT_OLD_ISSUER: {}}     # verdict -> pair -> era key
+    for pass_no in range(MAX_VERDICT_PASSES + 1):
+        made = [pair for pair in derive if verdicts.get(pair) != NOT_MADE]
+        eras, era_by_key, ftd = _refine(index, clients.ftd_client, as_of, limit, log, made, ftd)        # 1
+        for e in eras:
+            e.derived_from = _origin(e, derive) if e.derived else None
+        handoffs = cusip_handoffs(eras, ftd)    # the CUSIP links between the eras: the second pass and stage 3 read them
+        excluded = _excluded_issuers(eras, derive, verdicts)
+        found = _resolve_issuers(eras, ftd, handoffs, clients, log, workers, meter, excluded)           # 2, 2b
+        resolutions, securities, review = _resolve_securities(eras, era_by_key, ftd, handoffs, found, clients, log)  # 3
+        new = _check_derived(eras, derive, verdicts, ftd, resolutions, found)
+        if not new:
+            break
+        if pass_no == MAX_VERDICT_PASSES:
+            log(f"derived eras: {len(new)} more verdicts after {MAX_VERDICT_PASSES} passes, not applied")
+            break
+        for pair, (verdict, key) in new.items():
+            found_keys[verdict][pair] = key
+        verdicts |= {pair: verdict for pair, (verdict, _) in new.items()}
+    if found_keys[NOT_MADE]:
+        log(f"derived eras not made: {len(found_keys[NOT_MADE])} whose price did not carry over onto the line they "
+            f"came from ({', '.join(sorted(found_keys[NOT_MADE].values()))})")
+    if found_keys[WITHOUT_OLD_ISSUER]:
+        log(f"derived eras asked without the old line's issuer: {len(found_keys[WITHOUT_OLD_ISSUER])} "
+            f"({', '.join(sorted(found_keys[WITHOUT_OLD_ISSUER].values()))})")
     cusips = _security_cusips(securities, resolutions, ftd)                                              # 4
     return Identity(eras, era_by_key, ftd, found.issuers, resolutions, securities, cusips, review,
                     {k: r.source for k, r in found.answers.items()},
-                    frozenset(k for k, v in found.inferred.items() if v.source == TICKER_ROWS))
+                    frozenset(k for k, v in found.inferred.items() if v.source == TICKER_ROWS), verdicts)
+
+
+def _pair_of(era: TickerEra, derive: Mapping[tuple[str, str], DerivedFrom]) -> tuple[str, str] | None:
+    """The (ticker, new CUSIP) pair a derived era came from: its ticker and the first of its CUSIPs `derive` names."""
+    return next(((era.ticker, c) for c in era.ftd_cusips if (era.ticker, c) in derive), None)
+
+
+def _origin(era: TickerEra, derive: Mapping[tuple[str, str], DerivedFrom]) -> DerivedFrom | None:
+    pair = _pair_of(era, derive)
+    return derive[pair] if pair is not None else None
+
+
+def _excluded_issuers(eras: Sequence[TickerEra], derive: Mapping[tuple[str, str], DerivedFrom],
+                      verdicts: Mapping[tuple[str, str], str]) -> dict[str, frozenset[int]]:
+    """The issuer each era is asked without (era key -> CIKs): the old line's, for a derived era whose pair has
+    `WITHOUT_OLD_ISSUER`."""
+    out: dict[str, frozenset[int]] = {}
+    for e in eras:
+        pair = _pair_of(e, derive) if e.derived_from is not None else None
+        if pair is not None and verdicts.get(pair) == WITHOUT_OLD_ISSUER and e.derived_from.issuer_cik is not None:
+            out[e.key] = frozenset({e.derived_from.issuer_cik})
+    return out
+
+
+# a source that is a given answer, not a lookup's finding: the caller's own CIK map or a manual override
+GIVEN_ANSWERS = ("manual", "cik_map")
+
+
+def _check_derived(eras: Sequence[TickerEra], derive: Mapping[tuple[str, str], DerivedFrom],
+                   verdicts: Mapping[tuple[str, str], str], ftd: FtdIndex, resolutions: Mapping[str, EraResolution],
+                   found: "_Issuers") -> dict[tuple[str, str], tuple[str, str]]:
+    """The new verdicts on the derived eras that have none yet: (pair -> (verdict, era key)).
+
+    Rule J: an era whose security is the one its step was refused from (`resolutions[era].sec_id ==
+    derived_from.sec_id`) is made only when the price carried over across the step (`step_price_ratio`,
+    `price_carried`; the issuers play no part): else `NOT_MADE`.
+
+    Rule X: an era from a `merged_out` step whose issuer answer is the origin's issuer (`derived_from.issuer_cik`,
+    not None) while its security is another one, and which has no pin and no given answer (`GIVEN_ANSWERS`), is
+    `WITHOUT_OLD_ISSUER`: by stage 4b's own finding the old issuer files no periodic report after a `merged_out` step,
+    so it cannot be the issuer of the line after it (Coca-Cola Enterprises 2016)."""
+    out: dict[tuple[str, str], tuple[str, str]] = {}
+    for e in eras:
+        origin = e.derived_from
+        pair = _pair_of(e, derive) if origin is not None else None
+        if origin is None or pair is None or pair in verdicts:
+            continue
+        if resolutions[e.key].sec_id == origin.sec_id:
+            if not price_carried(step_price_ratio(ftd, e.ticker, origin.old_cusip, pair[1])):
+                out[pair] = (NOT_MADE, e.key)
+        elif (origin.why == "merged_out" and origin.issuer_cik is not None
+              and cik_of(found.issuers, e.key) == origin.issuer_cik
+              and e.cik_pin is None and not e.sec_id_pin and found.answers[e.key].source not in GIVEN_ANSWERS):
+            out[pair] = (WITHOUT_OLD_ISSUER, e.key)
+    return out
 
 
 def _refine(index: ObservationIndex, ftd_client: Any, as_of: date, limit: int | None,
@@ -268,10 +367,12 @@ class _Issuers:
     inferred: dict[str, InferredIssuer]
     disagreements: dict[str, InferredIssuer]
     degraded: set[str]
+    excluded: Mapping[str, frozenset[int]] = field(default_factory=dict)
 
 
 def _resolve_issuers(eras: list[TickerEra], ftd: FtdIndex, handoffs: Sequence[Handoff], clients: Sources,
-                     log: Callable[[str], None], workers: int, meter: StageMeter) -> _Issuers:
+                     log: Callable[[str], None], workers: int, meter: StageMeter,
+                     excluded: Mapping[str, frozenset[int]] = _NO_PAIRS) -> _Issuers:
     """2. The issuer CIK of each era, resolved at two dates, its capped date and the end of its own fails rows, one
     answer chosen (`choose_first_pass`), with each era's own pin and name (a pin or name looked up by
     (ticker, date) can belong to a neighbouring era when the last sighting falls
@@ -284,16 +385,20 @@ def _resolve_issuers(eras: list[TickerEra], ftd: FtdIndex, handoffs: Sequence[Ha
     (`IssuerRecord.names`), which stage 3 checks CUSIPs and FIGI names against:
     an issuer whose read failed has none (its eras are checked against their
     observed names only) and is reported degraded. A weak first-pass answer (its name does not agree) stands only
-    where no pass infers an issuer and the era's own fails rows fit it (`EraIssuers.rows_fit`)."""
+    where no pass infers an issuer and the era's own fails rows fit it (`EraIssuers.rows_fit`).
+
+    `excluded`: era key -> the CIKs the era is asked without (rule X: a derived era never takes the old line's issuer):
+    every resolver tier leaves them out, and an answer 2b or the second pass gives is dropped when it is one."""
     resolver, record = clients.resolver, clients.issuers
     capped, last_seen = capped_sightings(eras, ftd), last_sightings(eras, ftd)
 
     def both(lookup, e: TickerEra) -> tuple[TickerResolution, TickerResolution]:
         """The era's answers at its capped date and at the end of its rows (one lookup when they are one day)."""
-        at_cap = lookup.resolve(e.ticker, capped[e.key], pin=e.cik_pin, name=e.name, since=e.first)
+        ex = {"exclude": excluded[e.key]} if e.key in excluded else {}       # the argument only where it is asked
+        at_cap = lookup.resolve(e.ticker, capped[e.key], pin=e.cik_pin, name=e.name, since=e.first, **ex)
         if last_seen[e.key] <= capped[e.key]:
             return at_cap, at_cap
-        return at_cap, lookup.resolve(e.ticker, last_seen[e.key], pin=e.cik_pin, name=e.name, since=e.first)
+        return at_cap, lookup.resolve(e.ticker, last_seen[e.key], pin=e.cik_pin, name=e.name, since=e.first, **ex)
 
     mark = meter.start()
     if workers > 1:
@@ -309,7 +414,8 @@ def _resolve_issuers(eras: list[TickerEra], ftd: FtdIndex, handoffs: Sequence[Ha
         f"{sum(f.fallback is not None for f in first.values())} weak answers kept aside")
     passes = EraIssuers(record, resolver.frequency_candidates)
     tickers = {e.key: e.ticker for e in eras}
-    checked = passes.check_names(eras, ftd, last_seen, answers)                                          # 2b
+    checked = {k: v for k, v in passes.check_names(eras, ftd, last_seen, answers).items()           # 2b
+               if v.cik not in excluded.get(k, ())}
     for key, found in checked.items():
         answers[key] = TickerResolution(tickers[key], found.cik, None, found.source)
     log(f"name checks: {len(checked)} name-search answers replaced"
@@ -318,7 +424,7 @@ def _resolve_issuers(eras: list[TickerEra], ftd: FtdIndex, handoffs: Sequence[Ha
     # the first run answers keeps that answer (rule B reads the 8-K filers of the 120 days before its date).
     ciks = {k: r.cik for k, r in answers.items()}
     by_cap, by_end = (passes.infer(eras, ftd, dates, ciks, handoffs) for dates in (capped, last_seen))
-    inferred = {**by_end.inferred, **by_cap.inferred}
+    inferred = {k: v for k, v in {**by_end.inferred, **by_cap.inferred}.items() if v.cik not in excluded.get(k, ())}
     disagreements = {**by_end.disagreements, **by_cap.disagreements}
     for key, found in inferred.items():
         answers[key] = TickerResolution(tickers[key], found.cik, None, found.source)
@@ -346,7 +452,7 @@ def _resolve_issuers(eras: list[TickerEra], ftd: FtdIndex, handoffs: Sequence[Ha
     meter.done("issuer resolution", mark)
     # stage 2b's answers are reported as issuer_inferred, as the second pass's are
     return _Issuers(answers, issuers_by_era(ciks, issuer_names), capped, last_seen, names_degraded,
-                    {**checked, **inferred}, disagreements, set(passes.degraded))
+                    {**checked, **inferred}, disagreements, set(passes.degraded), excluded)
 
 
 def _trading_span(ftd: FtdIndex, cusip: str) -> tuple[str, str] | None:
@@ -424,7 +530,8 @@ def _resolve_securities(eras: list[TickerEra], era_by_key: dict[str, TickerEra],
             review.append(ReviewItem(res.sec_id or "", era.ticker, cik_of(issuers, key), flag,
                                      f"{era.key} {era.name or ''}".strip(), last_seen=era.last))
     for e in eras:
-        if any(clients.resolver.is_degraded(e.ticker, day, name=e.name)
+        ex = {"exclude": found.excluded[e.key]} if e.key in found.excluded else {}    # the key the lookup was made under
+        if any(clients.resolver.is_degraded(e.ticker, day, name=e.name, **ex)
                for day in {found.capped[e.key], found.last_seen[e.key]}) or e.key in found.degraded:
             review.append(degraded_item(resolutions[e.key].sec_id or "", e.ticker, cik_of(issuers, e.key),
                                          f"{e.key} {e.name or ''}: issuer resolution",

@@ -68,7 +68,7 @@ A caller-supplied record that a ticker was seen on a date, with the name and CUS
 _Avoid_: member name, names row
 
 **Derived line**:
-A line after a CUSIP change that stage 4b refused (another registrant took over) and that no observation names, made an era of its own from the fails rows (`identity/derived_lines.py`, `identify_with_lines`). Its one observation is derived (`Observation.derived`): it is not the caller's, so it appears in neither `observation_map.csv` nor `contract/seeds.csv`, and a security all of whose eras are derived is `observed=false`. In a full run the caller has observed the same line.
+A line after a CUSIP change that stage 4b refused (another registrant took over) and that no observation names, made an era of its own from the fails rows (`identity/derived_lines.py`, `identify_with_lines`). Its one observation is derived (`Observation.derived`): it is not the caller's, so it appears in neither `observation_map.csv` nor `contract/seeds.csv`, and a security all of whose eras are derived is `observed=false`. In a full run the caller has observed the same line. A derived era knows the step it came from and is checked against it: it joins the line it was refused from only when the price carried over across the step, and an era from a `merged_out` step is never given the old line's issuer.
 
 **Pin**:
 A CIK or `sec_id` the caller attaches to an observation because it has already settled that observation's identity. A pin beats the library's own resolution but is still checked against the observation's name.

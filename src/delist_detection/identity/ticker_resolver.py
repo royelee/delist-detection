@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from collections.abc import Collection
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -187,9 +188,14 @@ class TickerResolver:
         return None
 
     @staticmethod
-    def _key(ticker: str, observed_date: str | None, observed_name: str | None) -> str:
-        """The memo key: an answer holds for one ticker, date and observed name."""
-        return f"{ticker.upper().strip()}|{observed_date or ''}|{observed_name or ''}"
+    def _key(ticker: str, observed_date: str | None, observed_name: str | None,
+             exclude: Collection[int] = ()) -> str:
+        """The memo key: an answer holds for one ticker, date and observed name. A lookup that leaves CIKs out
+        (`resolve(exclude=)`) has a key of its own, `|!` and the CIKs after the usual one, so the answer found without
+        a candidate is never read by a lookup with it, and the other way round. The one place the key is built:
+        `resolve` and `is_degraded` both call it."""
+        key = f"{ticker.upper().strip()}|{observed_date or ''}|{observed_name or ''}"
+        return key + "|!" + ",".join(str(c) for c in sorted(exclude)) if exclude else key
 
     # Every read of an issuer's EDGAR record goes through the run's issuer record
     # (`self.issuers`), current for the event on the date asked about. A read that
@@ -332,13 +338,13 @@ class TickerResolver:
         self._dirty = False
 
     def is_degraded(self, ticker: str, observed_date: str | None = None, *,
-                    name: str | None | object = _LOOK_UP_NAME) -> bool:
-        """Whether this run's answer for (ticker, date, observed name: as
-        `resolve` takes it) rests on a failed EDGAR request or a stale copy. Such
+                    name: str | None | object = _LOOK_UP_NAME, exclude: Collection[int] = ()) -> bool:
+        """Whether this run's answer for (ticker, date, observed name, excluded CIKs: as
+        `resolve` takes them) rests on a failed EDGAR request or a stale copy. Such
         an answer is used for the run and never saved; the pipeline flags it
         `resolution_degraded`."""
         t = ticker.upper().strip()
-        return self._key(t, observed_date, self._observed_name(t, observed_date, name)) in self._degraded
+        return self._key(t, observed_date, self._observed_name(t, observed_date, name), exclude) in self._degraded
 
     # CIKs of US exchanges — these file Form 25-NSEs *on behalf of* the issuer,
     # so they appear in every delisting filing's CIK array. Always skip them.
@@ -665,7 +671,8 @@ class TickerResolver:
         key = normalize_name(spelling)
         return any(normalize_name(n).startswith(key) for n in self._names_by(cik, on, near))
 
-    def _name_search(self, observed_date: str | None, nm: str | None) -> list[tuple[int, str]]:
+    def _name_search(self, observed_date: str | None, nm: str | None,
+                     exclude: Collection[int] = ()) -> list[tuple[int, str]]:
         """Candidates for the expected name `nm` (observed, else AV) from EDGAR's
         company search, best first, as (CIK, the name the search gave).
 
@@ -682,7 +689,7 @@ class TickerResolver:
         first is always a candidate; one ranked below it only when one of its
         EDGAR names `names_agree`s with `nm`. With a name index (SEC's
         cik-lookup-data.txt) the candidates come from it instead
-        (`_index_candidates`) and the live search is not asked."""
+        (`_index_candidates`) and the live search is not asked. A CIK in `exclude` is no candidate."""
         if not nm:
             return []
         target_d = parse_day(observed_date)
@@ -713,6 +720,7 @@ class TickerResolver:
                     break  # one form-class per variant is enough
         if index is not None:
             found = self._index_candidates(index, nm, observed_date)
+        found = {c: v for c, v in found.items() if c not in exclude}
         order = list(found)
         fit = {c: self._edgar_name_fit(c, nm, observed_date) for c in order}
         ranked = sorted(order, key=lambda c: (-fit[c][0], found[c][1], order.index(c)))
@@ -853,7 +861,8 @@ class TickerResolver:
 
     def resolve(self, ticker: str, observed_date: str | None = None, *,
                 pin: int | None | object = _LOOK_UP_PIN,
-                name: str | None | object = _LOOK_UP_NAME, since: str | None = None) -> TickerResolution:
+                name: str | None | object = _LOOK_UP_NAME, since: str | None = None,
+                exclude: Collection[int] = ()) -> TickerResolution:
         """`pin`: the caller's own CIK pin for this lookup (None: none), in place of
         `cik_pins(ticker, observed_date)`. `name`: the observed name to check the
         answer with (None: none), in place of `observed_names(ticker,
@@ -869,10 +878,14 @@ class TickerResolver:
         company formed while the era traded can have taken its name and ticker
         (Energizer's 2015 SpinCo for ENERGIZER HOLDINGS INC, 2008-2015; Alcoa
         Corp, 2016, for ALCOA INC). A remembered answer is held to it as well;
-        a pin, a manual override and a rename are not."""
+        a pin, a manual override and a rename are not.
+
+        `exclude`: CIKs this lookup never answers, from any tier (the company-ticker map, the Form 25 search, the
+        company-name search and its agreeing-issuer fallback, the 8-K frequency rank): a derived era is asked without
+        the old line's issuer. The answer is remembered under a key of its own (`_key`)."""
         t = ticker.upper().strip()
         observed_name = self._observed_name(t, observed_date, name)
-        cache_key = self._key(t, observed_date, observed_name)
+        cache_key = self._key(t, observed_date, observed_name, exclude)
         self._reset()
 
         pinned = self.cik_pins(t, observed_date) if pin is _LOOK_UP_PIN else pin
@@ -904,14 +917,14 @@ class TickerResolver:
 
         renamed = self.rename_map.get(t)
         if renamed and renamed != t:
-            inner = self.resolve(renamed, observed_date)   # leaves its transient state for this answer
+            inner = self.resolve(renamed, observed_date, exclude=exclude)   # leaves its transient state for this answer
             res = TickerResolution(ticker=t, cik=inner.cik, name=inner.name, source="rename")
             self._remember(cache_key, res, observed_name)
             return res
 
         expected = self.expected_name(t, observed_date, observed_name)
         companies = self._ensure_companies()
-        if t in companies:
+        if t in companies and int(companies[t]["cik_str"]) not in exclude:
             # SEC's map lists today's holder of the ticker: accept it only if
             # that issuer existed on the date under an agreeing name, and by
             # the era's first sighting.
@@ -940,6 +953,8 @@ class TickerResolver:
         # held back as a fallback.
         c0, n0, weak = self._efts_lookup(t, observed_date, expected_name=expected)
         fallback: tuple[int, str | None] | None = None
+        if c0 in exclude:
+            c0 = None
         if c0 is not None:
             if not observed_date or self._validate_cik(c0, observed_date, strict=False):
                 existed, agrees = self._fits_date(c0, observed_date, expected)
@@ -954,7 +969,7 @@ class TickerResolver:
         # checked best first, each one that existed by the era's first sighting.
         if cik is None:
             # A generator: a candidate below the one accepted is never read.
-            ranked = ((c, n) for c, n in self._name_search(observed_date, expected)
+            ranked = ((c, n) for c, n in self._name_search(observed_date, expected, exclude)
                       if self.issuers.existed_by(c, since))
             if fallback is not None:
                 # The observed name is a check, never a substitute: it replaces
@@ -981,6 +996,8 @@ class TickerResolver:
                 hit = next(((c, n) for c, n in ranked if ok(c)), None)
                 if hit is None:
                     hit = self._agreeing_issuer(expected, observed_date, since)
+                    if hit is not None and hit[0] in exclude:
+                        hit = None
                 if hit is not None:
                     (cik, name), source = hit, "name_search"
 
@@ -991,7 +1008,7 @@ class TickerResolver:
             ranked = self._efts_pre_delist_frequency_ranked(t, observed_date)
             best: tuple[int, int, int, str] | None = None
             for rank, (cand_cik, cand_name) in enumerate(ranked):
-                if not self.issuers.existed_by(cand_cik, since) \
+                if cand_cik in exclude or not self.issuers.existed_by(cand_cik, since) \
                         or not self._validate_cik(cand_cik, observed_date, strict=True):
                     continue
                 score = self._name_match_score(cand_cik, expected, observed_date) if expected else 0
