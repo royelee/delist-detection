@@ -1138,6 +1138,7 @@ scripts/
     observations_from_instruments.py  Legacy (ticker,start,end) file → observations CSV
     observations_from_snapshots.py    Folder of dated snapshot CSVs → observations CSV
     seeds_from_observations.py        Observations CSV → one row per introduction (the seeds-only input)
+    seeds_parity.py                   A seeds-only run against a full run: lost and changed endings, the floor
     classify_universe.py              Reads --observations → writes the seven output tables
     accept_review.py                  Bulk-accept review.csv rows by flag → appends data/review_decisions.csv
     compute_corrected_returns.py      CLI: read panel + delistings.csv → write BMP-corrected panel
