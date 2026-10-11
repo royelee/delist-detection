@@ -2913,6 +2913,9 @@ git commit -m "The parity script reports securities whose observed flag differs"
 
 ### Task 15: Parity checkpoint after S2 (network)
 
+**Outcome (2026-10-10):** Steps 1 to 3 were run on `c80928c`. The full run moved away from the truth set, so no
+floor was written and S2 went back into Tasks 16 and 17; Task 18 is the checkpoint after them. See "Checkpoint 3".
+
 The controller runs it, as Tasks 3 and 5, on the head after Task 14. The reference for the full run is Checkpoint 2's
 full run (`pout-full2`, commit `26eefdb`); the reference for the numbers is `data/seeds_parity.json`.
 
@@ -2945,6 +2948,405 @@ CLWR, ALEX, SPB, CIT, DOW, MRK, FOXA (the new line exists), ANN, EVHC, AMSG, ANA
 TCF, WEN, MIR, TWC, LVNTA is in the parity case lists. A name that is: report which stage did not produce the line
 (a refusal the rule leaves alone: `no_filing`, `bankruptcy`, `unsettled`; a step stage 4b was not asked about; a new line under another
 ticker: AMSG, DISCA, MYL 2020; a description that names nothing: WW, 2U; LGFA/LGFB: Starz).
+
+### Task 16: A continuation by timing across two issuers needs the price to carry over (S2, reworked)
+
+**Why.** Checkpoint 3 (S2 as first built) found the full run worse. Seadrill 2018 (`BBG000BKQ3V3`) was a bankruptcy
+drop and became a one-for-one continuation into the derived line of new Seadrill: the old row is `unknown` through
+stages 5 to 9, stage 9b (`pipeline._handoffs`) now finds a pair with the derived line, `decide_handoff` rule 2 says
+continuation on `timing:cusip` (two issuers, the ticker's fails rows switch CUSIP within `CONTINUATION_DAYS`),
+`apply_handoffs` rewrites an `unknown` row, and stage 9e's plan-bankruptcy step skips a row that has a successor. The
+same rule wrote a new continuation row from Aaron's Holdings into The Aaron's Company, the spin-off that took the ticker
+AAN in 2020. Neither is the holders' shares carried over one for one, and the fails rows already say so: the price went
+from 0.10 to 18.50 (Seadrill) and from 62.93 to 18.41 (Aaron's).
+
+Measured over every pair both full runs decided on `timing:cusip` (`E/s2reg/endings/band.csv`): the ratio of B's first
+fails price to A's last is 0.89 for GGP 2010 (the one continuation row that is right), 0.99 FTI, 1.03 WCN, 1.01 BXS,
+1.14 IGT, 0.71 CCE 2010 and 0.69 GCI (merger rows that stand anyway); outside 0.5 to 2.0 are Seadrill 185, Aaron's 0.29,
+EVHC 3.10 (a merger row that stands anyway) and NWS-A 2013 0.46 (a continuation that is wrong today: the old issuer
+lived on as Twenty-First Century Fox). One pair has no price (WEN 2009: no fails row on A's side). Same-issuer pairs
+(`timing:cik`) are left alone: a one-to-three reclassification (LMCA, LMCK 2016) moves the price and is still the same
+issuer's line.
+
+**The rule.** In `decide_handoff` rule 2, a CUSIP switch between two issuers is evidence of a continuation only when
+the price carried over: B's first fails price under the ticker is between 0.5 and 2.0 times A's last. When either price
+is missing the rule is as before. The rule is the same for an observed line and a derived one. A same-issuer pair
+(`same_issuer`) does not read the price.
+
+**Files:**
+- Modify: `src/delist_detection/endings/handoffs.py` (`cusip_switch`, a new `switch_price_ratio`, `decide_handoff`)
+- Modify: `src/delist_detection/pipeline.py` (`_handoffs`, the `decide_handoff` call near line 983)
+- Test: `tests/test_handoffs.py`, `tests/test_pipeline.py`
+- Docs: `docs/data-flow.md` (the handoff rules near line 854), `docs/architecture.md` (the `handoffs` entry under
+  "endings/"), `README.md` (the `handoff_continuation` flag row, only if its wording becomes untrue)
+
+**Interfaces:**
+- Consumes: `FtdRow(date, cusip, symbol, description, price)` with `price: float | None` (the prior trading day's close;
+  `sources/ftd.py`), `FtdIndex.by_symbol(ticker)`, `HandoffPair`.
+- Produces: `handoffs.CARRIED_PRICE: tuple[float, float] = (0.5, 2.0)`;
+  `handoffs.switch_price_ratio(ftd: FtdIndex, pair: HandoffPair, a_cusips: Sequence[str], b_cusips: Sequence[str]) -> float | None`;
+  `decide_handoff(..., price_ratio: float | None = None)`. `cusip_switch` keeps its signature and its answers.
+
+- [ ] **Step 1: Write the failing tests** in `tests/test_handoffs.py` (import `switch_price_ratio` and `CARRIED_PRICE`
+  beside `cusip_switch`):
+
+```python
+def test_the_price_across_a_cusip_switch_is_bs_first_over_as_last():
+    """Seadrill 2018: G7945E105 last fails under SDRL at 0.10, G7998G106 first at 18.50."""
+    ftd = FtdIndex([FtdRow("2018-06-20", "G7945E105", "SDRL", "SEADRILL LTD", 0.21),
+                    FtdRow("2018-07-03", "G7945E105", "SDRL", "SEADRILL LTD", 0.10),
+                    FtdRow("2018-07-05", "G7998G106", "SDRL", "SEADRILL LTD NEW SHS", 18.50),
+                    FtdRow("2018-07-09", "G7998G106", "SDRL", "SEADRILL LTD NEW SHS", 19.00)])
+    p = _pair("2018-07-03", "2018-07-05", ticker="SDRL")
+    assert switch_price_ratio(ftd, p, ["G7945E105"], ["G7998G106"]) == pytest.approx(185.0)
+    assert switch_price_ratio(ftd, p, ["G7945E105"], ["G7945E105"]) is None       # no switch: no ratio
+    assert switch_price_ratio(ftd, p, ["G7945E105"], ["99999Z999"]) is None
+    for a_price, b_price in ((None, 18.50), (0.10, None), (0.0, 18.50), (0.10, 0.0)):
+        gap = FtdIndex([FtdRow("2018-07-03", "G7945E105", "SDRL", "SEADRILL LTD", a_price),
+                        FtdRow("2018-07-05", "G7998G106", "SDRL", "SEADRILL LTD NEW SHS", b_price)])
+        assert cusip_switch(gap, p, ["G7945E105"], ["G7998G106"])                 # the switch itself still holds
+        assert switch_price_ratio(gap, p, ["G7945E105"], ["G7998G106"]) is None   # a price missing or not above zero
+    far = FtdIndex([FtdRow("2018-01-04", "G7945E105", "SDRL", "SEADRILL LTD", 0.30),
+                    FtdRow("2018-07-05", "G7998G106", "SDRL", "SEADRILL LTD NEW SHS", 18.50)])
+    assert switch_price_ratio(far, p, ["G7945E105"], ["G7998G106"]) is None       # where `cusip_switch` does not hold
+
+
+@pytest.mark.parametrize("ratio,kind", [
+    (185.0, None),            # Seadrill 2018: a bankruptcy plan's new shares
+    (0.29, None),             # The Aaron's Company 2020: a spin-off that took the ticker
+    (0.46, None),             # NWS-A 2013
+    (0.49, None), (2.01, None),
+    (0.5, "continuation"), (2.0, "continuation"),
+    (0.89, "continuation"),   # GGP 2010
+    (None, "continuation"),   # no price on one side (WEN 2009): as before
+])
+def test_a_cusip_switch_between_two_issuers_is_a_continuation_only_when_the_price_carried_over(ratio, kind):
+    d = decide_handoff(_pair("2015-06-12", "2015-06-15"), filing=None, same_issuer=False, cusip_switch=True,
+                       price_ratio=ratio)
+    assert (d.kind if d else None) == kind
+    if d is not None:
+        assert d.evidence == "timing:cusip"
+
+
+def test_the_price_is_not_read_for_one_issuer_or_against_a_filing():
+    """LMCA 2016: one share became three of the same issuer's; the price fell to 0.487 and the line is the same."""
+    p = _pair("2016-04-15", "2016-04-18")
+    d = decide_handoff(p, filing=None, same_issuer=True, cusip_switch=True, price_ratio=0.487)
+    assert (d.kind, d.evidence) == ("continuation", "timing:cik")
+    d = decide_handoff(p, filing=FILING, same_issuer=False, cusip_switch=True, price_ratio=185.0)
+    assert d.kind == "continuation" and d.by_filing
+
+
+def test_a_switch_whose_price_did_not_carry_over_can_still_be_a_takeover():
+    """An older issuer taking the ticker at another price: rule 3 still answers."""
+    p = _pair("2015-06-12", "2015-06-15")
+    d = decide_handoff(p, filing=None, same_issuer=False, cusip_switch=True, price_ratio=185.0,
+                       b_issuer_since="2010-01-04")
+    assert (d.kind, d.evidence) == ("takeover", "timing:issuer")
+```
+
+  `_pair`, `FILING`, `FtdIndex` and `FtdRow` are the helpers the file already uses. If `_pair`'s signature differs from
+  these calls (read it first), keep the dates and adapt the call.
+
+- [ ] **Step 2: Run them and see them fail.** `PYTHONPATH=src ~/miniconda3/envs/rdagent4qlib/bin/python -m pytest tests/test_handoffs.py -q`.
+  Expected: an ImportError for `switch_price_ratio`, then, once it exists, failures on the ratios outside the band.
+
+- [ ] **Step 3: Implement** in `src/delist_detection/endings/handoffs.py`. One helper finds the two rows, so
+  `cusip_switch` and the ratio cannot disagree about which rows they mean:
+
+```python
+CARRIED_PRICE = (0.5, 2.0)   # B's first fails price over A's last: a share for a share keeps the price about there
+
+
+def _switch_rows(ftd: FtdIndex, pair: HandoffPair, a_cusips: Sequence[str],
+                 b_cusips: Sequence[str]) -> tuple[FtdRow, FtdRow] | None:
+    """A's last fails row and B's first under the pair's ticker, where the ticker switches CUSIP at the handoff
+    (both within `CONTINUATION_DAYS` of B's first sighting); None without a switch."""
+    rows = ftd.by_symbol(pair.ticker)
+    a_rows = [r for r in rows if r.cusip in a_cusips]
+    b_rows = [r for r in rows if r.cusip in b_cusips and r.cusip not in a_cusips]
+    if not a_rows or not b_rows:
+        return None
+    last, first = a_rows[-1], b_rows[0]
+    if all(abs(_days(pair.b_first, d)) <= CONTINUATION_DAYS for d in (last.date, first.date)):
+        return last, first
+    return None
+
+
+def cusip_switch(ftd: FtdIndex, pair: HandoffPair, a_cusips: Sequence[str], b_cusips: Sequence[str]) -> bool:
+    """(the docstring it has today)"""
+    return _switch_rows(ftd, pair, a_cusips, b_cusips) is not None
+
+
+def switch_price_ratio(ftd: FtdIndex, pair: HandoffPair, a_cusips: Sequence[str],
+                       b_cusips: Sequence[str]) -> float | None:
+    """B's first fails price over A's last across the pair's CUSIP switch (`cusip_switch`): each the prior trading
+    day's close. None without a switch, or when either row has no price above zero. A share that became one share
+    keeps the price about where it was (GGP 2010: 17.39 to 15.40); a bankruptcy plan's new shares (Seadrill 2018:
+    0.10 to 18.50) and a spin-off that takes the ticker (The Aaron's Company 2020: 62.93 to 18.41) do not."""
+    rows = _switch_rows(ftd, pair, a_cusips, b_cusips)
+    if rows is None:
+        return None
+    a, b = rows[0].price, rows[1].price
+    return b / a if a and b and a > 0 and b > 0 else None
+```
+
+  In `decide_handoff`: the new keyword `price_ratio: float | None = None`; rule 2 of the docstring says "or the
+  ticker's CUSIP switches from A's to B's (`cusip_switch`) at about the same price (`price_ratio` within
+  `CARRIED_PRICE`, or unknown)"; and the condition becomes
+
+```python
+    carried = price_ratio is None or CARRIED_PRICE[0] <= price_ratio <= CARRIED_PRICE[1]
+    if (abs(pair.gap) <= CONTINUATION_DAYS and not existed and not lived_on and not issuer_carries_on
+            and (same_issuer or (cusip_switch and carried))):
+        return HandoffDecision(pair, "continuation", TIMING_CIK if same_issuer else TIMING_CUSIP, False)
+```
+
+  In `pipeline._handoffs`, compute the two CUSIP lists once per pair and pass both answers:
+
+```python
+        a_cusips, b_cusips = sec_cusips.get(p.a, []), sec_cusips.get(p.b, [])
+        decision = decide_handoff(p, filing=filing, same_issuer=same,
+                                  cusip_switch=cusip_switch(ftd, p, a_cusips, b_cusips),
+                                  issuer_carries_on=issuer_carries_on(p, securities, first_seen),
+                                  b_issuer_since=since.isoformat() if since else None,
+                                  price_ratio=switch_price_ratio(ftd, p, a_cusips, b_cusips))
+```
+
+- [ ] **Step 4: A whole-run test that the run passes the price** in `tests/test_pipeline.py`. Find the whole-run test
+  that today ends in a continuation by `timing:cusip` between two issuers (grep the file for `timing:cusip` and for
+  `handoff_continuation`; `test_a_continuation_the_finder_found_no_row_for_clips_the_old_line_at_its_last_sighting`
+  and `test_a_handoff_continuation_clips_the_old_line_whose_ticker_the_issuer_still_lists` are the candidates). Add a
+  sibling of it in the same fixture world whose fails rows carry a price of 0.10 on the old CUSIP's last row and 18.50
+  on the new CUSIP's first: the run writes no `handoff_continuation` row and no successor for the old line. Keep the
+  original test green with prices that carry over (or none). If no whole-run test reaches `timing:cusip` between two
+  issuers, build one from the nearest (two securities, two issuer CIKs, one ticker, a CUSIP switch a day apart) and say
+  so in the report. Prove the wiring by mutation: with `price_ratio=` removed from the call in `_handoffs` the new
+  test fails.
+
+- [ ] **Step 5: Run the suite.** `PYTHONPATH=src ~/miniconda3/envs/rdagent4qlib/bin/python -m pytest -q`. Expected:
+  3,977 passed plus the new tests, 44 xfailed. Task 13's three tests (`test_a_derived_line_after_wendys_international...`
+  and its two neighbours) pass no `price_ratio` and stay as they are. A golden or committed-output test that fails is a
+  finding to report, not something to adjust.
+
+- [ ] **Step 6: The five-ticker run.** `bash E/s2reg/sub_run.sh t16 SDRL CSAL UNIT CCE AAN` with
+  `CODE=<a clone of the worktree's tree>` is not possible from the worktree (no `.env` there), so use the snapshot
+  recipe: `cp -cR E/psnap-full4 E/s2reg/t16code`, copy the three changed source files over the clone's, and run
+  `CODE=E/s2reg/t16code bash E/s2reg/sub_run.sh t16 SDRL CSAL UNIT CCE AAN` with `allowed_domains: ["api.openfigi.com"]`
+  (`E` is `/private/tmp/claude-501/-Users-royeli-repo-github-com-delist-detection/a6c3c0f4-120e-40f6-9019-80889ff3e772/scratchpad/exec`).
+  Expected, read with `E/rows_of.py E/s2reg/out-t16 BBG000BKQ3V3 BBG00VSH86G4`: Seadrill's row is a `liquidation`
+  (code 470, reason "Bankruptcy plan exchange ...") with no successor, as in `E/pout-full3`; Aaron's Holdings
+  (`BBG00VSH86G4`) has no continuation row into `BBG00WCNDCZ6`. UNIT, CSAL and CCE are as in `E/s2reg/out-smoke`
+  (another task has them). Put the output of `rows_of.py` in the report.
+
+- [ ] **Step 7: Docs and commit.** Update the three docs named above (the rule, the constant, the two examples). Commit
+  with the message "A continuation by timing across two issuers needs the price to carry over" and the trailer lines
+  the dispatch gives.
+
+**Not in this task:** the issuer of a derived era, the UNIT/CSAL split, stage order (9e stays after 9b), the
+`timing:cik` rule, `apply_handoffs`.
+
+### Task 17: A derived era is checked against the step it came from (S2, reworked)
+
+**Why.** Checkpoint 3 (S2 as first built) found two things wrong with a derived era's identity. Both come from one
+gap: the era does not know which refused step it came from, so nothing checks its answers against that step.
+
+1. *It joined the line it was refused from although the shares did not carry over one for one.* Uniti 2025: stage 4b
+   refuses the step 91325V108 to 912932100 under UNIT (`merged_out`); the derived era resolves to New Uniti (CIK
+   2020795) and OpenFIGI gives the new CUSIP the composite `BBG002B67HB2`, which the old UNIT era holds by ticker. The
+   era joins the old security, the security takes the new issuer, stage 4b no longer folds the CSAL placeholder into it
+   (`line_follow.py`, the fold needs one issuer), and the line runs on, so the 2025-08-01 merger ending is gone. The
+   truth set rules this a stock merger at 0.6029 New Uniti share per share, and a continuation is "same holders, same
+   claim, one for one". The fails rows show it: 4.91 on the old CUSIP's last row, 8.09 on the new one's first, a ratio
+   of 1.65. In the seeds run the same happens to IR 2020 (0.25: Gardner Denver took the name and ticker) and ENR 2015
+   (0.26: the spin-off took the ticker), and to CFFN 2010 (0.44) and WE 2023 (32, a 1-for-40 reverse split). The joins
+   whose price carried over are right and stay: MDT 0.996, MYL 1.01, WEC 0.996, ICE 0.986, PRGO 0.986, ACN 0.971, and
+   CLWR (no price).
+2. *It took the old line's issuer under a composite of its own.* Coca-Cola Enterprises 2016: the derived era (CCE,
+   G25839104, from 2016-06-01) is Coca-Cola European Partners plc (CIK 1650107), but the name search ranks the old
+   registrant 1491675 first because its Form 25 and Form 15 of 2016 lie nearer the lookup dates. Every resolver tier
+   looks for the registrant that delisted near the date, and for a derived era that is the old line's issuer. With
+   1491675 the Form 25 is ambiguous between two securities, the finder builds no merger row, the handoff writes a
+   continuation, and the CCEP line reads as unlisted. Aaron's Holdings 2020 (706688 for 1808834) and, in the seeds run,
+   IGT 2015 (353944 for 1619762) are the same. All three steps were refused as `merged_out`, which stage 4b says when
+   the old issuer files no periodic report after the step: by stage 4b's own finding that issuer cannot be the issuer
+   of the line after the step. CHTR 2016 keeps its issuer on both sides and is rightly left alone: its step is
+   `other_registrant`, not `merged_out`.
+
+A prototype of the two rules is at `E/s2reg/identity/proto` (diff against the code of c80928c:
+`E/s2reg/identity/proto.diff`; its rule "U" is not wanted, its "X1" and "X2" are the two halves of what follows). Read
+the diff for where the origin travels and where the resolver filters candidates; write the real thing with tests.
+`E` is `/private/tmp/claude-501/-Users-royeli-repo-github-com-delist-detection/a6c3c0f4-120e-40f6-9019-80889ff3e772/scratchpad/exec`.
+
+**The rules.**
+
+- **Origin.** `derivable` returns, for each `(ticker, new CUSIP)` pair, the step it came from:
+  `DerivedFrom(sec_id, issuer_cik, why, old_cusip, first)`: the refused security's id and issuer CIK (as that round's
+  securities give them), the refusal (`merged_out`, `other_registrant`, `name`), the step's old CUSIP and the step's
+  first day. `identify` gives each derived era its origin (`TickerEra.derived_from`), matched by the era's ticker and
+  one of its CUSIPs.
+- **Rule J (the join).** A derived era whose security is the one its step was refused from (`resolutions[era].sec_id
+  == derived_from.sec_id`) is made only when the price carried over across the step: the ratio of the new CUSIP's first
+  fails price under the ticker to the old CUSIP's last one on or before it is within `CARRIED_PRICE`, or either price
+  is missing or not above zero. Otherwise the era is not made: the step stays refused, as before S2. The issuers play
+  no part in rule J.
+- **Rule X (the issuer).** A derived era from a `merged_out` step whose issuer answer is the origin's issuer
+  (`derived_from.issuer_cik`, not None) while its security is another one than the origin's, and which has no pin (no
+  `cik_pin`, no `sec_id_pin`, answer source neither `manual` nor `cik_map`), is asked again with the origin's issuer
+  excluded from every resolver tier's candidates. What that lookup answers stands: another issuer, or none (the era
+  then keeps its composite with no issuer, as an era without an issuer does today). A weak answer stands only if the
+  era's own fails rows fit it, which `_resolve_issuers` already does for every era. An answer the second pass
+  (`EraIssuers.infer`) or `check_names` gives is filtered the same way.
+- **One constant.** `CARRIED_PRICE` becomes `(2 / 3, 3 / 2)` and is defined once, in the identity package, and
+  `endings/handoffs.py` imports it (endings may import identity; identity may not import endings). Task 16's rule in
+  `decide_handoff` reads the same constant. Measured: no pair of either full run or of the seeds run lies between 0.5
+  and 2/3 or between 1.5 and 2.0 except the second CI step of the seeds run (1.96, a merger row that stands either way).
+- **Verdicts carry over the rounds.** `identify` takes and returns the verdicts on derived pairs:
+  `verdicts: Mapping[tuple[str, str], str]`, values `"not_made"` (rule J) and `"without_old_issuer"` (rule X). A pair
+  with `"not_made"` is not derived at all; a pair with `"without_old_issuer"` is asked with the exclusion from the
+  start. After stage 3 `identify` checks every derived era that has no verdict yet; if the check gives new verdicts it
+  computes stages 1 to 3 again with them (the result must equal a fresh `identify` call given the enlarged verdicts)
+  and checks again, at most `MAX_VERDICT_PASSES = 3` times, then goes on with what it has and logs it.
+  `Identity.verdicts` holds the final mapping. `identify_with_lines` passes each round's verdicts to the next, and a
+  pair with `"not_made"` is never counted as new.
+- **The memo.** A lookup with an exclusion uses its own memo key (the prototype's suffix `|!<cik>` after the usual
+  key), so an answer found without a candidate is never read by a lookup with it, and no memo `__version__` bump is
+  needed. Every place that builds a memo key for the degraded check (`is_degraded` and whatever calls it from
+  `_resolve_securities`) must build the same key for an excluded lookup.
+- **Logs.** One line each when it happens, naming the eras by key:
+  `derived eras not made: N whose price did not carry over onto the line they came from (UNIT@2025-08-05, ...)` and
+  `derived eras asked without the old line's issuer: N (CCE@2016-06-01, ...)`.
+
+**Files:**
+- Modify: `src/delist_detection/identity/observations.py` (`DerivedFrom`, `TickerEra.derived_from`)
+- Modify: `src/delist_detection/identity/derived_lines.py` (`derivable` returns the mapping; the loop carries verdicts)
+- Modify: `src/delist_detection/identity/identity.py` (`identify`, `_refine`/`refine_eras` take the mapping's keys,
+  `_resolve_issuers` takes the exclusions, the check after stage 3, `Identity.verdicts`)
+- Modify: `src/delist_detection/identity/ticker_resolver.py` (`resolve(..., exclude=())`, the tiers, the memo key)
+- Modify: `src/delist_detection/endings/handoffs.py` (imports `CARRIED_PRICE`; no rule change)
+- Create if it helps the import order: one small module in `identity/` for `CARRIED_PRICE`, `step_price_ratio` and
+  `price_carried` (identity.py and handoffs.py both import it; `derived_lines.py` imports identity.py, so the helpers
+  cannot live there). `tests/test_import_closure.py` must stay green.
+- Test: `tests/test_derived_lines.py`, the identity tests Tasks 10 to 12 added (find them by `derive=`), the resolver
+  tests (`tests/test_ticker_resolver*.py`), `tests/test_handoffs.py` (the band's edges), `tests/test_pipeline.py`
+- Docs: `docs/architecture.md` (the `derived_lines`, `identity` and `ticker_resolver` entries), `docs/invariants.md`
+  (the section Task 12 extended for derived lines), `docs/data-flow.md` (the handoff band, and derived lines where it
+  describes them), `CONTEXT.md` only if it defines a derived line
+
+**Interfaces:**
+- Consumes: `RefusedStep(sec_id, step, why)` and its step's fields (read `line_follow.py` for the names of the old
+  CUSIP, the new CUSIP and the first day); `FtdIndex.by_symbol`, `FtdRow.price`; `EraIssuers.rows_fit`;
+  `TickerResolver.resolve`; Task 16's `handoffs.CARRIED_PRICE`, `switch_price_ratio`.
+- Produces:
+  - `observations.DerivedFrom` (frozen dataclass: `sec_id: str`, `issuer_cik: int | None`, `why: str`,
+    `old_cusip: str`, `first: str`); `TickerEra.derived_from: DerivedFrom | None = None`.
+  - `derivable(refused, securities, profile) -> dict[tuple[str, str], DerivedFrom]` (the keys are the pairs it
+    returned before; the first step that names a pair wins).
+  - `CARRIED_PRICE: tuple[float, float] = (2 / 3, 3 / 2)`; `price_carried(ratio: float | None) -> bool` (True for
+    None); `step_price_ratio(ftd: FtdIndex, ticker: str, old_cusip: str, new_cusip: str) -> float | None`.
+  - `identify(..., derive: Mapping[tuple[str, str], DerivedFrom] = {}, verdicts: Mapping[tuple[str, str], str] = {})`
+    (an immutable empty default); `Identity.verdicts: Mapping[tuple[str, str], str]`.
+  - `TickerResolver.resolve(..., exclude: Collection[int] = ())`.
+
+**What the tests must pin** (write each before the code that makes it pass; name the tests after the behaviour):
+
+1. `derivable` returns the origin of each pair: the security id, its issuer, the refusal, the old CUSIP, the first day;
+   two refused steps naming one pair keep the first.
+2. `step_price_ratio`: new CUSIP's first price under the ticker over the old CUSIP's last one on or before it; None when
+   either side has no row under the ticker, or a price is None or not above zero. `price_carried`: None is True; 2/3
+   and 3/2 are inside; 0.66 and 1.51 are outside.
+3. Rule J: a derived era that resolves to its origin's security with prices 4.91 then 8.09 is not made (no era, no
+   security, the old security exactly as with no `derive` at all, compare the two `Identity` results field by field for
+   the old security and for the eras); with 75.59 then 75.26 it is made and joined; with no price on one side it is
+   made and joined; an era that resolves to another security is not judged by rule J whatever the prices (185).
+4. Rule X: a derived era from a `merged_out` step whose first answer is the origin's issuer under another composite is
+   asked again with `exclude` and takes the second answer; when the second lookup finds nothing the era has no issuer
+   and its security is still made; an era from an `other_registrant` or `name` step keeps the origin's issuer; an era
+   with a `cik_pin`, or whose answer's source is `manual`, keeps it; an era joined to its origin (same security) keeps
+   it.
+5. The resolver: `resolve(..., exclude={c})` never answers `c` from any tier (one test per tier the prototype diff
+   touches: the company-ticker map, the EFTS lookup, the name search, the agreeing-issuer fallback, the frequency
+   tier), and the memo holds the two answers under two keys (a lookup without `exclude` after one with it still
+   answers `c`, and the other way round).
+6. Verdicts: `identify` given `verdicts={pair: "not_made"}` equals `identify` without that pair in `derive`;
+   given `{pair: "without_old_issuer"}` it asks with the exclusion at once (the first-pass lookup without it is not
+   made: count the resolver calls); `Identity.verdicts` holds what the check found; `identify_with_lines` passes them
+   on, and a pair with `"not_made"` does not keep the loop going (the loop ends when no other pair is new).
+7. No change without derived eras: with `derive` empty `identify` makes the same calls and returns the same result
+   as before this task (the existing no-change tests of Tasks 10 and 12 stay green untouched).
+8. The handoff band: in `tests/test_handoffs.py` the parametrized edges move to the new band (0.66 and 1.51 no
+   continuation; 0.67 and 1.5 a continuation); 0.46, 0.29, 185, 0.89 and None keep their answers. `handoffs.py`
+   defines no band of its own.
+9. A whole-run test in `tests/test_pipeline.py`, in the fixture world Task 12's whole-run test uses: the derived era
+   joins its origin's composite and the price did not carry over; the run's tables are those of the same run with no
+   derived line for that pair (the old security's history and its ending are unchanged), and the log has the
+   "not made" line.
+
+Prove by mutation, and restore: rule J's price test removed (test 3 fails); rule X's `why == "merged_out"` widened to
+all three refusals (test 4 fails); the memo suffix removed (test 5 fails); the verdicts not passed to the next round
+(test 6 fails).
+
+- [ ] **Step 1:** read `E/s2reg/identity/proto.diff`, `identity/derived_lines.py`, the parts of `identity/identity.py`
+  the diff touches, and `line_follow.py`'s `RefusedStep` and step types. Read the tests Tasks 10 to 12 added.
+- [ ] **Step 2:** tests 1, 2 and 8 with their code (`DerivedFrom`, `derivable`'s mapping, the price helpers, the
+  constant's move). Run `tests/test_derived_lines.py tests/test_handoffs.py tests/test_import_closure.py`.
+- [ ] **Step 3:** tests 3, 6 and 7 with rule J and the verdicts.
+- [ ] **Step 4:** tests 4 and 5 with rule X and the resolver's `exclude`.
+- [ ] **Step 5:** test 9, the four mutations, then the whole suite:
+  `PYTHONPATH=src ~/miniconda3/envs/rdagent4qlib/bin/python -m pytest -q -p no:cacheprovider`. Expected: 3,991 passed
+  plus the new tests, 44 xfailed. A golden or committed-output test that fails is a finding to report, not to adjust.
+- [ ] **Step 6: the five-ticker run.** Clone the snapshot (`cp -cR E/psnap-full4 E/task17/code`), copy the worktree's
+  whole `src/delist_detection` tree over the clone's, and run
+  `CODE=E/task17/code bash E/s2reg/sub_run.sh t17 SDRL CSAL UNIT CCE AAN`. This run asks SEC for the excluded lookups
+  (a handful of requests), so allow these hosts on that one Bash call: `data.sec.gov`, `www.sec.gov`, `efts.sec.gov`,
+  `api.openfigi.com`, `api.nasdaq.com`, `www.nasdaqtrader.com`, `api.anthropic.com`. It must exit 0. Expected, read
+  with `E/rows_of.py E/s2reg/out-t17 t:UNIT t:CSAL BBG000BF5RY1 BBG00B6BFWH9 BBG000D9V7T4 BBG00VSH86G4 BBG000BKQ3V3`:
+  - UNIT: `BBG002B67HB2` has issuer 1620280, history CSAL then UNIT to 2025-08-01, and its merger row at 2025-08-01,
+    as `E/pout-full3` has it; no security of CIK 2020795; no `CIK1620280-COMMON`.
+  - CCE 2016 (`BBG000BF5RY1`): a merger with `acquirer_sec_id` `BBG00B6BFWH9`, cash 14.50 and stock ratio 1.0;
+    `BBG00B6BFWH9` has issuer 1650107, history CCE then CCEP with no end, and no `unexplained_ending`.
+  - AAN 2020 (`BBG000D9V7T4`): the 1:1 stock merger with acquirer `BBG00VSH86G4`; `BBG00VSH86G4` has no issuer and
+    no row into `BBG00WCNDCZ6`; `BBG00WCNDCZ6` is not in the run.
+  - Seadrill (`BBG000BKQ3V3`): a `liquidation`, code 470, no successor (Task 16).
+  - the log has the "not made" line naming the UNIT era and the "asked without the old line's issuer" line naming the
+    CCE and AAN eras.
+  Put the `rows_of.py` output and the two log lines in the report. A result that differs is a finding: report it, do
+  not tune the rules to it.
+- [ ] **Step 7:** docs, then commit. Message: "A derived era is checked against the step it came from", with a body
+  that names rule J, rule X and the one band, and the trailer lines the dispatch gives.
+
+**Not in this task:** stage 4b's refusal reasons, the handoff rules beyond the constant's home, a price test on a
+continuation by filing, the run-time cost of the rounds, an observed second era that joins by composite (a full run's
+own join stays as it is).
+
+### Task 18: Parity checkpoint after the rework of S2 (network)
+
+The controller runs it, as Tasks 3, 5 and 15, on the head after Task 17. The reference for the full run is the full
+run before S2 (`pout-full3`, commit `0ec338f`); the reference for the numbers is `data/seeds_parity.json`.
+
+- [ ] **Step 1:** make sure no other SEC client is running (Task 3, Step 1).
+- [ ] **Step 2:** the full input at the head on a copy of the cache the last full run left (`pcache-full4`), then the
+  seeds on a copy of the cache that run leaves. Expected: both exit 0 with no degraded answer; a few SEC requests for
+  the lookups rule X asks without the old line's issuer.
+- [ ] **Step 3:** judge the full run against `pout-full3`: `scripts/seeds_parity.py --full pout-full3 --seeds <new full>`
+  lists what moved, `scripts/scorecard.py` on both gives `D.mismatches` and the cases. Expected: SDRL 2018 and UNIT 2025
+  as before S2 (both `pass` cases pass); CCE 2016 a merger priced through the derived CCEP line (cash 14.50 plus one
+  share), its `known_wrong` case better than before S2; AAN 2020 the 1:1 stock merger with one `handoff_conflict`; GCI
+  2019 and ODP 2025 priced; WCN and BXS unchanged; WE as before S2 (its derived era is not made). `D.mismatches` at or
+  below 149 and no `pass` case failing that passed at `0ec338f`. New rows on derived lines are listed with a verdict
+  each (the two `unexplained_ending` rows of BancorpSouth Bank and new Seadrill are expected). No observed era with
+  another issuer (`issuers_moved.py`). Anything else that moved is judged against EDGAR and the truth sets; a
+  regression goes back into the tasks.
+- [ ] **Step 4:** the parity numbers, full against seeds, against the floor:
+  `scripts/seeds_parity.py --full <full> --seeds <seeds> --cases <dir> --check` must exit 0. Then Task 15's acceptance
+  list, each ticker looked up in the case lists; `observed_flag_differs` with its case list; coverage, `left_view` and
+  `closed_no_event` against Checkpoint 2. The verdicts of rules J and X in the seeds run are listed from the log
+  (expected not made: UNIT, CFFN, WE, IR, ENR; expected asked without the old issuer: CCE 2016, AAN, IGT) and each
+  era rule X touched is compared with the full run's issuer for that line.
+- [ ] **Step 5:** SEC requests and wall time against Checkpoint 3's table.
+- [ ] **Step 6:** only when 3 to 5 are done: `scripts/seeds_parity.py ... --write-floor`; record the date, the commit,
+  the numbers before and after, the verdicts and the acceptance list under "Checkpoints" ("Checkpoint 4: S2
+  reworked, the floor"); commit `data/seeds_parity.json` with the plan, message "Seeds-only parity after S2: the floor".
 
 ---
 
@@ -3204,3 +3606,64 @@ the seeds run, and US Bancorp and C3 AI gained their blank endings when the memo
 that company (guard G's row test, `EraIssuers._fits_rows`), and never for an era with too few
 rows to test. It goes first in S2's plan, because a followed line is looked up under a fails
 description, where name mismatches are likely.
+
+### Checkpoint 3: S2 as first built (Task 15, 2026-10-10)
+
+Code `c80928c` (Tasks 7 to 12), run date 2026-09-25, `claude-sonnet-5-5`, `--sec-workers 8`. The full run on a copy of
+the cache Task 6's full run left; the seeds run on a copy of the cache the full run left. No floor was written: the full
+run moved away from the truth set, so S2 went back into Tasks 16 and 17.
+
+| Run | Wall | SEC requests | Identity rounds | Eras | Securities |
+|---|---|---|---|---|---|
+| full, `0ec338f` (before S2) | 251 s | 0 | 1 | 2,615 | 2,200 |
+| full, `c80928c` | 510 s | 51 | 3 (13 pairs, then 1) | 2,624 | 2,206 |
+| seeds, `0ec338f` | 355 s | 390 | 1 | 2,448 | 2,152 |
+| seeds, `c80928c` | 556 s | 436 | 3 (55 pairs, then 2) | 2,499 | 2,185 |
+
+**The full run against the run before S2.** No observed era got another issuer (0 of 2,615). The diagnosis truth set got
+worse: `D.mismatches` 149 to 166, `D.cases_matching` 275 to 273. Four truth cases moved, thirteen `delistings.csv` rows.
+
+| Step | Before S2 | At `c80928c` | Verdict |
+|---|---|---|---|
+| GCI 2019 | merger, no value | priced: 6.25 cash plus 0.5427 of the derived acquirer line, dlret 0.022 | better |
+| ODP 2025 (an added successor) | merger, no value | cash 28.00, dlret 0 (C5, Task 8) | better |
+| WCN 2016, BXS 2017 | merger 1:1 | the same, one `handoff_conflict` each; BXS names the derived bank line as acquirer | same |
+| WE 2023 | bankruptcy drop | the same; the derived era joined the old line (a reverse split) | same |
+| AAN 2020 | merger 1:1 into Aaron's Holdings | continuation into Aaron's Holdings (derived with the old issuer 706688), which then "continues" into the spin-off The Aaron's Company | first hop the same value, second hop wrong |
+| SDRL 2018 | bankruptcy drop (470) | continuation into new Seadrill, dlret 0 | worse, `pass` case fails on 8 fields |
+| UNIT 2025 | merger at 2025-08-01; CSAL and UNIT one security | no ending; New Uniti joined the security; CSAL split off to a placeholder | worse, `pass` case fails |
+| CCE 2016 | merger at assumed par | continuation into the derived CCEP line (derived with the old issuer 1491675); the CCEP line reads as unlisted | worse, `known_wrong` case 1 to 9 fields |
+
+New `unexplained_ending` rows on derived lines: BancorpSouth Bank 2021-10-28 (it became Cadence Bank; the bank files
+with the FDIC), new Seadrill 2022-02-22 (its second bankruptcy), CCEP 2026-09-03 (wrong: the issuer error).
+
+**Causes (two trace agents, evidence `E/s2reg/`).**
+
+- *SDRL.* The old row is `unknown` through stages 5 to 9. Before S2 no pair existed and stage 9e made it a bankruptcy
+  plan exchange. Now stage 9b decides the pair with the derived line a continuation on `timing:cusip`, rewrites the
+  `unknown` row, and 9e skips a row with a successor. Fails prices across the switch: 0.10 to 18.50. The same rule wrote
+  the second AAN hop (62.93 to 18.41). Fixed by Task 16.
+- *CCE and AAN Holdings.* The derived era took the old line's issuer: every resolver tier looks for the registrant that
+  delisted near the date. With two securities under one CIK the Form 25 is ambiguous, the finder builds no merger row,
+  and the handoff writes the continuation. Fixed by Task 17, rule X.
+- *UNIT.* OpenFIGI gives New Uniti's CUSIP the composite the old UNIT era holds by ticker, so the derived era joined the
+  old security although holders got 0.6029 share (fails prices 4.91 to 8.09). Fixed by Task 17, rule J.
+
+**The price across a switch, measured** (`E/s2reg/endings/band.csv`, `band_filing.csv`, `derived_seeds.csv`).
+Continuations on `timing:cusip` in the full runs: GGP 2010 0.89 (right); merger rows that stand anyway: IGT 1.14,
+FTI 0.99, CCE 2010 0.71, WCN 1.03, BXS 1.01, GCI 0.69, EVHC 3.10; wrong: NWS-A 2013 0.46, SDRL 185, AAN 0.29; WEN 2009
+has no price. Continuations by filing between two issuers: 17 of 20 between 0.918 and 1.106; AVGO 2016 reads 0.0075
+because the new CUSIP's first fails row carries 1.00, so a price test on filing pairs would switch off a right
+continuation, and none was added. Derived eras joined to their origin in the seeds run: MDT, MYL, WEC, ICE, PRGO, ACN
+0.97 to 1.01, CLWR no price; UNIT 1.65, CFFN 0.44, WE 32, IR 0.25, ENR 0.26.
+
+**The seeds run at `c80928c` against the full run at `c80928c`** (evidence only; both before Tasks 16 and 17):
+endings_lost 0 (floor 2), endings_gained 6 (13), kind_changed 18 (35), value_or_date_changed 10 (17), securities_lost
+17 (27), securities_gained 6 (8), seeds_placed_differently 18 (19), truth cases failing only in seeds 16 (25);
+`observed_flag_differs` 40. Of 70 refused switch steps 55 became eras, 12 of them joined to their origin's security.
+On almost every one the seeds run has the holder, the issuer and the ending the full run has; the exceptions are IGT
+2015 (the old issuer, rule X), IR and ENR (wrong joins, rule J), CI 2018 and SPB 2018 (a merger where the full run has
+a continuation by filing; not traced) and TMA 2008.
+
+**Run time.** The identity stage and stage 4b run once per round: about 130 s a round in the full run. The task that
+makes a repeat round recompute only what a derived pair touches (decision (e)) is still to do.
