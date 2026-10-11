@@ -11,7 +11,7 @@ from delist_detection.identity.observations import Observation, ObservationIndex
 from delist_detection.identity.added_securities import AddedAcquirer, AddedSuccessor
 from delist_detection.identity.history import Range, Sighting, ranges_from_sightings
 from delist_detection.identity.identity import (
-    FirstPass, _refine, capped_sightings, choose_first_pass, era_capped_seen, era_cusips, era_last_seen, last_sightings,
+    _refine, capped_sightings, choose_first_pass, era_capped_seen, era_cusips, era_last_seen, last_sightings,
     refine_eras,
 )
 from delist_detection.identity.ticker_resolver import TickerResolution

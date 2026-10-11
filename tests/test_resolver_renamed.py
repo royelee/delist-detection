@@ -23,7 +23,7 @@ import requests
 from delist_detection.sources.edgar import EdgarSubmission
 from delist_detection.sources.ftd import FtdIndex, FtdRow
 from delist_detection.identity.identity import (
-    EraIssuers, InferredIssuer, capped_sightings, identify, last_sightings, refine_eras,
+    EraIssuers, InferredIssuer, SecondPass, capped_sightings, identify, last_sightings, refine_eras,
 )
 from delist_detection.identity.observations import ObservationIndex, load_observations
 from delist_detection.pipeline import Clients
@@ -703,8 +703,9 @@ def test_a_weak_answer_stands_when_nothing_is_inferred(matx_dates):
     assert _issuer_and_tier(identity) == (A, "efts_name_mismatch")
 
 
-def test_an_era_degraded_at_either_date_is_flagged(matx_dates):
-    _, identity = _matx({MATX_CAP: (A, "name_search"), MATX_END: (A, "name_search")}, degraded_on=MATX_END)
+@pytest.mark.parametrize("degraded_date", [MATX_CAP, MATX_END])
+def test_an_era_degraded_at_either_date_is_flagged(matx_dates, degraded_date):
+    _, identity = _matx({MATX_CAP: (A, "name_search"), MATX_END: (A, "name_search")}, degraded_on=degraded_date)
     flagged = [i.reason for i in identity.review if i.flag == "resolution_degraded"]
     assert len(flagged) == 1 and flagged[0].startswith(MATX)
 
@@ -720,6 +721,18 @@ def test_the_second_pass_runs_with_the_capped_dates_first(eras, ftd, frequency):
     resolver = TickerResolver(_Edgar())
     identity = _identify({"CPO"}, _DatedLookup({}, candidates=resolver.frequency_candidates))
     assert _issuer_and_tier(identity, key) == (1046257, "efts_frequency_renamed")
+
+
+def test_the_capped_dates_run_wins_when_the_two_second_pass_runs_disagree(matx_dates, monkeypatch):
+    """The second pass is scripted: with the capped dates it answers MATX with issuer A, with the followed dates with
+    issuer B. The stage ends with A: the capped dates' run is merged last."""
+    def infer(self, eras, ftd, last_seen, ciks, handoffs):
+        cik, source = (A, "efts_frequency_renamed") if last_seen[MATX] == MATX_CAP else (B, "shared_cusip")
+        return SecondPass({MATX: InferredIssuer(cik, source, "scripted")}, {})
+
+    monkeypatch.setattr(EraIssuers, "infer", infer)
+    _, identity = _matx({})
+    assert _issuer_and_tier(identity) == (A, "efts_frequency_renamed")
 
 
 def test_a_second_pass_read_that_failed_degrades_the_era_it_was_read_for():
