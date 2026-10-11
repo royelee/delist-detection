@@ -4509,3 +4509,68 @@ memo answers an earlier pass wrote that an empty memo would answer differently.
 choice — if wrong, the floor above was measured on a file nobody sends.
 **Ruling: `--max-passes` defaults to 8** — this input needed 4 — if wrong, a slower input exits 1 and leaves its passes
 in the work folder.
+
+## The gated fold (2026-10-11)
+
+Code `09bba78` on `a8f25b4` (suite 4,170 passed, 43 xfailed). The fold of 56e3d42 (an unobserved CUSIP part joins the era
+before it) wrongly joined a new security to the old one in a seeds run: HTZ 2016 (CUSIP 42806J106, the new Hertz Global,
+CIK 1657853), NRF 2014 (66704R704) and Z 2015 (98954M101, Zillow Group, CIK 1617640). `_split_era` now records each fold
+on the era (`TickerEra.folds`), and `identify` judges them after stage 3 in the verdict loop that already judges derived
+eras (`_check_folds`; stages 1 to 3 are rerun with a failing fold turned off). A fold is kept only when (a) none of the
+era's CUSIPs before the fold has a US composite in OpenFIGI, and (b) stage 4b's R1 test, `line_follow.corroborate`
+(through the new `line_follow.step_refusal`), follows the step from the era's last CUSIP to the part's with the era's
+issuer. A fold that fails gets the verdict `fold_refused`, and the next pass makes the part a derived era
+(`refine_eras(unfold=...)`): the variant the investigation's full-universe run `out-u2` used (its eras after the split
+were 4 more than the baseline's 2,532, so the four vetoed parts became derived eras; `out-u1` had two more). Stage 1 on its
+own and a full run (the part has an observation) keep their behaviour. The identity test fixture's EDGAR filings now hold
+the filings R1 reads (8-K 5.03/3.03, 8-K12B/G3, periodic reports; 2,972 rows added to `edgar.json.gz` by the changed
+`scripts/build_identity_fixtures.py`), because CHK's fold, which passes in the cache, was refused in the fixture for want
+of them.
+
+Both runs: run date 2026-09-25, `--sec-workers 1`, `claude-sonnet-5-5`, side by side on two APFS clones of the cache the
+last section left, `ticker_resolution.json` deleted from each clone. `merger_terms.asked` is 0 in both: no fresh LLM answer.
+
+| Run | Time | Result |
+| --- | --- | --- |
+| full run | 15:03 to 15:09 (381 s) | every table byte-identical to the full run at `a8f25b4`; scorecard identical (`D.mismatches` 134) |
+| fixed point | 15:03 to 15:30 (27 min), 4 passes | seeds 2,712, 2,912, 2,928, 2,930 |
+
+| Seeds file | endings_lost | kind_changed | securities_lost | seeds_placed_differently | truth_cases_failing_only_in_seeds |
+| --- | --- | --- | --- | --- | --- |
+| fixed point at `a8f25b4` (2,927 seeds) | 0 | 3 | 3 | 8 | 5 |
+| fixed point with the gate (2,930 seeds) | 0 | 2 | 2 | 5 | 4 |
+
+The other numbers: endings_gained 0, value_or_date_changed 1 (2), securities_gained 2, observed_flag_differs 0. Every number is
+at or below the floor and the floor is lowered to them (kind_changed 3 to 2, securities_lost 3 to 2, seeds_placed_differently
+8 to 5, truth_cases_failing_only_in_seeds 5 to 4, value_or_date_changed 2 to 1). The seeds run scores `D.mismatches` 144 (150
+before, full run 134); 31 floored numbers below the committed floor; golden MRK 2020 and the diagnosis cases ANN, SPB and WLL
+fail, as in the investigation's `out-u2`; no `pass` case newly fails.
+
+**What moved.** The gate fired in each pass: pass 1 refused HTZ, Z, LBTYA and WFT; pass 2 LBTYA and NRF; passes 3 and 4 LBTYA.
+Its refusals make the seed builder's holder rule see the holder change, so the file gains the three seeds the full run's
+history called for and the last section's file lacked: HTZ 2016-12-30, NRF 2014-12-31, Z 2015-06-30 (2,930 seeds). The
+tables of the final run differ from `out-u2` (the same code on the 2,927-seed file) only in those three seeds: three
+observation_map rows, and HTZ's name and observed flag in securities.csv and delistings.csv (HTZ is now observed).
+LBTYA's output does not change. The 10 folds the investigation found passing stay folded in the final pass; the last run's
+log names only LBTYA as not kept, because HTZ, NRF and Z are seeds by then. The fold list depends on the seed file (WFT was
+refused in pass 1 only).
+
+**What is left, by name.** Kind: BBG000G5H5S0 (the full run: merger; the seeds run: none), SPB 2018. Value or date:
+BBG00B6WH9G3. Securities lost: ANN, WLL; gained: WPO, DDR. Seeds placed differently: ANN, DDR (2), WLL, WPO. Truth cases: ANN,
+SPB, WLL and MRK 2020. WLL is untouched, as asked: its cause is stage 4b's `_today_holder_fold` (sub-plan 5h) and its fix is
+the owner's decision.
+
+**Ruling: a fold that fails becomes a derived era, not just an unjoined part** — it is the variant of the investigation's
+`out-u2`; skipping the fold only (`out-u1`) left the new security's rows without an era — if wrong, the four failing parts
+vanish as eras again and HTZ, Z and NRF read as in `out-u1`.
+**Ruling: gate (a) is OpenFIGI's composite for the era's own CUSIPs, not the stage-3 resolution** — the resolution after the
+fold may come from the folded CUSIP itself, so it cannot say what the era had without it — if wrong, an era whose composite
+OpenFIGI names but stage 3 rejects keeps its fold's refusal.
+**Ruling: an era with no issuer fails gate (b)** — stage 4b follows no security without an issuer, so R1 could not follow the
+step — if wrong, such a fold is split off as a derived era where the old rule kept it; none of the 14 folds of the seeds run had
+no issuer.
+**Ruling: a read that failed keeps the fold and says so (`resolution_degraded`)** — a refusal that rests on a failed request is no
+finding, and a rerun answers it — if wrong, a fold that R1 would refuse stays until the rerun.
+**Ruling: the fixture's filings are extended, not the fixture rebuilt** — a rebuild reads the current `output/` and moved
+`cases.json` and `figi.json`; only the added filings were taken — if wrong, `build_identity_fixtures.py` run from scratch
+gives other fixture rows than the committed ones.

@@ -1,10 +1,10 @@
 {
   "endings_gained": 0,
   "endings_lost": 0,
-  "kind_changed": 3,
+  "kind_changed": 2,
   "securities_gained": 2,
-  "securities_lost": 3,
-  "seeds_placed_differently": 8,
-  "truth_cases_failing_only_in_seeds": 5,
-  "value_or_date_changed": 2
+  "securities_lost": 2,
+  "seeds_placed_differently": 5,
+  "truth_cases_failing_only_in_seeds": 4,
+  "value_or_date_changed": 1
 }
