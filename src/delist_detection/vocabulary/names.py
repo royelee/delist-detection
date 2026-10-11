@@ -77,8 +77,12 @@ def same_letters(a: str, b: str) -> bool:
 
 
 def _run(name: str) -> str:
-    """A name's letters and digits run together, legal suffixes and fillers out (2U INC and 2U, Inc. are 2U)."""
-    parts = re.findall(r"[A-Z0-9]+", re.sub(r"['’]", "", (name or "").upper()))
+    """A name's letters and digits run together, legal suffixes, fillers, a state tag and a share class out (2U INC and
+    2U, Inc. are 2U; XP CLASS A INC and XP Inc. are XP; US BANCORP and US BANCORP \\DE\\ are US)."""
+    text = re.sub(r"['’]", "", (name or "").upper())
+    text = re.sub(r"\s*[\\/][A-Z]{2}[\\/]?\s*$", "", text)                  # EDGAR's state tag: \DE\ or /DE/
+    text = re.sub(r"\b(?:CLASS|SERIES|SER)\s+[A-Z0-9]{1,2}\b", " ", text)   # the share class a snapshot spells out
+    parts = re.findall(r"[A-Z0-9]+", text)
     return "".join(p for p in parts if p not in _STOP and p != "CO")
 
 

@@ -28,6 +28,18 @@ def test_letters_and_digits_run_together_are_one_word():
     assert names_agree("HARRIS CORP", "L3HARRIS TECHNOLOGIES CORP")   # a run of four letters or more spells it too
 
 
+def test_a_class_and_a_state_tag_are_no_part_of_a_name_with_no_word_to_compare():
+    """US BANCORP, XP, C3.ai, Nu Holdings and On Holding AG have no word of three letters once legal suffixes are out,
+    so their letters and digits are compared: the snapshot's CLASS A and EDGAR's state tag (US BANCORP \\DE\\) are
+    not part of the name. Without this the ticker map's holder of each of these tickers was refused on its name and
+    the five securities had no issuer unless an old resolver memo held one."""
+    assert names_agree("US BANCORP", "US BANCORP \\DE\\") and names_agree("XP CLASS A INC", "XP Inc.")
+    assert names_agree("C3 AI INC CLASS A", "C3.ai, Inc.") and names_agree("NU HOLDINGS CLASS A", "Nu Holdings Ltd.")
+    assert names_agree("ON HOLDING AG CLASS A", "On Holding AG")
+    assert not names_agree("XP CLASS A INC", "XPO Inc.") and not names_agree("US BANCORP", "US BANCORP PA")
+    assert names_agree("HP INC", "HP Inc.") and not names_agree("HP INC", "HPE Inc.")
+
+
 def test_agreement_needs_two_shared_words_unless_a_name_has_one():
     assert names_agree("HALYARD HEALTH INC", "Halyard Health, Inc.")
     assert names_agree("SUNPOWER CORP.", "SunPower Inc.")               # one-word names: one shared word
