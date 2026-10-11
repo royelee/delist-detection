@@ -2471,6 +2471,44 @@ def test_a_handoff_continuation_clips_the_old_line_whose_ticker_the_issuer_still
     assert not [r for r in review if r["review_flags"] in ("ended_without_delisting", "ticker_shared")]
 
 
+def _two_issuers_one_ticker_run(fake_edgar, tmp_path, old_last_price, new_first_price):
+    """HC: issuer 999's line stops 2015-06-12, issuer 888's takes the ticker 2015-06-15 on another CUSIP. The old
+    line's last fails price and the new line's first are the two arguments."""
+    fake_edgar.company_map["HC"] = {"cik_str": 999, "ticker": "HC", "title": "HOLDCO INC"}
+    fake_edgar.submissions_by_cik[999] = []
+    fake_edgar.submissions_by_cik[888] = []
+    fake_edgar.listings[999] = [("HC", "NYSE")]
+    fake_edgar.listings[888] = [("HC", "NYSE")]
+    obs = ([Observation("HC", d, "HOLDCO INC", cik=999) for d in ("2014-06-30", "2014-12-31")]
+           + [Observation("HC", d, "NEWCO INC", cik=888) for d in ("2015-12-31", "2016-06-30")])
+    old = _ftd("HC", "111111101", "HOLDCO INC", ["2014-06-02", "2014-10-01", "2015-01-02", "2015-04-01"])
+    old += _ftd("HC", "111111101", "HOLDCO INC", ["2015-06-12"], price=old_last_price)
+    new = _ftd("HC", "222222202", "NEWCO INC", ["2015-06-15"], price=new_first_price)
+    new += _ftd("HC", "222222202", "NEWCO INC", ["2015-09-01", "2016-01-04", "2016-06-01"])
+    index, clients = _index_clients(fake_edgar, obs, old + new, {
+        ("ID_CUSIP", "111111101"): _figi_answer("BBGHCOLD001", "HC", "HOLDCO INC"),
+        ("ID_CUSIP", "222222202"): _figi_answer("BBGHCNEW001", "HC", "NEWCO INC"),
+    })
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+    return read_table("delistings", table_path(tmp_path, "delistings"))
+
+
+def test_a_cusip_switch_between_two_issuers_with_the_price_carried_over_is_a_continuation(fake_edgar, tmp_path):
+    rows = _two_issuers_one_ticker_run(fake_edgar, tmp_path, 10.0, 11.0)
+    (d,) = [r for r in rows if r["sec_id"] == "BBGHCOLD001"]
+    assert d["review_flags"].split(";")[0] == "handoff_continuation" and d["successor_sec_id"] == "BBGHCNEW001"
+    assert "timing:cusip" in d["reason"]
+
+
+def test_a_cusip_switch_between_two_issuers_whose_price_did_not_carry_over_is_no_continuation(fake_edgar, tmp_path):
+    """Seadrill 2018 / The Aaron's Company 2020: the new shares are not the old ones one for one (0.10 to 18.50)."""
+    rows = _two_issuers_one_ticker_run(fake_edgar, tmp_path, 0.10, 18.50)
+    assert not [r for r in rows if r["successor_sec_id"] == "BBGHCNEW001"
+                or r["review_flags"].split(";")[0] == "handoff_continuation"]
+    m = json.loads((tmp_path / "run_manifest.json").read_text())
+    assert m["handoffs"]["continuations_by_timing"] == 0
+
+
 def test_run_writes_the_scorecard_of_the_tables_it_wrote(fake_edgar, tmp_path):
     index, clients = _clients(fake_edgar)
     config = ScorecardConfig(window=Window("2006-01-02", "2024-12-29"))

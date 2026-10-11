@@ -10,8 +10,8 @@ from delist_detection.sources.edgar import EdgarSubmission
 from delist_detection.endings.delistings import Delisting
 from delist_detection.sources.ftd import FtdIndex, FtdRow
 from delist_detection.endings.handoffs import (
-    CONTINUATION_DAYS, OVERLAP_DAYS, TAKEOVER_DAYS, HandoffDecision, HandoffPair, apply_handoffs, continuation_filing,
-    cusip_switch, own_continuation_filing, decide_handoff, drop_resolved_shared, find_handoffs, issuer_carries_on, predecessor_names,
+    CARRIED_PRICE, CONTINUATION_DAYS, OVERLAP_DAYS, TAKEOVER_DAYS, HandoffDecision, HandoffPair, apply_handoffs, continuation_filing,
+    cusip_switch, switch_price_ratio, own_continuation_filing, decide_handoff, drop_resolved_shared, find_handoffs, issuer_carries_on, predecessor_names,
 )
 from delist_detection.identity.history import Sighting
 from delist_detection.endings.last_trade import LastTrade
@@ -233,6 +233,60 @@ def test_a_cusip_switch_under_the_ticker_near_the_handoff():
     far = FtdIndex([FtdRow("2016-01-04", "450911201", "ITT", "ITT CORP", 35.0),
                     FtdRow("2016-05-18", "45073V108", "ITT", "ITT INC", 35.2)])
     assert not cusip_switch(far, late, ["450911201"], ["45073V108"])     # A's CUSIP stopped months before
+
+
+def test_the_price_across_a_cusip_switch_is_bs_first_over_as_last():
+    """Seadrill 2018: G7945E105 last fails under SDRL at 0.10, G7998G106 first at 18.50."""
+    ftd = FtdIndex([FtdRow("2018-06-20", "G7945E105", "SDRL", "SEADRILL LTD", 0.21),
+                    FtdRow("2018-07-03", "G7945E105", "SDRL", "SEADRILL LTD", 0.10),
+                    FtdRow("2018-07-05", "G7998G106", "SDRL", "SEADRILL LTD NEW SHS", 18.50),
+                    FtdRow("2018-07-09", "G7998G106", "SDRL", "SEADRILL LTD NEW SHS", 19.00)])
+    p = _pair("2018-07-03", "2018-07-05", ticker="SDRL")
+    assert switch_price_ratio(ftd, p, ["G7945E105"], ["G7998G106"]) == pytest.approx(185.0)
+    assert switch_price_ratio(ftd, p, ["G7945E105"], ["G7945E105"]) is None       # no switch: no ratio
+    assert switch_price_ratio(ftd, p, ["G7945E105"], ["99999Z999"]) is None
+    for a_price, b_price in ((None, 18.50), (0.10, None), (0.0, 18.50), (0.10, 0.0)):
+        gap = FtdIndex([FtdRow("2018-07-03", "G7945E105", "SDRL", "SEADRILL LTD", a_price),
+                        FtdRow("2018-07-05", "G7998G106", "SDRL", "SEADRILL LTD NEW SHS", b_price)])
+        assert cusip_switch(gap, p, ["G7945E105"], ["G7998G106"])                 # the switch itself still holds
+        assert switch_price_ratio(gap, p, ["G7945E105"], ["G7998G106"]) is None   # a price missing or not above zero
+    far = FtdIndex([FtdRow("2018-01-04", "G7945E105", "SDRL", "SEADRILL LTD", 0.30),
+                    FtdRow("2018-07-05", "G7998G106", "SDRL", "SEADRILL LTD NEW SHS", 18.50)])
+    assert switch_price_ratio(far, p, ["G7945E105"], ["G7998G106"]) is None       # where `cusip_switch` does not hold
+
+
+@pytest.mark.parametrize("ratio,kind", [
+    (185.0, None),            # Seadrill 2018: a bankruptcy plan's new shares
+    (0.29, None),             # The Aaron's Company 2020: a spin-off that took the ticker
+    (0.46, None),             # NWS-A 2013
+    (0.49, None), (2.01, None),
+    (0.5, "continuation"), (2.0, "continuation"),
+    (0.89, "continuation"),   # GGP 2010
+    (None, "continuation"),   # no price on one side (WEN 2009): as before
+])
+def test_a_cusip_switch_between_two_issuers_is_a_continuation_only_when_the_price_carried_over(ratio, kind):
+    d = decide_handoff(_pair("2015-06-12", "2015-06-15"), filing=None, same_issuer=False, cusip_switch=True,
+                       price_ratio=ratio)
+    assert (d.kind if d else None) == kind
+    if d is not None:
+        assert d.evidence == "timing:cusip"
+
+
+def test_the_price_is_not_read_for_one_issuer_or_against_a_filing():
+    """LMCA 2016: one share became three of the same issuer's; the price fell to 0.487 and the line is the same."""
+    p = _pair("2016-04-15", "2016-04-18")
+    d = decide_handoff(p, filing=None, same_issuer=True, cusip_switch=True, price_ratio=0.487)
+    assert (d.kind, d.evidence) == ("continuation", "timing:cik")
+    d = decide_handoff(p, filing=FILING, same_issuer=False, cusip_switch=True, price_ratio=185.0)
+    assert d.kind == "continuation" and d.by_filing
+
+
+def test_a_switch_whose_price_did_not_carry_over_can_still_be_a_takeover():
+    """An older issuer taking the ticker at another price: rule 3 still answers."""
+    p = _pair("2015-06-12", "2015-06-15")
+    d = decide_handoff(p, filing=None, same_issuer=False, cusip_switch=True, price_ratio=185.0,
+                       b_issuer_since="2010-01-04")
+    assert (d.kind, d.evidence) == ("takeover", "timing:issuer")
 
 
 # --- acting on a pair (Task 5) -----------------------------------------------------------

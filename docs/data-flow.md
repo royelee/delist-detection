@@ -854,7 +854,12 @@ ticker and another starting under it within days (CONTEXT.md).
    continuation by timing and identity (at most `CONTINUATION_DAYS` = 10
    days apart, B sighted under no ticker before then, and the same issuer CIK
    or the ticker's CUSIP switching from A's to B's in the fails data,
-   `cusip_switch`); a takeover (B traded before, under another ticker, or
+   `cusip_switch`, at about the same price: B's first fails price is 0.5 to
+   2.0 times A's last, `CARRIED_PRICE` and `switch_price_ratio`, or either
+   price is missing. A bankruptcy plan's new shares (Seadrill 2018, 0.10 to
+   18.50) and a spin-off that takes the ticker (The Aaron's Company 2020,
+   62.93 to 18.41) fail it; a same-issuer pair never reads the price: LMCA
+   2016's one-to-three reclassification is still one line); a takeover (B traded before, under another ticker, or
    B's issuer is another company that filed with EDGAR over a year before:
    Eldorado, never observed as ERI, took CZR); otherwise nothing, and any
    `ticker_shared` row stays. Two guards stop a spin-off that takes the old

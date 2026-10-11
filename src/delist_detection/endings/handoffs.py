@@ -32,7 +32,7 @@ from ..sources.edgar import EdgarSubmission
 from ..filings.evidence import names_near
 from ..vocabulary.exit_kind import SUCCESSOR_FORMS, TIMING_CIK, TIMING_CUSIP, continuation_reason, successor_note
 from ..filings.filing_search import successor_query
-from ..sources.ftd import FtdIndex
+from ..sources.ftd import FtdIndex, FtdRow
 from ..identity.history import TAKEOVER_DAYS, Sighting
 from ..vocabulary.identifiers import bare_ticker, strip_class_words
 from .last_trade import NO_DAY, at_handoff
@@ -165,18 +165,44 @@ def predecessor_names(sub: dict | None, a_last: str, observed: str | None) -> li
     return out
 
 
+CARRIED_PRICE = (0.5, 2.0)   # B's first fails price over A's last: a share for a share keeps the price about there
+
+
+def _switch_rows(ftd: FtdIndex, pair: HandoffPair, a_cusips: Sequence[str],
+                 b_cusips: Sequence[str]) -> tuple[FtdRow, FtdRow] | None:
+    """A's last fails row and B's first under the pair's ticker, where the ticker switches CUSIP at the handoff
+    (both within `CONTINUATION_DAYS` of B's first sighting); None without a switch."""
+    rows = ftd.by_symbol(pair.ticker)
+    a_rows = [r for r in rows if r.cusip in a_cusips]
+    b_rows = [r for r in rows if r.cusip in b_cusips and r.cusip not in a_cusips]
+    if not a_rows or not b_rows:
+        return None
+    last, first = a_rows[-1], b_rows[0]
+    if all(abs(_days(pair.b_first, d)) <= CONTINUATION_DAYS for d in (last.date, first.date)):
+        return last, first
+    return None
+
+
 def cusip_switch(ftd: FtdIndex, pair: HandoffPair, a_cusips: Sequence[str], b_cusips: Sequence[str]) -> bool:
     """Whether the pair's ticker switches CUSIP in the fails data at the
     handoff: a CUSIP of A's last fails under the ticker, and a different CUSIP
     of B's first fails under it, both within `CONTINUATION_DAYS` of B's first
     sighting (ITT 2016: 450911201 last fails 2016-05-17, 45073V108 first
     2016-05-18)."""
-    rows = ftd.by_symbol(pair.ticker)
-    a_rows = [r for r in rows if r.cusip in a_cusips]
-    b_rows = [r for r in rows if r.cusip in b_cusips and r.cusip not in a_cusips]
-    if not a_rows or not b_rows:
-        return False
-    return all(abs(_days(pair.b_first, d)) <= CONTINUATION_DAYS for d in (a_rows[-1].date, b_rows[0].date))
+    return _switch_rows(ftd, pair, a_cusips, b_cusips) is not None
+
+
+def switch_price_ratio(ftd: FtdIndex, pair: HandoffPair, a_cusips: Sequence[str],
+                       b_cusips: Sequence[str]) -> float | None:
+    """B's first fails price over A's last across the pair's CUSIP switch (`cusip_switch`): each the prior trading
+    day's close. None without a switch, or when either row has no price above zero. A share that became one share
+    keeps the price about where it was (GGP 2010: 17.39 to 15.40); a bankruptcy plan's new shares (Seadrill 2018:
+    0.10 to 18.50) and a spin-off that takes the ticker (The Aaron's Company 2020: 62.93 to 18.41) do not."""
+    rows = _switch_rows(ftd, pair, a_cusips, b_cusips)
+    if rows is None:
+        return None
+    a, b = rows[0].price, rows[1].price
+    return b / a if a and b and a > 0 and b > 0 else None
 
 
 def issuer_carries_on(pair: HandoffPair, securities: Mapping[str, Security],
@@ -197,7 +223,7 @@ def issuer_carries_on(pair: HandoffPair, securities: Mapping[str, Security],
 
 def decide_handoff(pair: HandoffPair, *, filing: tuple[str, str, str] | None, same_issuer: bool,
                    cusip_switch: bool, issuer_carries_on: bool = False,
-                   b_issuer_since: str | None = None) -> HandoffDecision | None:
+                   b_issuer_since: str | None = None, price_ratio: float | None = None) -> HandoffDecision | None:
     """What the pair is, the first rule that applies. A that lived on under
     another ticker (`pair.a_last_any` past `CONTINUATION_DAYS` after A's last
     sighting under this one) is no continuation at all: B took a ticker A
@@ -209,7 +235,8 @@ def decide_handoff(pair: HandoffPair, *, filing: tuple[str, str, str] | None, sa
        are at most `CONTINUATION_DAYS` apart, B was sighted under no ticker
        before `CONTINUATION_DAYS` ahead of A's last, and the two share an issuer
        CIK (`same_issuer`) or the ticker's CUSIP switches from A's to B's
-       (`cusip_switch`), and A's issuer does not carry on in another line while
+       (`cusip_switch`) at about the same price (`price_ratio` within
+       `CARRIED_PRICE`, or unknown), and A's issuer does not carry on in another line while
        B is another issuer's (`issuer_carries_on`);
     3. a takeover: B traded before (under another ticker: IIVI), or B's issuer
        is another, older company (it filed with EDGAR `ISSUER_AGE_DAYS` before A's
@@ -220,8 +247,9 @@ def decide_handoff(pair: HandoffPair, *, filing: tuple[str, str, str] | None, sa
         form, accession, _ = filing
         return HandoffDecision(pair, "continuation", f"{form} {accession}".strip(), True)
     existed = _days(pair.b_first_any, pair.a_last) > CONTINUATION_DAYS
+    carried = price_ratio is None or CARRIED_PRICE[0] <= price_ratio <= CARRIED_PRICE[1]
     if (abs(pair.gap) <= CONTINUATION_DAYS and not existed and not lived_on and not issuer_carries_on
-            and (same_issuer or cusip_switch)):
+            and (same_issuer or (cusip_switch and carried))):
         return HandoffDecision(pair, "continuation", TIMING_CIK if same_issuer else TIMING_CUSIP, False)
     older = (not same_issuer and b_issuer_since is not None
              and _days(b_issuer_since, pair.a_last) > ISSUER_AGE_DAYS)

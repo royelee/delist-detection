@@ -943,7 +943,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   successor issuer's 8-K12B/8-K12G3 `continuation_filing`, found by the full-text
   search for the predecessor's name, else in the successor issuer's own filing list,
   `own_continuation_filing`, unless the old issuer carries on in another line; else by timing and
-  the same CIK or a `cusip_switch`; else a takeover when the new line traded
+  the same CIK or a `cusip_switch` whose price carried over (`switch_price_ratio` within `CARRIED_PRICE`, 0.5 to 2.0, or
+  unknown; a same-issuer pair does not read it); else a takeover when the new line traded
   before), `apply_handoffs` (a continuation's missing `exchange_transfer` row
   or its successor, `handoff_continuation`/`handoff_rebucketed`/
   `handoff_conflict`; a takeover's `ticker_successor_sec_id` or

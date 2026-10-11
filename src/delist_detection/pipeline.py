@@ -37,7 +37,7 @@ from .vocabulary.exit_kind import (ContinuationReading, continuation_reason, end
                                    is_wind_down, last_endings, successor_note)
 from .sources.fatal import FATAL
 from .endings.handoffs import (
-    HandoffDecision, HandoffOutcome, apply_handoffs, continuation_filing, cusip_switch, decide_handoff,
+    HandoffDecision, HandoffOutcome, apply_handoffs, continuation_filing, cusip_switch, decide_handoff, switch_price_ratio,
     drop_resolved_shared, find_handoffs, issuer_carries_on, own_continuation_filing, predecessor_names,
 )
 from .filings.form25 import ISSUER_FORM25_FORMS
@@ -1006,10 +1006,12 @@ def _handoffs(ctx: _RunContext, delistings: list[Delisting], securities: dict[st
         if watch.tripped():
             degraded.append(degraded_item(p.a, p.ticker, a_cik, f"the handoff search ({p.ticker} to {p.b})",
                                           last_seen=p.a_last))
+        a_cusips, b_cusips = sec_cusips.get(p.a, []), sec_cusips.get(p.b, [])
         decision = decide_handoff(p, filing=filing, same_issuer=same,
-                                  cusip_switch=cusip_switch(ftd, p, sec_cusips.get(p.a, []), sec_cusips.get(p.b, [])),
+                                  cusip_switch=cusip_switch(ftd, p, a_cusips, b_cusips),
                                   issuer_carries_on=issuer_carries_on(p, securities, first_seen),
-                                  b_issuer_since=since.isoformat() if since else None)
+                                  b_issuer_since=since.isoformat() if since else None,
+                                  price_ratio=switch_price_ratio(ftd, p, a_cusips, b_cusips))
         if decision is not None:
             decisions.append(decision)
     ctx.meter.done("handoff search", mark)
