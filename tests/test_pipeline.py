@@ -1934,6 +1934,28 @@ def test_with_no_last_trade_date_the_window_is_anchored_on_the_form25_filing():
     assert successor_in_run(ev, starts) == ("BBGAPANEW01", "same_ticker")
 
 
+def test_the_issuers_own_new_line_outranks_another_issuer_that_took_the_ticker():
+    """Alcoa Inc 2016 (FB-003): it separated, kept its CIK as Arconic (ARNC, a new composite, first seen
+    2016-11-04), and the spun-off Alcoa Corp (another CIK) took AA from 2016-11-03. The one security of the same
+    issuer and class is the successor; the one that only shares the ticker is a takeover of it. Two of the same
+    issuer, or one of another class, stay ambiguous (test_two_candidates_leave_the_successor_unknown)."""
+    record = DelistRecord(ticker="AA", cik=4281, observed_delist_date="2016-11-01", crsp_code=304,
+                          bucket=CrspBucket.EXCHANGE_TRANSFER, confidence="high", reason="Ticker change",
+                          evidence={"flags": []}, sec_id="BBGAAOLD001", delist_date="2016-11-01")
+    ev = Delisting(sec_id="BBGAAOLD001", cik=4281, ticker="AA", delist_date="2016-11-01", record=record,
+                   last_trade=LastTrade(None, "", ("no_last_trade_date",)), form25=None, form25_sub=None,
+                   exchange="NYSE")
+    starts = {"BBGAAOLD001": SecurityStart("2007-12-19", 4281, {"AA"}, share_class="COMMON"),
+              "BBGARNC0001": SecurityStart("2016-11-04", 4281, {"ARNC", "HWM"}, share_class="COMMON"),
+              "BBGAANEW001": SecurityStart("2016-11-03", 1675149, {"AA"}, share_class="COMMON")}
+    assert successor_in_run(ev, starts) == ("BBGARNC0001", "same_issuer")
+    # a second line of the issuer, or one of another class beside the ticker's taker: no guess
+    two = {**starts, "BBGARNC0002": SecurityStart("2016-11-04", 4281, {"ARNCP"}, share_class="COMMON")}
+    assert successor_in_run(ev, two) is None
+    other_class = {**starts, "BBGARNC0001": starts["BBGARNC0001"]._replace(share_class="SERIES X")}
+    assert successor_in_run(ev, other_class) is None
+
+
 def _same_ticker_acquirer_run(fake_edgar, tmp_path, holder=None, old_tail=()):
     """Waste Connections 2016 as the run sees it: the target (old WCN, pinned to
     its own issuer) is acquired by a company that takes the same ticker WCN; the

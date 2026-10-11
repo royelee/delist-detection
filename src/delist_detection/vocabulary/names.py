@@ -160,12 +160,17 @@ def description_names(description: str, name: str) -> bool:
     same word, a plural S aside, written short, or run together). Stricter than
     `description_matches`, where one shared word is enough: CITIZENS
     COMMUNICATIONS does not name CLEAR CHANNEL COMMUNICTNS, while CORN PRODUCTS
-    INTERNATIONAL names CORN PRODUCTS INT'L. With nothing to compare it names
-    nothing."""
+    INTERNATIONAL names CORN PRODUCTS INT'L. When neither side has a word to
+    compare (WW INTL INC COM, WW INTERNATIONAL INC), the description names the
+    company when their letters and digits, security words out, are the same, as
+    `names_agree` reads such a name (FB-003); with nothing at all to compare it
+    names nothing."""
     d_words = _without_holding(_issuer_words(_name_part(description)))
     n_words = _without_holding(_issuer_words(name))
     if not d_words or not n_words:
-        return False
+        bare = _run(" ".join(p for p in re.findall(r"[A-Z0-9'’]+", _name_part(description))
+                             if p not in _SECURITY_WORDS))
+        return not d_words and not n_words and bare != "" and bare == _run(name)
     exact, short = _word_matches(d_words, n_words, _name_part(description), name, either=False)
     return exact + short >= min(2, len(d_words), len(n_words))
 

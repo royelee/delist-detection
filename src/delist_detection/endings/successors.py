@@ -136,8 +136,12 @@ def successor_in_run(e: Delisting, starts: dict[str, SecurityStart]) -> tuple[st
     that shares the delisted security's issuer CIK or its ticker: the new line
     of a holding-company reorganization or a rename. With no last trade date
     the ending's anchor stands in for it (`Delisting.anchor`: the Form 25's
-    filing date, the delisting date being ten days later). Returns (sec_id,
-    "same_issuer" | "same_ticker"); None for zero or several candidates."""
+    filing date, the delisting date being ten days later). The one candidate of
+    the same issuer and the same share class outranks those that only share a
+    ticker, which another issuer took (FB-003: Alcoa Inc's common went on as
+    Arconic's, CIK 4281, while the spun-off Alcoa Corp took AA); a line of the
+    issuer in another class is no such candidate. Returns (sec_id, "same_issuer" |
+    "same_ticker"); None otherwise for zero or several candidates."""
     day = e.anchor
     lo = (day - timedelta(days=SUCCESSOR_BEFORE_DAYS)).isoformat()
     hi = (day + timedelta(days=SUCCESSOR_AFTER_DAYS)).isoformat()
@@ -152,6 +156,11 @@ def successor_in_run(e: Delisting, starts: dict[str, SecurityStart]) -> tuple[st
             found[sid] = "same_issuer"
         elif own & start.tickers:
             found[sid] = "same_ticker"
+    own_class = starts[e.sec_id].share_class if e.sec_id in starts else ""
+    same = [sid for sid, how in found.items()
+            if how == "same_issuer" and own_class and starts[sid].share_class == own_class]
+    if len(same) == 1 and sum(how == "same_issuer" for how in found.values()) == 1:
+        return same[0], "same_issuer"
     return next(iter(found.items())) if len(found) == 1 else None
 
 

@@ -123,7 +123,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `placeholder_id` (`CIK<cik>-<CLASS>` from a class code, `SHARE_CLASS_CODE`; an optional CUSIP appends
   `-<CUSIP>`, one of several lines of an issuer and class, FB-005) and `is_placeholder` (a prefix test). A class code
   (COMMON, CLASS X, SERIES X) and its letter (`class_letter`). One reader per kind of text, each its own rule:
-  a security's name, observed, EDGAR's or OpenFIGI's (`share_class_from_name`; `name_class_letter`, the era split's
+  a security's name, observed, EDGAR's or OpenFIGI's (`share_class_from_name`: a series letter apart from SER or
+  SERIES, so OpenFIGI's SERV for services is no series V, FB-003; `name_class_letter`, the era split's
   and the identity rules'; `strip_class_words`, the name an 8-K12B prints, for stage 9's and the handoffs'
   searches); the class letter an OpenFIGI name ends with (`figi_class_letter`: "MSG NETWORKS INC- A", which the
   name reader reads as COMMON); one fails description (`description_class_letter`: CL or CLASS, a "-" allowed; the
@@ -186,7 +187,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   side when another word is left, `_HOLDING_WORDS`: a holding company that keeps the name, EXXONMOBIL HLDGS CORPORATION
   beside EXXON MOBIL CORP, is that name; FB-004 part c: `has_name`, whether a name can agree with another, a word of
   three letters or the letters and digits left after the fillers; `same_letters`, two names of the same letters in any
-  order, the name run together, split or reordered): `name_tokens`, `names_agree`, `has_name`, `same_letters`, `description_names`,
+  order, the name run together, split or reordered; FB-003: `description_names` of a description and a name that both
+  have no word to compare reads their letters and digits, security words out, as `names_agree` does, so WW INTL INC
+  COM names WW INTERNATIONAL INC): `name_tokens`, `names_agree`, `has_name`, `same_letters`, `description_names`,
   `names_an_issuer` and `description_matches` (a fails row's description against a security's names), read by the
   observations, the identity rules, the fails index, the Form 25 match, the classifier and the merger readers.
 - `vocabulary/exchanges.py` — a listing's exchange, normalized, a leaf: `Exchange` (NYSE, AMEX, NASDAQ, OTHER, the four buckets
@@ -845,7 +848,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   of the CUSIP it held last). Cached answers are read from the one fails index on the warm pass's threads too.
   Tested at its interface (`tests/test_trading_record.py`).
 - `endings/successors.py` — the successor after a FIGI change: a security of the run
-  that starts right after the last trade (`successor_in_run`, `SecurityStart`),
+  that starts right after the last trade (`successor_in_run`, `SecurityStart`: the one candidate of the same issuer
+  and share class outranks a ticker another issuer took, FB-003: Alcoa Inc's common went on as Arconic while Alcoa
+  Corp took AA; two of the issuer, or one of another class, stay ambiguous),
   else the successor issuer's 8-K12B found by full-text search
   (`successor_search_args`, `filing_search.successor_query`, `successor_from_8k12b`,
   `successor_search_name`). Sub-plan 5c: `successor_by_terms` (the security an R1 statement names, the statement

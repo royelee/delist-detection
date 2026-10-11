@@ -122,14 +122,15 @@ def is_placeholder(sec_id: str) -> bool:
 
 def share_class_from_name(name: str | None) -> str:
     """The class code a security's name states, observed, EDGAR's or OpenFIGI's: the first "CL X" or "CLASS X"
-    ("ALPHABET INC-CL C", "META PLATFORMS INC-CLASS A"), else the first "SER X" or "SERIES X" ("LIBERTY
-    BROADBAND-SER C"), else a "-X" it ends with ("DISCOVERY INC-A"); COMMON for a name that states none ("CLOROX
-    CO")."""
+    ("ALPHABET INC-CL C", "META PLATFORMS INC-CLASS A"), else the first "SER X" or "SERIES X", the letter apart
+    from the word ("LIBERTY BROADBAND-SER C"; OpenFIGI's "SERV" for services is no series V: FB-003, Nationwide
+    Financial Services), else a "-X" it ends with ("DISCOVERY INC-A"); COMMON for a name that states none
+    ("CLOROX CO")."""
     s = (name or "").upper().strip()
     m = re.search(r"\bCL(?:ASS)?\s*-?\s*([A-Z])\b", s)
     if m:
         return f"CLASS {m.group(1)}"
-    m = re.search(r"\bSER(?:IES)?\s*-?\s*([A-Z0-9])\b", s)
+    m = re.search(r"\bSER(?:IES)?(?:\s+|\s*-\s*)([A-Z0-9])\b", s)
     if m:
         return f"SERIES {m.group(1)}"
     m = re.search(r"-([A-Z])$", s)
@@ -151,7 +152,7 @@ def name_class_letter(name: str | None) -> str | None:
     return class_letter(share_class_from_name(name))
 
 
-_CLASS_WORDS = re.compile(r"\b(?:CL(?:ASS)?|SER(?:IES)?)\s*-?\s*[A-Z0-9]\b|-[A-Z]$", re.I)
+_CLASS_WORDS = re.compile(r"\b(?:CL(?:ASS)?\s*-?\s*|SER(?:IES)?(?:\s+|\s*-\s*))[A-Z0-9]\b|-[A-Z]$", re.I)
 
 
 def strip_class_words(name: str | None) -> str:

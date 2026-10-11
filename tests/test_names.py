@@ -175,6 +175,12 @@ def test_with_nothing_to_compare_the_answer_is_the_callers():
     ("ACME HOLDINGS", "BETA HOLDINGS", False),                         # a holding word is no word shared
     ("ACME HOLDINGS", "ACME ROCKETS", True),
     ("HOLDINGS", "HOLDINGS CORP", False),                              # nothing left to compare
+    # FB-003: neither side has a word to compare (WW is two letters, INTERNATIONAL a filler): their letters and
+    # digits, security words out, are the same, as `names_agree` reads such a name (WW International's new CUSIP)
+    ("WW INTL INC COM", "WW INTERNATIONAL INC", True),
+    ("WW INTL INC COM", "WW INTERNATIONAL, INC.", True),
+    ("2U INC COM STK", "2U, Inc.", True),
+    ("WW INTL INC COM", "VV INTERNATIONAL INC", False),
 ])
 def test_a_description_names_a_company_word_by_word(description, name, names):
     assert description_names(description, name) is names

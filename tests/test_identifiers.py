@@ -78,6 +78,11 @@ def test_the_class_code_a_name_states():
     assert share_class_from_name("META PLATFORMS INC-CLASS A") == "CLASS A"
     assert share_class_from_name("DISCOVERY INC-A") == "CLASS A"
     assert share_class_from_name("LIBERTY BROADBAND-SER C") == "SERIES C"
+    assert share_class_from_name("LIBERTY MEDIA CORP - SER A") == "SERIES A"
+    # FB-003: OpenFIGI's "SERV" (services) is no series V; the class is the "-A" it ends with (Nationwide Financial
+    # Services' class A), or none (Fidelity National Information Services)
+    assert share_class_from_name("NATIONWIDE FINANCIAL SERV-A") == "CLASS A"
+    assert share_class_from_name("FIDELITY NATIONAL INFORMATION SERV") == "COMMON"
     assert share_class_from_name("CLOROX CO") == "COMMON"
     assert share_class_from_name(None) == "COMMON"
     # real observed names: Lennar's class B, Berkshire's class B; Liberty Capital's tracking stock (LCAPA) states
@@ -112,6 +117,8 @@ def test_a_name_without_its_class_words():
     assert strip_class_words("AON PLC CLASS A") == "AON PLC"
     # CAPITAL is a word of Liberty Capital's name, not a class word
     assert strip_class_words("LIBERTY CAPITAL") == "LIBERTY CAPITAL"
+    # SERV (services) is a word of the name, not a series V (FB-003)
+    assert strip_class_words("FIDELITY NATIONAL INFORMATION SERV") == "FIDELITY NATIONAL INFORMATION SERV"
     assert strip_class_words(None) == ""
 
 
