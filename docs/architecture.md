@@ -750,7 +750,10 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   why). A security with an ending that ends it whose ticker a successor took is not listed today (AON 2012). A
   security with no ending that ends it, not listed today, closes at its last sighting - unless that sighting is a
   fails row under an own ticker within `DATA_EDGE_TRADING_DAYS` (2) trading days of `FtdIndex.files_end()`, the fails
-  data's last day (FB-004: DIS, whose issuer CIK lists nothing): it is still trading, its history stays open
+  data's last day (FB-004: DIS, whose issuer CIK lists nothing): it is still trading, its history stays open; so is a
+  fails row under an own ticker at the edge under a CUSIP no security of the run holds whose description names the
+  security (`history.unheld_trading_days`, `description_names`: XOM 2026, 30233Q108 "EXXONMOBIL HLDGS CORPORATION" after
+  the holding-company reorganization whose line follow was refused for want of a filing)
   (`Histories._at_data_edge`; a security gone weeks before the edge, SBNY, FRCB, is not; an ending that ends it
   always wins; an index over rows alone has no edge). `keeps_trading` is the one continues-after test, shared with
   `endings/registrants.goes_on`. Pipeline

@@ -23,9 +23,9 @@ from typing import NamedTuple
 from .added_securities import AddedSecurity
 from ..vocabulary.crsp_codes import CrspBucket
 from ..vocabulary.exit_kind import LastTrade, end_day
-from ..sources.ftd import FtdIndex, is_deleted_symbol, is_unassigned_symbol
+from ..sources.ftd import FtdIndex, is_deleted_symbol, is_trading_symbol, is_unassigned_symbol
 from ..vocabulary.identifiers import bare_ticker
-from ..vocabulary.names import description_matches
+from ..vocabulary.names import description_matches, description_names
 from ..vocabulary.trading_calendar import add_trading_days
 from .observations import TickerEra
 from ..outputs.review_triage import ReviewItem
@@ -365,6 +365,18 @@ class SecurityEnd:
     listed: bool = False
 
 
+def unheld_trading_days(security: Security, ftd: FtdIndex, held: Iterable[str]) -> list[str]:
+    """The days the security's own tickers show fails rows (trading symbols) under a CUSIP no security of the run
+    holds (`held`) whose description names the security (`description_names`, which leaves a holding word out): the
+    ticker trading on under a CUSIP the run has not attached, a holding-company reorganization's new one (XOM 2026:
+    30233Q108, "EXXONMOBIL HLDGS CORPORATION"). Another company's CUSIP under a recycled ticker names another
+    company, and a CUSIP of another security of the run is that security's. The ISO days, ascending."""
+    held = set(held)
+    days = {r.date for t in security.own_tickers() for r in ftd.by_symbol(t)
+            if r.cusip not in held and is_trading_symbol(r.symbol) and description_names(r.description, security.name)}
+    return sorted(days)
+
+
 class Histories:
     """The observed securities' histories over one set of endings: which endings end their security, where each
     history ends, and its ranges. Pure: every input is data, and the one read it makes, the exchange EDGAR lists today
@@ -467,6 +479,9 @@ class Histories:
         alone). A security gone weeks before it (SBNY, FRCB) is not."""
         edge = self._ftd.files_end()
         days = [s.day for s in self._own(sec_id) if s.source == FTD]
+        if sec_id in self._securities:
+            held = {c for cs in self._cusips.values() for c in cs}
+            days += unheld_trading_days(self._securities[sec_id], self._ftd, held)
         return bool(edge and days and max(days) >= add_trading_days(date.fromisoformat(edge),
                                                                      -DATA_EDGE_TRADING_DAYS).isoformat())
 

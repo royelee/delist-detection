@@ -612,3 +612,46 @@ def test_an_ending_the_run_found_wins_over_the_data_edge():
     history = _edge_history("2026-09-25", endings=[ending])
     assert history.end("BBGDIS") == SecurityEnd("2026-09-24", True, False)
     assert history.ticker_rows[-1]["valid_to"] == "2026-09-24"
+
+
+# --- FB-004 (batch 3 gate, XOM 2026): the ticker trades on under a CUSIP no security of the run holds ---
+
+def _holdco_history(new_cusip_rows, *, held_elsewhere=False, desc="EXXONMOBIL HLDGS CORPORATION"):
+    """Exxon Mobil observed in 2020, its own CUSIP failing to 2026-07-02, its ticker failing on to `new_cusip_rows`
+    days under another CUSIP (a holding-company reorganization); the files end 2026-09-30."""
+    era = TickerEra("XOM", "2020-01-02", "2020-01-02", [Observation("XOM", "2020-01-02", "EXXON MOBIL CORP")])
+    secs = {"BBGXOM": Security("BBGXOM", 34088, "COMMON", "EXXON MOBIL CORP", "Common Stock", True, "cusip",
+                               eras=[era])}
+    old = [FtdRow(d.isoformat(), "30231G102", "XOM", "EXXON MOBIL CORP", 100.0 + i % 3)
+           for i, d in enumerate(date(2026, 6, 1) + timedelta(days=k) for k in range(0, 32, 2))]
+    new = [FtdRow(d, "30233Q108", "XOM", desc, 100.0 + i % 3) for i, d in enumerate(new_cusip_rows)]
+    ftd = FtdIndex(old + new, source=_Files(), window=(date(2007, 12, 17), date(2026, 9, 25)))
+    cusips = {"BBGXOM": ["30231G102"]}
+    if held_elsewhere:
+        secs["BBGHLD"] = Security("BBGHLD", 2115436, "COMMON", "EXXONMOBIL HLDGS CORPORATION", "Common Stock", True,
+                                  "cusip", eras=[])
+        cusips["BBGHLD"] = ["30233Q108"]
+    sightings = {sid: ticker_sightings(s, ftd, cusips[sid]) if s.eras else [] for sid, s in secs.items()}
+    return Histories(secs, sightings, cusips, ftd, [], listed={sid: False for sid in secs},
+                     exchange_today=lambda security, ticker: None)
+
+
+def test_a_ticker_trading_on_under_an_unheld_cusip_naming_the_security_stays_open():
+    history = _holdco_history(["2026-07-06", "2026-09-22", "2026-09-24"])
+    assert history.end("BBGXOM") == SecurityEnd(None, False, True)
+    assert history.ticker_rows[-1]["valid_to"] is None
+
+
+def test_a_cusip_another_security_of_the_run_holds_is_not_this_ones_trading():
+    history = _holdco_history(["2026-07-06", "2026-09-22", "2026-09-24"], held_elsewhere=True)
+    assert history.end("BBGXOM").listed is False
+
+
+def test_a_cusip_whose_description_names_another_company_is_not_this_ones_trading():
+    history = _holdco_history(["2026-07-06", "2026-09-22", "2026-09-24"], desc="CHEVRON CORP")
+    assert history.end("BBGXOM").listed is False
+
+
+def test_an_unheld_cusip_that_stopped_before_the_edge_does_not_keep_it_open():
+    history = _holdco_history(["2026-07-06", "2026-07-20"])
+    assert history.end("BBGXOM").listed is False

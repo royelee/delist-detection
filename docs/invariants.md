@@ -408,7 +408,8 @@
   never second-guessed nor published. A security
   none of whose delistings ends it, and that isn't listed today either, is
   left unclipped, ending at its last real sighting - unless that sighting is a fails row at the fails data's last day
-  (`Histories._at_data_edge`, FB-004): then it is still trading and its history stays open. A security whose ending
+  (`Histories._at_data_edge`, FB-004; a row at the edge under a CUSIP no security of the run holds whose description
+  names the security counts too, `history.unheld_trading_days`: XOM 2026): then it is still trading and its history stays open. A security whose ending
   went on as itself and whose old registrant a new one replaced (`endings/registrants.py`) is listed through the
   new registrant, and the contract names it as the issuer in force from its registration.
   A successor's ticker is not its predecessor's (`Histories._successor_starts`, one map shared by the clip check,
