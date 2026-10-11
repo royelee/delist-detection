@@ -319,11 +319,13 @@ def renamed_cusips(sub: Mapping | None, end: LineEnd, cusips: Collection[str], f
     renamed = max(renames)           # the names the issuer held from its last rename here on
     names = names_between(sub, renamed + timedelta(days=1), renamed + timedelta(days=RENAME_DAYS))
     lo, hi = _days(end.settled, -LINE_DAYS), _days(end.last, LINE_DAYS)
+    by_first: dict[str, list[str]] = defaultdict(list)        # the names by their first word, computed once
+    for n in names:
+        by_first[_first_word(n)].append(n)
     rows: dict[str, list[str]] = defaultdict(list)
     for r in ftd.every_row(date.fromisoformat(lo), date.fromisoformat(hi) + timedelta(days=NAME_DAYS)):
         if r.cusip not in cusips and is_line_symbol(r.symbol) \
-                and any(_first_word(r.description) == _first_word(n) and description_names(r.description, n)
-                        for n in names):
+                and any(description_names(r.description, n) for n in by_first.get(_first_word(r.description), ())):
             rows[r.cusip].append(r.date)
     return {c for c, days in rows.items() if len(days) >= MIN_NEW_ROWS and lo <= min(days) <= hi}
 

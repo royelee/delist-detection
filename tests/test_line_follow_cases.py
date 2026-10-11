@@ -440,3 +440,53 @@ def test_the_dv_step_is_found_by_the_name_its_rows_carry():
     """DV 2017: the case's named CUSIP is 00737L103, found by `renamed_cusips` (EDGAR dates the rename to Adtalem on
     2017-05-24; ATGE is neither listed by EDGAR today nor named by the 8-K 5.03)."""
     assert DATA["cases"]["CIK730464-COMMON"]["extra_cusips"] == ["00737L103"]
+
+
+# ---- the rename scan computes each first word once: the answer is the one the per-row comparison gave ----
+
+class _Files:
+    def __init__(self, rows):
+        self.rows_ = rows
+
+    def urls_for(self, lo, hi):
+        return ["f"]
+
+    def rows(self, url, *, symbols=None, cusips=None):
+        yield from self.rows_
+
+
+def _old_renamed_cusips(sub, end, cusips, ftd):
+    """The scan as it was: the first word of the description and of every name compared inside the row loop."""
+    settled = date.fromisoformat(end.settled)
+    renames = [date.fromisoformat(to) for fn in sub["formerNames"] if (to := fn["to"][:10])
+               and abs((date.fromisoformat(to) - settled).days) <= lf.RENAME_DAYS]
+    renamed = max(renames)
+    names = lf.names_between(sub, renamed + lf.timedelta(days=1), renamed + lf.timedelta(days=lf.RENAME_DAYS))
+    lo, hi = lf._days(end.settled, -lf.LINE_DAYS), lf._days(end.last, lf.LINE_DAYS)
+    rows: dict[str, list[str]] = {}
+    for r in ftd.every_row(date.fromisoformat(lo), date.fromisoformat(hi) + lf.timedelta(days=lf.NAME_DAYS)):
+        if r.cusip not in cusips and lf.is_line_symbol(r.symbol) \
+                and any(lf._first_word(r.description) == lf._first_word(n) and lf.description_names(r.description, n)
+                        for n in names):
+            rows.setdefault(r.cusip, []).append(r.date)
+    return {c for c, days in rows.items() if len(days) >= lf.MIN_NEW_ROWS and lo <= min(days) <= hi}
+
+
+def test_the_rename_scan_gives_the_answer_the_per_row_comparison_gave():
+    sub = {"name": "NEWCO GLOBAL", "formerNames": [
+        {"name": "OLDCO INC", "from": "2000-01-01", "to": "2020-06-01"},
+        {"name": "THE NEWCO DYNAMICS", "from": "2020-06-02", "to": "2020-09-15"},     # two names, one first word
+        {"name": "NEWCO WIDGET INC", "from": "2020-06-02", "to": "2020-10-01"}]}
+    descriptions = {"11111A101": "NEWCO WIDGET INC COM",        # names the second name
+                    "22222B202": "NEWCO FOODS LLC",             # shares only the first word
+                    "33333C303": "WIDGET NEWCO INC",            # matches only the name's second word
+                    "44444D404": "THE NEWCO DYNAMICS CORP",     # a name beginning with THE, named with it
+                    "55555E505": "",                            # no word at all
+                    "66666F606": "NEWCO DYNAMICS CORP"}         # the THE-name's words without THE
+    rows = [FtdRow(d, c, "NEWC", desc, 1.0) for c, desc in descriptions.items()
+            for d in ("2020-06-02", "2020-06-03", "2020-06-04")]
+    ftd = FtdIndex(rows, source=_Files(rows))
+    end = lf.LineEnd("00000Z000", "2020-06-01", "2020-06-01")
+    got = lf.renamed_cusips(sub, end, ["00000Z000"], ftd)
+    assert got == _old_renamed_cusips(sub, end, ["00000Z000"], ftd)
+    assert got == {"11111A101", "44444D404", "66666F606"}
