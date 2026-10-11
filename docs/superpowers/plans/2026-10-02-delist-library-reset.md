@@ -189,6 +189,24 @@ from sources.
   `R1.1.mapped_share` 0.9766 (0.9850), `V.uncertain_seeds` 44 (390). Coverage falls, so by the rule above
   qlib_practice keeps passing every sighting until reset-4a lands. The published output comes from the run with
   every input, the LLM included; it also lowered `R1.4.review_rows` 712 -> 713 by hand (one more row flagged).
+- Seeds-only parity, measured again 2026-10-10 and 2026-10-11 (plan `2026-10-10-seeds-only-parity.md`, its
+  checkpoints 2 to 6; run date 2026-09-25, `claude-sonnet-5-5`; `scripts/seeds_parity.py`, floor
+  `data/seeds_parity.json`). The numbers are the differences between a seeds run and the full run on the same code
+  and caches, first at the start of that plan (2,589 seeds, after its S1) and then at its head (2,900 seeds, built
+  by `scripts/seeds_from_observations.py` in two passes with the previous run's `contract/security_history.csv`):
+  `endings_lost` 2 -> 0, `endings_gained` 13 -> 1, `kind_changed` 35 -> 6, `value_or_date_changed` 17 -> 2,
+  `securities_lost` 27 -> 3, `securities_gained` 8 -> 2, `seeds_placed_differently` 19 -> 10,
+  `truth_cases_failing_only_in_seeds` 25 -> 5. Coverage of tickers 0.9757 against the full run's 0.9770, of
+  securities 0.9799 against 0.9808, `left_view` 4 in both. What closed the gap: the issuer asked at two dates (S1),
+  the line after a refused CUSIP change as a line of the run with its two checks (S2), a seed where the ticker's
+  holder, an identifier pin or the class words changed (S3; the old seed file had dropped 26 rows on which the
+  caller pins another issuer), and stage 4b reading the 8-K text for a line that moved and stopped (S4). The rule
+  for the switch (that plan's decision D) asks for `endings_lost`, `kind_changed`, `securities_lost`,
+  `seeds_placed_differently` and `truth_cases_failing_only_in_seeds` at 0; they are 0, 6, 3, 10 and 5, so
+  qlib_practice keeps passing every sighting for now. Left by name: NFS, VIACA, CEG, SPB, WRK, SUNW (kind), XRX, ANN,
+  WLL (a security missing), ALEX, DDR, WW (seeds on another security), CFFN (an ending the full run lacks). A seeds
+  run needs two passes (seeds, a run, seeds again with that run's history), and costs about 7.5 minutes against the
+  full run's 6.2 on warm caches.
 
 ### reset-3q: qlib_practice switch (in the qlib_practice repo)
 
