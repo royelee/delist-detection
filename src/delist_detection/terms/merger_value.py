@@ -50,7 +50,7 @@ from ..endings.delistings import Delisting
 from ..outputs.dlret import MergerInputs
 from ..endings.exchange_terms import one_share_no_cash
 from ..sources.fatal import FATAL
-from ..vocabulary.exit_kind import LLM_GATE_FAILED, PAYOUT_GATE_FAILED, TERMS_GATE_FAILED, flag_name
+from ..vocabulary.exit_kind import LLM_GATE_FAILED, PAYOUT_GATE_FAILED, TERMS_GATE_FAILED, flag_detail, flag_name
 from ..sources.ftd import FtdIndex
 from .llm_merger_extractor import MergerTerms
 from ..vocabulary.identifiers import class_letter, normalize_ticker, share_class_from_name
@@ -65,6 +65,8 @@ from ..outputs.store import DelistingKey
 from ..vocabulary.trading_calendar import next_trading_day
 
 _FAILED_GATES = frozenset({PAYOUT_GATE_FAILED, LLM_GATE_FAILED, TERMS_GATE_FAILED})
+# a gate that could not compare the terms with a close: it refused nothing (Paramount Global's class A 2025)
+_UNCHECKED = frozenset({"no_last_close", "no_acq_price", "no_ratio"})
 
 
 @dataclass(frozen=True)
@@ -160,9 +162,12 @@ class MergerValues:
     def gate_failed(self, key: DelistingKey) -> bool:
         """Whether the payout gate refused the delisting's terms or cash (`payout_gate_failed`, `llm_gate_failed`,
         `terms_gate_failed:<why>`): a read that did not reconcile with the last close, which proves nothing against
-        the registrant's own statement of what its shares became (stage 8b). A skipped gate is no failure."""
+        the registrant's own statement of what its shares became (stage 8b). A skipped gate is no failure, and nor is
+        one that could not compare the terms with a close (`no_last_close`, `no_acq_price`, `no_ratio`: Paramount
+        Global's class A 2025, whose $15 cash had no last close to meet)."""
         v = self.records.get(key)
-        return v is not None and any(flag_name(f) in _FAILED_GATES for f in v.flags)
+        return v is not None and any(flag_name(f) in _FAILED_GATES and flag_detail(f) not in _UNCHECKED
+                                     for f in v.flags)
 
     def reconciled(self, key: DelistingKey) -> bool:
         """Whether the delisting's value reconciled with its last close (stage 9b): a payout the gate kept on the

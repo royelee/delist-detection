@@ -306,6 +306,16 @@ def test_terms_the_gate_kept_still_outvote_the_statement(monkeypatch):
     assert d.record.bucket is CrspBucket.MERGER and r1.links == {}
 
 
+@pytest.mark.parametrize("flag", ["terms_gate_failed:no_last_close", "terms_gate_failed:no_acq_price",
+                                  "terms_gate_failed:no_ratio"])
+def test_terms_the_gate_could_not_check_still_outvote_the_statement(monkeypatch, flag):
+    """Paramount Global's class A 2025 (batch 3 gate): the Skydance merger's cash ($15, the closing 8-K) failed the
+    gate only for want of a last close; a gate that could not compare the terms with a close refused nothing, so a
+    one-for-one sentence about some holders' shares does not make the merger a continuation."""
+    d, r1 = _failed_gate_stage(monkeypatch, flags=[flag])
+    assert d.record.bucket is CrspBucket.MERGER and r1.links == {}
+
+
 def test_failed_terms_and_a_statement_into_no_new_issuer_keep_the_merger(monkeypatch):
     d, r1 = _failed_gate_stage(monkeypatch, flags=["llm_gate_failed"], target="Some Other Holdings")
     assert d.record.bucket is CrspBucket.MERGER and r1.links == {}
