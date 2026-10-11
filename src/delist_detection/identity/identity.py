@@ -666,18 +666,35 @@ def _derived_era(era: TickerEra, part_rows: Sequence[FtdRow], kept: tuple[str, .
 
 
 def _split_era(era: TickerEra, rows: list[FtdRow], *, contested: bool,
-               derive: Collection[str] = ()) -> list[TickerEra]:
+               derive: Collection[str] = (), later: Collection[str] | None = None) -> list[TickerEra]:
     """The era split on its rows. `derive`: CUSIPs approved for the era's ticker (as the era spells it), already
-    without any CUSIP that has rows under the ticker from the next era's first day on (`refine_eras`)."""
+    without any CUSIP that has rows under the ticker from the next era's first day on (`refine_eras`). `later`: the
+    CUSIPs with rows under the ticker from the next era's first day on, None for an era with no next era.
+
+    A part of the rows with no observation is no era of its own, but it is the line going on when the era before it
+    in the same gap group carried the name its rows describe: a reverse split or an exchange of the same company
+    under a new CUSIP (XRX 2017, ITT 2011, ALEX 2012), which a caller who sends one seed per introduction never
+    observed. Its CUSIP then joins that era's `ftd_cusips`, so the era follows the line to the end of its rows and
+    its FIGI can be found by any CUSIP of the chain. Only a part between observations: a part with a part holding an
+    observation after it in the group, or an era of the ticker after this one (a tail past the last observation is
+    stage 4b's to follow). Not a CUSIP of `later`, not a part whose description does not agree with the era's names
+    (another holder of the ticker)."""
     out: list[TickerEra] = []
     for g_obs, g_rows in _cut(era.observations, rows, _gap_cuts(era.observations, rows)):
         follows = False                   # the part before is an era of this group: a line is derived only after one
-        for obs, part_rows in _cut(g_obs, g_rows, _switch_cuts(g_rows)):
+        tail = -1                         # the index in `out` of the era a part with no observation would join
+        parts = _cut(g_obs, g_rows, _switch_cuts(g_rows))
+        for i, (obs, part_rows) in enumerate(parts):
             kept = _kept_cusips(part_rows)
             if not obs:                   # an FTD-only side (another holder of the ticker, a tail) is no era ...
                 follows = follows and bool(kept) and kept[0] in derive      # ... unless a derived line (`derive`)
                 if follows:
                     out.append(_derived_era(era, part_rows, kept))
+                    tail = -1
+                elif tail >= 0 and kept and kept[0] not in out[tail].ftd_cusips and kept[0] not in (later or ()) and \
+                        (later is not None or any(o for o, _ in parts[i + 1:])) and \
+                        _described(kept[0], part_rows, [o.name for o in out[tail].observations if o.name]):
+                    out[tail] = replace(out[tail], ftd_cusips=out[tail].ftd_cusips + (kept[0],))
                 continue
             follows = True
             names = [o.name for o in obs if o.name]
@@ -688,6 +705,7 @@ def _split_era(era: TickerEra, rows: list[FtdRow], *, contested: bool,
                 kept = tuple(c for c in kept if _described(c, part_rows, names))
             out.append(replace(era, first=obs[0].as_of, last=obs[-1].as_of, observations=list(obs),
                                ftd_cusips=kept))
+            tail = len(out) - 1
     return out
 
 
@@ -746,9 +764,9 @@ def refine_eras(eras: Sequence[TickerEra], ftd: FtdIndex,
         lo = (date.fromisoformat(prev) + timedelta(days=1)).isoformat() if prev else None
         hi = (date.fromisoformat(nxt) - timedelta(days=1)).isoformat() if nxt else None
         contested = any(seen_on[(e.ticker, o.as_of)] > 1 for o in e.observations)
-        later = {r.cusip for r in ftd.by_symbol(e.ticker, nxt)} if nxt and derive else set()   # the next era's own
-        approved = {c for t, c in derive if t == e.ticker and c not in later}
-        out += _split_era(e, ftd.by_symbol(e.ticker, lo, hi), contested=contested, derive=approved)
+        later = {r.cusip for r in ftd.by_symbol(e.ticker, nxt)} if nxt else None   # the next era's own
+        approved = {c for t, c in derive if t == e.ticker and c not in (later or ())}
+        out += _split_era(e, ftd.by_symbol(e.ticker, lo, hi), contested=contested, derive=approved, later=later)
     return number_eras(out)
 
 

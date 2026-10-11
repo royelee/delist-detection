@@ -183,10 +183,24 @@ def test_refine_eras_ignores_short_cusip_runs_and_obs_less_sides():
             + _rows("X", "NOISE", ["2020-04-15", "2020-04-16", "2020-05-15"])   # 3 rows, but no run of 3: noise
             + _rows("X", "AAA", ["2020-05-01", "2020-06-01", "2020-07-01"])
             + _rows("X", "BBB", ["2020-09-01", "2020-10-01", "2020-11-02", "2021-01-04"])
-            + _rows("X", "CCC", ["2021-03-01", "2021-04-01", "2021-05-03"]))  # no observation after: not created
+            + _rows("X", "CCC", ["2021-03-01", "2021-04-01", "2021-05-03"], "ANOTHER HOLDER OF X LTD"))  # no observation: not created
     (a, b) = refine_eras([era], FtdIndex(rows))
     assert [(a.first, a.last), (b.first, b.last)] == [("2020-01-15", "2020-06-30"), ("2020-12-31", "2020-12-31")]
-    assert a.ftd_cusips == ("AAA",) and b.ftd_cusips == ("BBB",)
+    assert a.ftd_cusips == ("AAA",) and b.ftd_cusips == ("BBB",)        # a part describing another company joins nobody
+
+
+def test_an_unobserved_cusip_part_that_describes_the_eras_company_joins_the_era_before_it():
+    """XRX 2017 and 2019, ITT 2011, ALEX 2012, DDR 2018: the company went on under a new CUSIP no seed observed. The
+    part is no era, but its CUSIP is the earlier era's, so the era follows the line and finds its FIGI by it. Not when
+    the CUSIP is the next era's own (XRX's holding company, observed 2019-12-31), not across a hole of over 400 days."""
+    rows = (_rows("X", "AAA", ["2020-01-02", "2020-02-03", "2020-03-02", "2020-04-01"], "XYZ CORP")
+            + _rows("X", "BBB", ["2020-09-01", "2020-10-01", "2020-11-02", "2021-01-04"], "XYZ CORP COM NEW")
+            + _rows("X", "CCC", ["2021-03-01", "2021-04-01", "2021-05-03", "2021-11-01", "2022-03-01", "2022-07-01"], "XYZ HOLDINGS CORP")
+            + _rows("X", "HHH", ["2025-03-01", "2025-04-01", "2025-05-03"], "XYZ CORP"))
+    a, b = _era("X", ("2020-01-15", "XYZ CORP")), _era("X", ("2022-06-30", "XYZ HOLDINGS CORP"))
+    got = refine_eras([a, b], FtdIndex(rows))
+    assert [(e.first, e.ftd_cusips) for e in got] == [("2020-01-15", ("AAA", "BBB")), ("2022-06-30", ("CCC",))]
+    assert era_last_seen(got[0], FtdIndex(rows), until=got[1].first) == "2021-01-04"
 
 
 def test_another_security_under_the_bare_symbol_does_not_split_a_class_tickers_era():
