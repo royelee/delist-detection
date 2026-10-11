@@ -90,6 +90,22 @@ def test_the_same_issuers_class_the_target_names_alive_after_the_end():
     assert _ask(starts, _own(names=(), letter="B", own=True)) is None
 
 
+def test_a_split_off_subsidiarys_target_is_the_new_issuer_not_a_class_of_the_registrants_old_name():
+    """Liberty Capital 2011 (FB-003): Liberty Media Corp (CIK 1355096, renamed Liberty Interactive) redeemed each
+    Series A Liberty Capital share for one Series A share of Splitco, the new Liberty Media Corporation (CIK 1507934).
+    The target names the registrant's former name too, so its own Series A line is a same-issuer candidate; the
+    statement's target is a subsidiary (`target_subsidiary`), and the new issuer it names wins, as in
+    `OwnShares.target_issuer`. Without a new-issuer candidate the registrant's class stands."""
+    own = replace(_own(names=("Splitco Liberty", "Liberty Media Corporation"), letter="A"), target_subsidiary=True)
+    starts = {"NEW": SecurityStart("2020-07-01", 2, {"LCPAD"}, "2026-01-01", "CLASS A"),
+              "QVCA": SecurityStart("2008-01-02", 1, {"QVCA"}, "2026-09-25", "SERIES A")}
+    names = {1: ("Liberty Interactive Corp", "Liberty Media Corp"), 2: ("Liberty Media Corp",)}
+    assert _ask(starts, own, since={2: "2019-10-25"}, names=names) == ("NEW", NEW_ISSUER)
+    assert _ask({"QVCA": starts["QVCA"]}, own, since={2: "2019-10-25"}, names=names) == ("QVCA", SAME_ISSUER_CLASS)
+    # not a subsidiary: the two candidates of one letter tie, as before
+    assert _ask(starts, replace(own, target_subsidiary=False), since={2: "2019-10-25"}, names=names) is None
+
+
 def test_two_new_lines_of_one_issuer_are_told_apart_by_the_class_letter_and_two_of_one_class_tie():
     """Liberty Live Holdings' Series A and Series C, both first sighted 2025-12-17."""
     starts = {"LA": SecurityStart("2020-07-02", 2, {"LLYVA"}, "", "CLASS A"),

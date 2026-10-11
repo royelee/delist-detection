@@ -871,9 +871,13 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   (`successor_search_args`, `filing_search.successor_query`, `successor_from_8k12b`,
   `successor_search_name`). Sub-plan 5c: `successor_by_terms` (the security an R1 statement names, the statement
   of the ending's own-share reading: the same issuer's class the target names, or a new issuer's line,
-  `own_shares.new_issuer`, first sighted in the window and named by the target, `own_shares.names_target`); a
-  successor is looked for around the ending's anchor (`Delisting.anchor`, `last_trade.anchor_day`). It imports
-  `delistings`; the classifier no longer imports it (step 7b: no classifier, successors, delistings cycle).
+  `own_shares.new_issuer`, first sighted in the window and named by the target, `own_shares.names_target`; a
+  target that is a subsidiary of the registrant, a split-off's Splitco, `OwnExchange.target_subsidiary`, names the
+  new issuer when one is found, as `OwnShares.target_issuer` reads it, and the registrant's own classes drop out:
+  FB-003, Liberty Capital 2011 into the new Liberty Media Corporation, not Liberty Interactive's Series A, which the
+  registrant's former name ties); a successor is looked for around the ending's anchor (`Delisting.anchor`,
+  `last_trade.anchor_day`). It imports `delistings`; the classifier no longer imports it (step 7b: no classifier,
+  successors, delistings cycle).
 - `endings/registrants.py` — FB-004 part b, the issuer in force after a holding-company reorganization: Disney 2019 (CIK
   1001039 to 1744489) and WestRock 2018 (1636023 to 1732845) ended the old registrant's listing with a merger-looking
   Form 25 and an 8-K12B of the new one, while the security's own CUSIP kept trading under its ticker; the old CIK lists

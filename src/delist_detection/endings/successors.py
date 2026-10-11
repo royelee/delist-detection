@@ -197,7 +197,11 @@ def successor_by_terms(e: Delisting, exchange: OwnExchange | None, day: date, st
       existing company is never a continuation (LVNTA into GCI Liberty, WCN into Progressive Waste), and without the
       name tie a new registrant sighted in the window is not one either (AABA and BHGE, MSG and Alphabet).
 
-    Several: the one of the class letter the target names. Returns (sec_id, how); None for none or a tie."""
+    A target that is a subsidiary of the registrant (`OwnExchange.target_subsidiary`: a split-off's "Splitco") names
+    the new issuer when one is found, as `OwnShares.target_issuer` reads it: the registrant's own classes, which a
+    name it carried before can tie, drop out (FB-003: Liberty Capital 2011 into the new Liberty Media Corporation,
+    not Liberty Interactive's Series A). Several: the one of the class letter the target names. Returns (sec_id,
+    how); None for none or a tie."""
     if exchange is None or not exchange.one_for_one:
         return None
     lo = (day - timedelta(days=SUCCESSOR_BEFORE_DAYS)).isoformat()
@@ -216,6 +220,8 @@ def successor_by_terms(e: Delisting, exchange: OwnExchange | None, day: date, st
                 continue
             if names_target(exchange, issuers.names(st.issuer_cik), st.tickers):
                 found[sid] = NEW_ISSUER
+    if exchange.target_subsidiary and NEW_ISSUER in found.values():
+        found = {sid: how for sid, how in found.items() if how == NEW_ISSUER}
     if len(found) > 1:
         found = {sid: how for sid, how in found.items()
                  if (class_letter(starts[sid].share_class) or "") == exchange.target_letter}
