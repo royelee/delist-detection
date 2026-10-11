@@ -430,3 +430,26 @@ def test_the_last_resort_is_not_asked_when_the_prefix_search_already_has_an_answ
                                                                       _f("Y1", "25-NSE", "2017-08-20")])
     got = r.resolve("DD", "2017-09-05", name="E I DU PONT DE NEMOURS & CO", since="2007-12-18", pin=None)
     assert got.cik == 1999999
+
+
+def test_a_word_the_snapshot_abbreviates_is_searched_by_its_stem_when_nothing_else_finds_a_company():
+    """NWA (2008-09): the snapshot spells NORTHWEST AIRLS CORP, EDGAR NORTHWEST AIRLINES CORP, and no character
+    prefix of the first reaches the second. With no candidate from any spelling, the last word is cut to its first
+    four letters and searched again; the Form 25 filer among the matches is the company."""
+    nwa = (1058033, ("NORTHWEST AIRLINES CORP", [], [_f("N1", "10-K", "2007-02-20"), _f("N2", "25-NSE", "2008-10-30")]))
+    old = (917678, ("NORTHWEST AIRLINES HOLDINGS CORP/PRED", [], [_f("O1", "10-K", "1998-02-20")]))
+    banks = {9000 + i: (f"NORTHWEST BANCORP {i}", [], []) for i in range(12)}      # the first word alone is too broad
+    idx = _index("NORTHWEST AIRLINES CORP:0001058033:", "NORTHWEST AIRLINES HOLDINGS CORP/PRED:0000917678:",
+                 *(f"{n[0]}:{c:010d}:" for c, n in banks.items()))
+    r = TickerResolver(_Edgar({**banks, **dict([nwa, old])}), name_index=idx)
+    assert r._index_candidates(idx, "NORTHWEST AIRLS CORP", "2009-06-08") == {
+        1058033: ("NORTHWEST AIRLINES CORP", 221)}
+    assert r.resolve("NWA", "2009-06-08", name="NORTHWEST AIRLS CORP", since="2008-01-16", pin=None).cik == 1058033
+
+
+def test_a_single_word_name_has_no_stem():
+    ok = (1, ("ACMEWIDGETS INC", [], [_f("A", "25-NSE", "2012-05-01")]))
+    others = {9000 + i: (f"ACMEWIDGETS FUND {i}", [], []) for i in range(12)}
+    idx = _index("ACMEWIDGETS INC:0000000001:", *(f"{n[0]}:{c:010d}:" for c, n in others.items()))
+    r = TickerResolver(_Edgar({**others, **dict([ok])}), name_index=idx)
+    assert r._index_candidates(idx, "ACMEWIDGS", "2012-06-29") == {}

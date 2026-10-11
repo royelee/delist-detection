@@ -177,6 +177,7 @@ def test_each_era_is_looked_up_under_its_own_name(index):
     _identify({"KORS"}, spy)
     assert index.name_on("KORS", "2015-08-03") == "MICHAEL KORS HOLDINGS LTD"
     assert calls == [("KORS", "2015-08-03", "CAPRI HOLDINGS LTD", "2012-06-29"),
+                     ("KORS", "2012-06-29", "CAPRI HOLDINGS LTD", "2012-06-29"),   # no answer: asked at its first sighting
                      ("KORS", "2019-01-03", "MICHAEL KORS HOLDINGS LTD", "2014-12-31")]
 
 
@@ -652,7 +653,7 @@ def _issuer_and_tier(identity, key=MATX):
 
 def test_an_era_is_asked_at_its_capped_date_and_at_the_end_of_its_rows(matx_dates):
     lookup, _ = _matx({})
-    assert [day for key, day in lookup.asked if key == MATX] == [MATX_CAP, MATX_END]
+    assert [day for key, day in lookup.asked if key == MATX] == [MATX_CAP, MATX_END, "2012-12-31"]   # ... and, with no answer, its first sighting
 
 
 def test_an_era_whose_two_dates_are_one_day_is_asked_once(eras, ftd):
@@ -661,7 +662,7 @@ def test_an_era_whose_two_dates_are_one_day_is_asked_once(eras, ftd):
     assert capped_sightings([eras[key]], ftd) == last_sightings([eras[key]], ftd) == {key: "2009-06-08"}
     lookup = _DatedLookup({})
     _identify({"CZN"}, lookup)
-    assert [day for k, day in lookup.asked if k == key] == ["2009-06-08"]
+    assert [day for k, day in lookup.asked if k == key] == ["2009-06-08", "2008-01-16"]    # no answer: its first sighting too
 
 
 def test_a_later_rename_does_not_lose_the_issuer(matx_dates):

@@ -409,14 +409,26 @@ def _resolve_issuers(eras: list[TickerEra], ftd: FtdIndex, handoffs: Sequence[Ha
             return at_cap, at_cap
         return at_cap, lookup.resolve(e.ticker, last_seen[e.key], pin=e.cik_pin, name=e.name, since=e.first, **ex)
 
+    def first_pass(lookup, e: TickerEra) -> FirstPass:
+        """`choose_first_pass` of the two dates; an era left with no answer at all is asked once more at its first
+        sighting, where its observed name was in force from the start (WestRock, WRK 2015 to 2024: the company that
+        holds the name at the end, CIK 1732845, was formed in 2018 and is no issuer of an era that began in 2015, and
+        the company that held it then is found by the first date)."""
+        chosen = choose_first_pass(*both(lookup, e))
+        if chosen.answer.cik is not None or chosen.fallback is not None or e.first >= capped[e.key]:
+            return chosen
+        ex = {"exclude": excluded[e.key]} if e.key in excluded else {}
+        at_first = lookup.resolve(e.ticker, e.first, pin=e.cik_pin, name=e.name, since=e.first, **ex)
+        return FirstPass(at_first) if at_first.strong else chosen
+
     mark = meter.start()
     if workers > 1:
         # Warm the EDGAR caches: each era resolved on a worker thread by a shadow
         # lookup (a snapshot of this memo that saves nothing), its answers thrown
         # away. The resolve below then runs one era at a time, in order, on this
         # thread, and finds its requests answered.
-        warm(eras, both, workers=workers, state=resolver.shadow, name="issuer resolution")
-    first = {e.key: choose_first_pass(*both(resolver, e)) for e in eras}
+        warm(eras, first_pass, workers=workers, state=resolver.shadow, name="issuer resolution")
+    first = {e.key: first_pass(resolver, e) for e in eras}
     resolver.flush()
     answers = {key: f.answer for key, f in first.items()}
     log(f"issuer lookups: {sum(last_seen[k] > capped[k] for k in first)} eras asked at two dates, "

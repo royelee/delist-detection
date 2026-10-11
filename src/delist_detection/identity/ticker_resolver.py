@@ -482,6 +482,21 @@ class TickerResolver:
             add(tokens[0])
         return variants
 
+    _SUFFIX_WORDS = frozenset({"INC", "CORP", "CORPORATION", "CO", "COMPANY", "LTD", "LIMITED", "PLC", "HOLDINGS",
+                               "GROUP", "INTERNATIONAL", "TRUST", "LLC", "LP", "LLP", "HOLDING"})
+
+    @classmethod
+    def _stem_variants(cls, name: str) -> list[str]:
+        """The name with its last word cut to four letters, for a name of two words or more once the legal-form words
+        at its end are left out (NORTHWEST AIRLS CORP -> NORTHWEST AIRL): a snapshot's abbreviation is no character
+        prefix of EDGAR's spelling (NORTHWEST AIRLINES CORP), and a stem of it is."""
+        words = re.sub(r"\s+", " ", re.sub(r"[.,'’&]", " ", name or "")).split()
+        while words and words[-1].upper() in cls._SUFFIX_WORDS:
+            words.pop()
+        if len(words) < 2 or len(words[-1]) < 5 or not words[-1].isalpha():
+            return []
+        return [" ".join(words[:-1] + [words[-1][:4]])]
+
     NAME_SEARCH_CANDIDATES = 5       # distinct CIKs the name search ranks and checks
 
     def _index(self) -> CikNameIndex | None:
@@ -535,7 +550,12 @@ class TickerResolver:
         want = name_tokens(nm)
         target = parse_day(observed_date)
         found: dict[int, tuple[str, int]] = {}
-        for variant in self._name_variants(nm):
+        def spellings():
+            yield from self._name_variants(nm)
+            if not found:      # nothing from any spelling: a word the snapshot abbreviates (AIRLS for AIRLINES) is cut
+                yield from self._stem_variants(nm)
+
+        for variant in spellings():
             exact, prefix = index.split_search(variant)
             names: dict[int, str] = {}
             for h in sorted(exact + prefix, key=lambda h: (-len(name_tokens(h.name) & want), len(h.name), h.cik)):
