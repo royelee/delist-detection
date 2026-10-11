@@ -4234,3 +4234,97 @@ are with it.
 
 **Decision D** asks for `endings_lost`, `kind_changed`, `securities_lost`, `seeds_placed_differently` and
 `truth_cases_failing_only_in_seeds` at 0. They are 0, 6, 3, 10 and 5.
+
+## Status at the end of this run (2026-10-11)
+
+Head `1882cb2`. Suite 4,063 passed, 44 xfailed. The whole-branch review's verdict after one fix round: ready to merge.
+
+**Done.** S0 (Task 1), S1 (Tasks 2 to 6), S2 (Tasks 7 to 18), S3 (Task 19), a first step of S4 (Tasks 20 and 21),
+S5's roadmap entry, a cleanup (Task 22) and the final review's fixes (Task 23).
+
+**The measured result.** The seeds run against the full run, at the start of the plan and now (the floor in
+`data/seeds_parity.json`): endings lost 2 to 0, endings gained 13 to 1, kind changed 35 to 6, value or date changed 17
+to 2, securities lost 27 to 3, securities gained 8 to 2, seeds placed differently 19 to 10, truth cases failing only in
+seeds 25 to 5. The full run against itself before S2: `D.mismatches` 149 to 148 at checkpoint 4, then 150 at
+checkpoint 6 where two cases fail only on a key that changed for the better; three mergers newly priced (CCE 2016, GCI
+2019, ODP 2025); two placeholders replaced by their composites (LIZ, YRCW). Warm run times: full 374 s (251 s before
+S2), seeds 444 s on 2,900 seeds (355 s on 2,589 before S2).
+
+**For the owner to decide.**
+
+1. *Decision B and the published output (S5, items 1 and 3).* A full run with the resolver memo rebuilt from empty is
+   byte-identical to the run with the memo (checked at `22027dd`), so the memo can be rebuilt at no cost. Rebuilding
+   the committed `output/` is another matter: it and `data/scorecard.json` were built on gpt-5.4 answers, every run of
+   this plan uses claude-sonnet-5-5, and a rebuilt output fails `scorecard.py --check` against the committed floor for
+   that reason (`D.mismatches` 121 committed, 148 to 150 here). Nothing was published.
+2. *Two truth cases to re-key:* `CIK352363-COMMON_2012-05-14` (LIZ) and `CIK716006-COMMON_2010-10-04` (YRCW) to the
+   composites their lines now end on.
+3. *Decision D* (when a caller may send seeds only) is not met: the five numbers it names are 0, 6, 3, 10 and 5.
+4. *Decision C* (whose job a seed is whose ticker did not trade on its date) was not needed for what was built and is
+   still open for SUNW.
+5. *The base branch.* This branch forks from `faster-runs`, which `worktree-reset-1-scorecard` (PR #7) has not taken
+   yet.
+
+**Not built, with what is known.**
+
+- An unobserved CUSIP run between two seeds as a derived era (XRX's old line, ALEX's four seeds): traced, tried on a
+  subset, 76 eras added over the seed file, ESV moved. Checkpoint 5.
+- A late Form 25 for a security whose span ends at its last seed (SUNW, VIACA): the unbounded rule broke five case
+  tests and did not reach the two cases with a live sibling. Checkpoint 6.
+- Reusing stage 4b's answers between rounds of the derived-line loop: each repeat round costs about 75 s; only the
+  rename scan's hoist was done (about 10 s a pass).
+- A price test on a continuation by filing: measured and rejected (AVGO 2016's first fails row is not a close).
+- Single cases with no rule: NFS, CEG, SPB, WRK, NRF, MTCH, ANN, WLL, DDR, WW, CFFN, MRK 2020.
+
+**Deferred review minors** (each recorded in the execution ledger): the fold mapping of a refused step's id has no
+test, and rule J misses an origin that was a placeholder folded into a composite; a pair with a verdict is never judged
+again; a derive round reads the fails index stage 4b enlarged in the round before; verdicts found at the last verdict
+pass are logged and not applied; `derivable` reads issuer profiles when nothing is derived; `_switch_rows` runs twice
+per pair; a new CUSIP's first fails row with a price that is not a close could switch off a right continuation by
+timing (none known); `last_sightings`' bound is strictly greater; the degraded path of `rows_fit` is untested; a 9d
+merger ending skips stage 8b's R1; the class-share and same-day tests of Task 10 are weak.
+
+## Rulings made while executing
+
+The controller decided these without asking, as the owner's standing instruction allows; each says what was
+decided, why, and what it costs if wrong. They are in the order of the execution ledger (newest work last
+except the first, which the ledger keeps at its end).
+
+1. Task 2 Step 4 gains one edit: the test helper `_second_pass` in tests/test_resolver_renamed.py takes its dates from `last_sightings(chosen, ftd)`, as the pipeline does — the helper called `era_last_seen` bare, which Task 2 makes unbounded, and rule D then gave TRI@2008 (Triad) Thomson Reuters' issuer; in src only `last_sightings` calls `era_last_seen`, so the pipeline is not affected — if wrong, a real unbounded caller exists somewhere and gets wrong dates.
+2. the branch is forked from the merged `faster-runs` head, not from `worktree-reset-1-scorecard` itself, because the base branch cannot be fast-forwarded from this session and 6bbeb7e is what it becomes after the fast-forward — if wrong (the base takes faster-runs some other way, a squash for example), this branch needs a rebase before it merges.
+3. Tasks 1 and 2 go to one implementer as a batch, two commits, one review with a verdict per task — if wrong, a finding in one delays the other.
+4. Task 3 is run by the controller (live network, judgment at Step 4) — if wrong, nothing: it changes no code.
+5. decisions A to E take the plan's recommendation when the plan reaches each (the owner's standing instruction for these plans); each is logged in the plan's Checkpoints section — if wrong, the owner reverses it there.
+6. the memo effect is measured against exec/ref2 (the same code and cache with the memo), not against the committed output/ as the plan's Step 2 says — the committed output was built by older code on gpt-5.4 answers, so comparing with it would mix three causes — if wrong, nothing: the committed output is still there to compare.
+7. Task 2's rework is rule R9, written into the plan as Task 4, with Task 5 as the checkpoint again (plan commit 2f27793, which also records checkpoint 1 under "Checkpoints") — R9 is the only rule scored that leaves the full run's issuers as they were (bar the WFT correction) and halves the seeds differences; it changes `_resolve_issuers` and adds no resolver tier — if wrong, the real runs of Task 5 show it before any floor is written, and the cost is one more round.
+8. the company_tickers exception stays in R9 although it leaves MRK, MTCH and SPB different from the full run in a seeds run — the seed's security was the old company's on the seed date (EDGAR names checked), the full run itself names the predecessor for PLD, and the golden case PLD-2015 needs it — if wrong, three seed rows stay different until S2 follows their lines.
+9. decision E is taken as "S1 as first built is not accepted"; decision B as recommended (rebuild the memo once at S5), with its five known costs listed in the plan.
+10. the weak-answer row check is not added to Task 4 after the fact; it goes first in S2's plan — Task 5's acceptance is met without it, S2 needs it for followed lines, and one measured change at a time keeps the cause of each number clear — if wrong, XP's wrong ending and TT's wrong issuer stay in the seeds run until S2's first task.
+11. S2's design is neither A nor B as written. A line is derived only for a step stage 4b refuses because another registrant took over (merged_out, other_registrant, and name when the new description names the old issuer by more than a generic word); it is made an era-born security so the later stages treat it as an observed second line; stage 4b keeps every step it follows. Plus: the line-successor link takes a merger row (5 cases), C5, and the weak-answer row check first — step zero shows the full run reaches these lines as in-run eras through handoffs and R1, not through the follow stages; B as written would move 61 proven full-run steps and add 43 full-run securities; A cannot carry STE, DTV, AMSG — if wrong, the checkpoint after S2 shows it against the floor and the full run's gate before anything is published.
+12. the test marked "Must not change (WCN, AAN)" is rewritten as Task 7 says — the real WCN and AAN are refused `merged_out` by stage 4b, never get a line successor and stay mergers, and a merger whose payout the gate reconciled stands; the five cases it fixes (TEAM, LSXMA, LSXMK, FWONA, FWONK) are continuations in the full run — if wrong, a real merger at a followed step reads as a continuation; the checkpoint's comparison of the full run with pout-full2 shows any row that flips.
+13. the loop's run-time cost is accepted for the checkpoint and a later task makes stage 4b ask again only about the securities a round touched, checked by byte-identical tables — measuring the derived lines on the simplest code first keeps the cause of each number clear — if wrong, runs stay about 100 to 180 s slower until that task.
+14. the warm fails index's effect (IAC@2012-06-29 and IACI@2008-01-16 move from a placeholder to the FIGI line stage 4b folds it into) is accepted for the checkpoint, which checks the published ids — if wrong, a published id of IAC changes and Task 15 stops on it.
+15. `StageMeter.done` is made to add up a stage that runs more than once, as a second commit of Task 8 — Task 12's loop calls the identity and line-follow stages several times a run, so the same overwrite would under-report them; a stage that runs once must report byte-identically — if wrong, the manifest's per-stage numbers are off, never a table.
+16. `derivable` returns pairs for the tickers of the security's own eras only, not for the tickers the line-follow stage learned from fails symbols — a pair is matched to an era by its ticker, a fails-spelled ticker matches no era of the security, and it could match another security's era by coincidence — if wrong, a refused step under a ticker no era of the security holds is not derived, which is already the case (there is no era to split).
+17. Task 12 is dispatched while Task 11's scoped re-review runs — the fix is one line of library code plus tests, and Task 12 appends to the same module without touching `derivable` — if wrong, a finding on `derivable` is fixed in a commit after Task 12's and both are re-reviewed.
+18. Tasks 13 and 14 go to one implementer, two commits, one review with a verdict per task — 13 adds tests only and 14 touches only the parity script and its tests, and two agents committing in one worktree at once can mix their files — if wrong, a finding in one delays the other.
+19. S2 goes back before the checkpoint; no floor is written and the seeds run is not started — decision E accepts a step only if the full run does not move away from the truth sets, and two diagnosis cases fail only in the new full run (SDRL 2018, UNIT 2025) with CCE 2016 a third worse row — if wrong, one fix task and one more full run (about 9 minutes) were spent on rows a caller would not have read.
+20. the seeds run at c80928c is started after all (pout-seeds4, on a copy of pcache-full4), as evidence for the fix and not as a checkpoint — it lists every derived era of a seeds run with its issuer, composite and handoff decision, which the full run's nine cannot show — if wrong, about ten minutes and a few hundred SEC requests.
+21. the handoff fix is the price rule, for every pair and not for derived lines only — the same step is an observed pair in a full run and a derived pair in a seeds run, so a rule that reads `derived` would give the two runs different answers; the measured table shows no right continuation outside 0.5 to 2.0 — if wrong, a one-for-one continuation whose price moved more than twofold across the switch loses its link (none known), and NWS-A 2013 loses a successor link that the truth set calls wrong anyway.
+22. stage order stays (9e after 9b) — moving the plan-bankruptcy step before the handoffs would let it reclassify rows the handoffs make continuations today (GGP 2010 is a bankruptcy emergence that is a right continuation) — if wrong, a bankruptcy exchange whose price happens to carry over is still rewritten.
+23. the price test is not added to a continuation by filing — AVGO shows a new CUSIP's first fails row can carry a price that is not a close, and a filing is stronger evidence than that row — if wrong, a non-one-for-one exchange under an 8-K12B (Uniti 2025) is read as a continuation wherever its new line is a security of the run, which the identity rule below must therefore prevent for derived lines.
+24. a derived era that joins the security it was refused from is made only when the price carried over (rule J), whatever the issuers — OpenFIGI's composite says one security and stage 4b's refusal says another registrant; the fails price across the step is the evidence at hand, and without it the step stays refused as before S2 — if wrong, a join that is right at another price is lost and that ticker is as before S2 (CFFN 2010, a 2.26-for-1 conversion the full run joins, and WE's reverse split, which needed no derived era).
+25. rule U (send the era to its issuer's placeholder) is not built — with New Uniti a security of the run the handoff stage makes the old row a continuation by filing, which the truth set refutes, and a price test on filing pairs is unsafe — if wrong, the Uniti merger stays at assumed par where it could have been priced through New Uniti's line.
+26. a derived era from a `merged_out` step never keeps the old line's issuer under a composite of its own (rule X: asked again without that issuer) — stage 4b says `merged_out` only when that issuer files no periodic report after the step, and the three cases found (CCE, AAN Holdings, IGT) are all wrong; `other_registrant` and `name` steps are left alone (CHTR) — if wrong, a line that truly kept the old CIK gets another issuer or none; the checkpoint lists every era the rule touched.
+27. one band for "the price carried over", two thirds to one and a half, for Task 16's handoff rule and rule J — Uniti's 1.65 must lie outside and GGP's 0.89 inside; nothing measured in either run lies between the old and the new bounds except one merger row that stands either way — if wrong, a one-for-one continuation whose price moved by more than half across the switch loses its link.
+28. rule X applies only when the origin's id and the derived era's id are both composites — its premise is two composites under one issuer; a placeholder origin only means the old line never got a composite, and the fold decides whether they are one line — if wrong, a derived era under a placeholder origin keeps a wrong old issuer (none known).
+29. decision A is taken as recommended — a seed where an identifier changed, and with a previous run's `contract/security_history.csv` a seed where the ticker's holder changed (Task 19); the observation file of this universe carries no identifier, so the second route is the one measured, and a first run needs two passes — if wrong, the seed builder gained an option nobody uses; the default behaviour is unchanged.
+30. of the run-time work only the rename scan's hoist is done now (Task 20, Part A); reusing stage 4b's answers between rounds is left open — the derived lines cost 145 s (full) and 190 s (seeds), both runs stay under ten minutes, and an exact reuse needs every input of a security's scan tracked, including the fails index that stage 4b itself enlarges between rounds; the hoist is a few lines with a measured 10 s a pass — if wrong, each run pays about 75 s per repeat round until someone builds the reuse; reported to the user as an open point.
+31. S4 is done in two steps. Task 21 builds the three rules that are small and were tried on their cases (a late Form 25 for a security whose last sighting is an observation; the seed builder's class words and the row after an unheld seed; stage 4b's text sources for a line that moved and stopped). The middle part between two seeds (ITT, XRX, ALEX) is a separate task after Task 21 is measured, because it adds 76 eras and already moved ESV in a subset. DDR, NFS, UAG, ANN, WLL, CEG, MEL, GM, NRF, ATVI, CBS, CLWR stay as single cases with no rule — each rule here was tried on its cases only, so the universe's answer comes from the next pair of runs — if wrong, the checkpoint after Task 21 shows what moved and the offending part is reverted by its own commit.
+32. Part A is dropped from Task 21 and left open — "any Form 25 after the last observation" has no bound and takes filings that belong to later securities of the issuer, and the two cases with a sibling need the sibling rule changed, which no trace covered — if wrong, SUNW, VIACA and LVNTA stay as three known differences (two truth cases) until a rule that is bounded and reads the siblings is designed.
+33. rule 3 is measured before it is narrowed — every added seed is one of the caller's own observations, which the full run reads too, so the drift seeds can only cost if an extra seed breaks something as ITT's did; the seeds run on E/task21/seeds-b.csv (2,900 seeds) decides: kept with a truncation test if the parity numbers hold, narrowed or dropped if they do not — if wrong, one seeds run was spent on a rule that is then cut back.
+34. Part C stands in the full run — both lines now do what their truth cases say (the line ends later, on its composite) and every other count improved; the two cases fail only on their key — if wrong, the two cases must be re-keyed to the composites in the truth set before `scorecard.py --check` can pass (S5 has to do this in any case, with the eight `sec_id` mismatches the scorecard already carries).
+35. rule 3 (class words) is kept as built — the run with its 95 extra seeds has every number at or below the floor and fixes DISCA and DISCK — if wrong, a caller's seed file is about 3% larger than it needs to be; the test the review asked for (a name cut inside its class words) goes into the cleanup task.
+36. the middle part between two seeds (XRX, ALEX; the traced rule adds 76 eras) is not built in this plan's run — it is the largest change left for two securities, it moved ESV in the subset, and it needs its own checkpoint — if wrong, XRX's old line and ALEX's four seeds stay as known differences; the rule, the clone that tried it (E/s4/identity/code3, switches MIDDLE and INHERIT) and the counts are in Checkpoint 5.
+37. S5 items 1 and 3 (rebuild the resolver memo, commit the rebuilt outputs, apply the flip rule) are not done in this run and go to the user — the committed `output/` and `data/scorecard.json` were built on gpt-5.4 answers and every run of this plan uses claude-sonnet-5-5, so a rebuilt output fails `scorecard.py --check` against the committed floor for a reason this plan did not cause (D.mismatches 121 in the committed scorecard against 148 to 150 in every run here), and lowering that floor by hand is a decision about the published tables — if wrong, the published output stays behind the code until the user says which answers it is built on; the scratch run with the memo rebuilt from empty (pout-full10) gives the evidence decision B asks for.
+38. Task 3 does not write the floor and S1 goes back into Task 2 — the plan's Step 4 says a regression goes back into Task 2 and decision E accepts S1 only if nothing moves away from the truth sets; two golden cases fail and 19 or 20 issuers got worse — if wrong, the cost is one more round on Task 2 before S2 starts.
