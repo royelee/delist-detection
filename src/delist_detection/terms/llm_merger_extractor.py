@@ -410,7 +410,8 @@ def _text(x: object) -> str:
     return "" if s.lower() in ("null", "none", "n/a", "n-a", "-") else s
 
 
-_SHARE_COUNT = re.compile(r"(?i)\b(?:one|1|\d+\.\d+)\b(?:\s*\(\d+\))?[^.;]{0,60}?\b(?:shares?|units?|ADSs?|stock)\b"
+# a count may be written as a multiplier: "1.00x ETE common unit" (SUG 2012)
+_SHARE_COUNT = re.compile(r"(?i)\b(?:one|1|\d+\.\d+)x?\b(?:\s*\(\d+\))?[^.;]{0,60}?\b(?:shares?|units?|ADSs?|stock)\b"
                           r"|one-for-one|equal number")
 
 

@@ -1248,7 +1248,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `{accession}_{model}_v3_{ticker}`. Candidates, latest completion documents first: the closing 8-K, an 8-K reporting
   the closing without 2.01 (3.01/3.03/5.01 within 30 days), an announcement 8-K filed after the last merger proxy (an
   amendment, BOT), DEFM14A, the other announcement 8-Ks, PREM14A, a 6-K near the delisting; an unsure one-for-one
-  answer whose quote states no share count is passed over (`unsupported_one_for_one`: ATH, CHTR); a spelled-out null
+  answer whose quote states no share count is passed over (`unsupported_one_for_one`: ATH, CHTR; a count written as a multiplier, SUG's "1.00x ETE common unit", is a count); a spelled-out null
   ticker ("NULL") is none. A failed LLM call is a
   degraded miss (`SEC_STATS.degraded("llm_call")`: the delisting is `resolution_degraded`), never cached; with
   the calls are filled ahead on `--llm-workers` threads (default 8), one lock per answer file so no call is paid for twice. Calibrate with

@@ -404,6 +404,22 @@ def test_an_unsure_one_for_one_answer_with_no_share_count_is_passed_over(tmp_pat
     assert not unsupported_one_for_one(sure) and not unsupported_one_for_one(said)
 
 
+def test_a_share_count_written_as_a_multiplier_is_a_stated_count():
+    """SUG 2012 (batch 3 gate, claude-sonnet-5-5): "either (i) $44.25 in cash ... or (ii) 1.00x ETE common unit" states
+    the unit count; the medium-confidence one-for-one answer stands instead of yielding to a later filing's cash."""
+    from delist_detection.terms.llm_merger_extractor import unsupported_one_for_one
+    sug = LLMMergerTermsExtractor._to_terms(
+        {**V3_JCI, "deal_type": "election", "package_basis": "default", "cash_per_share": None, "stock_ratio": 1,
+         "confidence": "medium", "quote": "either (i) $44.25 in cash (the “Cash Consideration”) or (ii) 1.00x ETE "
+                                          "common unit (the “Equity Consideration”)"}, _f("C1"))
+    assert not unsupported_one_for_one(sug)
+    bare = LLMMergerTermsExtractor._to_terms({**V3_JCI, "deal_type": "stock", "package_basis": "fixed",
+                                              "cash_per_share": None, "stock_ratio": 1, "confidence": "medium",
+                                              "quote": "became an indirect subsidiary of Parent (the 1.00x merger)"},
+                                             _f("C1"))
+    assert unsupported_one_for_one(bare)      # a multiplier with no share named is still no count
+
+
 @pytest.mark.parametrize("spelled", ["NULL", "None", "N/A", "null", "-", " "])
 def test_a_spelled_out_null_ticker_is_no_ticker(spelled):
     """GRUB 2021: the terms' acquirer ticker "NULL" is no ticker: the gate reports `no_acq_ticker`, never a price
