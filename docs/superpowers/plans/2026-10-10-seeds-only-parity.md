@@ -4457,3 +4457,55 @@ stay as named differences.
 if wrong, five names lose a class word's tolerance in `names_agree`'s no-word path only.
 **Ruling: checks ran one at a time** — the coordinator's permission to run two together arrived after the last pair; the
 ledger holds each run's start and end — if wrong, nothing.
+
+## The seed file as a fixed point (2026-10-11)
+
+Code `c3931d5` (`seeds_from_observations.py --fixed-point`; the library's code is that of the four commits above).
+The seed file of a check no longer depends on which run's history the holder rule reads. Pass 1 has no history; each
+later pass adds the seeds the previous pass's run history calls for, and a seed once added stays; the loop stops when
+a pass adds none. The last pass's run is the seeds-only run on the file. Both runs below: run date 2026-09-25,
+`--sec-workers 1`, `claude-sonnet-5-5`, run side by side on two APFS clones of the cache the full run of the last
+section left, `ticker_resolution.json` deleted from each clone; no run asked the LLM for a new answer. The fresh full
+run (387 s) wrote tables byte-identical to that full run's.
+
+| Pass | Seeds | Added by its run's history |
+| --- | --- | --- |
+| 1 | 2,712 | 198 |
+| 2 | 2,910 | 15 |
+| 3 | 2,925 | 2 |
+| 4 | 2,927 | 0 |
+
+Four runs, 26 minutes. Pass 2's file is the two-pass file of the last section, seed for seed.
+
+| Seeds file | endings_lost | kind_changed | securities_lost | seeds_placed_differently | truth_cases_failing_only_in_seeds |
+| --- | --- | --- | --- | --- | --- |
+| two passes (2,910 seeds) | 0 | 5 | 3 | 11 | 6 |
+| the fixed point (2,927 seeds) | 0 | 3 | 3 | 8 | 5 |
+
+The other numbers: endings_gained 0, value_or_date_changed 2, securities_gained 2, observed_flag_differs 0. Every number
+is at or below the floor, and the floor is lowered to them (endings_gained 1 to 0, kind_changed 5 to 3,
+seeds_placed_differently 10 to 8). The seeds run scores `D.mismatches` 150 (two-pass file 155, full run 134), 38 floored
+numbers below the committed floor (43), 4 diagnosis `pass` cases failing (5) and golden MRK 2020 failing (as before).
+
+**What the extra seeds fixed.** Sun Microsystems 2010 (its truth case and its kind), VIACA/PARAA 2025 (kind), and UAG
+2008 (a security gained and three seeds placed differently). The last section put SUNW and UAG under decision C and
+PARAA under the late Form 25; for these three a later seed was enough. The final file holds 47 seeds that the last
+run's history no longer calls for, all of them added by earlier passes (ABBI, SUNW, UAG, MEL, PARAA, QRTEA among
+them); SUNW's, UAG's and PARAA's are what fixed them.
+
+**What is left.** Kind: CEG 2012, SPB 2018, HTZ 2020. Value or date: NRF, MTCH. Securities lost: ANN, WLL, Z class A;
+gained: WPO, DDR. Seeds placed differently: ANN, DDR (2), HTZ (2), WLL, WPO, Z. Truth cases: ANN, SPB, HTZ, WLL and
+MRK 2020. The full run's history calls for five seeds the fixed point lacks: GHC 2013-12-31, HTZ 2016-12-30, NRF
+2014-12-31, WLL 2017-12-31, Z 2015-06-30. These are holder changes that only a run on every sighting sees, and HTZ,
+NRF, WLL and Z are four of the cases above.
+
+**Ruling: a seed once added stays** — the loop must end, and every seed is one of the caller's own rows; a loop that
+replaces the file moved 15 to 36 rows between two passes and has no guaranteed end — if wrong, 47 seeds the last
+history does not call for stay in the file, and with them the SUNW, UAG and PARAA fixes.
+**Ruling: every pass reads and fills one cache, which starts without a resolver memo** — a pass's memo then comes only
+from earlier seeds runs, never from every sighting, and the same start gives the same file — if wrong, a pass reads
+memo answers an earlier pass wrote that an empty memo would answer differently.
+**Ruling: a check's seed file is the fixed point** — it is the one file a caller sending seeds can build without a
+choice — if wrong, the floor above was measured on a file nobody sends.
+**Ruling: `--max-passes` defaults to 8** — this input needed 4 — if wrong, a slower input exits 1 and leaves its passes
+in the work folder.
