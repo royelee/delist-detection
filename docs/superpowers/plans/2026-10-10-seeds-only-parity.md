@@ -134,6 +134,7 @@ move, and Task 3 compares every era's issuer before and after.
    issuer is looked up under that name and its CUSIP, never under the predecessor's name.
 6. **A line the library follows on its own is not the caller's.** It is `observed=false` and is
    in no echo table. This holds for either S2 design.
+8. **The issuer is asked at two dates** (added after checkpoint 1): the capped date, where the observed name was in force, and the end of the era's own fails rows, where its Form 25 is. An answer whose name agrees beats one whose name does not; between two that agree and differ, the end of the line wins unless it is only today's ticker map. A name-mismatch answer stands only when the CUSIP evidence infers nothing. Task 4.
 7. **The parity floor only goes down.** `data/seeds_parity.json`, written by
    `scripts/seeds_parity.py --write-floor`.
 
@@ -145,14 +146,14 @@ move, and Task 3 compares every era's issuer before and after.
 | B | Whether to rebuild `cache/ticker_resolution.json` from empty for the published output. | Yes, once, in its own commit. The full run reads answers older code computed: NWA's issuer exists only there. Task 3 measures in a scratch folder what moves, before anything is published. |
 | C | Whether backfilled seeds (C3) are the library's job or the seed builder's. | Decide after S2's checkpoint, with the list of seeds still wrong. |
 | D | When qlib_practice may send seeds only. | When the parity numbers `endings_lost`, `kind_changed`, `securities_lost`, `seeds_placed_differently` and `truth_cases_failing_only_in_seeds` are 0, apart from cases the truth set marks as LLM differences. |
-| E | Whether S1 is accepted on its own. It changes the published full run: 638 of 2,659 eras are asked for their issuer at a new date. | Accept it if Task 3's comparison shows no issuer or ending moving away from the truth sets, and publish the full run's rebuilt output with it. |
+| E (taken: not as first built; see checkpoint 1 and Task 4) | Whether S1 is accepted on its own. It changes the published full run: 638 of 2,659 eras are asked for their issuer at a new date. | Accept it if Task 3's comparison shows no issuer or ending moving away from the truth sets, and publish the full run's rebuilt output with it. |
 
 ## The fixes, in order
 
 | ID | Fix | Must move | Status in this document |
 | --- | --- | --- | --- |
 | S0 | Parity script and floor | nothing; it measures | Task 1, step by step |
-| S1 | Last-seen date follows the era's own CUSIP rows | C1 | Tasks 2 and 3, step by step |
+| S1 | Last-seen date follows the era's own CUSIP rows; the issuer is asked at the capped date and at that date (reworked after checkpoint 1) | C1 | Tasks 2 to 5, step by step |
 | S2 | The line after a CUSIP change is a line of the run | C2 | Specified below; its step-by-step plan is written after Task 3's numbers |
 | S3 | A seed at a takeover | C6 | Specified below; needs decision A |
 | S4 | Smaller causes: C3, C4, C5, the three unexplained cases | the rest | Specified below |
@@ -821,6 +822,395 @@ git commit -m "Seeds-only parity after S1: the floor"
 
 ---
 
+### Task 4: The issuer is asked at two dates (S1, reworked)
+
+Task 3 found that Task 2 alone makes the full run worse: 21 eras got another issuer, 19 of them
+wrongly ("Checkpoints", checkpoint 1). Task 2 moved the one lookup date from the capped date (the
+last observation, or a later own fails row within 400 days) to the end of the era's own fails
+rows. The two dates are good for different things. A Form 25 search belongs at the end of the
+line. The name checks read the names in force within 30 days of the lookup date, so years after
+the observation a renamed issuer is rejected, and at the end of the line another issuer's
+filings mention the ticker. This task asks at both dates and chooses.
+
+The rule ("R9" in the checkpoint's table, scored offline on both inputs before this task was
+written):
+
+- A **miss** is an answer with no CIK. A **weak** answer is a CIK from `efts_name_mismatch`,
+  `efts_frequency_name_mismatch` or `rename`. Any other CIK is a **strong** answer.
+- Both strong, the same CIK: the capped date's answer.
+- Both strong, different CIKs: the followed date's answer. The exception: the followed date's
+  source is `company_tickers` and the capped date's is not. Then the capped date's answer stands,
+  because by the end of the line a successor can hold the ticker and the name (Prologis 2011,
+  Merck 2009, Match Group 2020, Spectrum Brands 2018).
+- One strong: that one.
+- Neither strong: the era has no first-pass answer. The second pass may infer its issuer. A weak
+  answer (the capped date's, else the followed date's) stands only when no pass infers one.
+- 2b (`check_names`) runs with the followed dates. The second pass (`infer`) runs twice, with the
+  capped dates and then with the followed dates, on the same first-pass answers; an era the first
+  run answers keeps that answer (Constellation Energy 2008: its 8-K frequency candidate is among
+  the top five before the capped date and not before the merger).
+
+**Files:**
+- Modify: `src/delist_detection/identity/ticker_resolver.py` (`WEAK_SOURCES`, `TickerResolution.strong`)
+- Modify: `src/delist_detection/identity/identity.py` (`era_capped_seen`, `capped_sightings`,
+  `FirstPass`, `choose_first_pass`, `_Issuers.capped`, `_resolve_issuers`, the degraded check in
+  `_resolve_securities`, the module docstring's stage 2 line)
+- Modify: `tests/test_security_master.py`, `tests/test_resolver_renamed.py`, `tests/test_issuer_code.py`
+- Modify: `docs/architecture.md`, `docs/data-flow.md`
+
+**Interfaces:**
+- Consumes: `era_last_seen`, `last_sightings` (Task 2), `EraIssuers.check_names`, `EraIssuers.infer`,
+  `TickerResolver.resolve(ticker, observed_date, *, pin, name, since)`, `TickerResolver.is_degraded`.
+- Produces:
+  - `ticker_resolver.WEAK_SOURCES: frozenset[str]` and `TickerResolution.strong -> bool`
+  - `identity.era_capped_seen(era: TickerEra, ftd: FtdIndex, horizon_days: int = 400) -> str`
+  - `identity.capped_sightings(eras: Sequence[TickerEra], ftd: FtdIndex) -> dict[str, str]`
+  - `identity.FirstPass(answer: TickerResolution, fallback: TickerResolution | None = None)`
+  - `identity.choose_first_pass(capped: TickerResolution, followed: TickerResolution) -> FirstPass`
+  - `_Issuers.capped: dict[str, str]` (era key to the capped date), beside `last_seen` (the followed date)
+
+- [ ] **Step 1: Write the failing tests for the two dates and the choice**
+
+Add to `tests/test_security_master.py`, after `test_era_last_seen_stops_before_the_tickers_next_era`.
+Add `capped_sightings`, `choose_first_pass`, `era_capped_seen` and `FirstPass` to the import from
+`delist_detection.identity.identity`, and `TickerResolution` from
+`delist_detection.identity.ticker_resolver` if the file does not import it yet.
+
+```python
+def test_the_capped_date_is_one_step_and_the_followed_date_the_end_of_the_rows():
+    era = replace(_era("HOT", ("2008-01-16", "STARWOOD HOTELS & RESRTS")), ftd_cusips=("85590A401",))
+    own = ["2008-06-02", "2009-05-04", "2010-04-05", "2011-03-07", "2012-02-06"]
+    ftd = FtdIndex(_own("HOT", "85590A401", own, "STARWOOD HOTELS&RESORTS WRLDWD"))
+    assert era_capped_seen(era, ftd) == "2008-06-02"
+    assert era_last_seen(era, ftd) == "2012-02-06"
+    assert capped_sightings([era], ftd) == {"HOT@2008-01-16": "2008-06-02"}
+
+
+def _answer(cik, source):
+    return TickerResolution("X", cik, None, source)
+
+
+@pytest.mark.parametrize("capped, followed, answer, fallback", [
+    # both strong, one CIK: the capped date's answer (its source is the one the tables have always shown)
+    ((1, "name_search"), (1, "efts"), (1, "name_search"), None),
+    # both strong, two CIKs: the end of the line, where the security's own Form 25 is (ITC, Laredo, Sprint)
+    ((1, "name_search"), (2, "name_search"), (2, "name_search"), None),
+    ((1, "efts"), (2, "efts_frequency"), (2, "efts_frequency"), None),
+    # ... unless the end of the line only has today's ticker map: a successor took the ticker and the name (Prologis)
+    ((1, "name_search"), (2, "company_tickers"), (1, "name_search"), None),
+    ((1, "company_tickers"), (2, "company_tickers"), (2, "company_tickers"), None),
+    # one strong: it (a later rename loses nothing; a seed's early miss is repaired at the end of the line)
+    ((1, "company_tickers"), (None, "rejected_validation"), (1, "company_tickers"), None),
+    ((None, "rejected_validation"), (2, "efts_frequency"), (2, "efts_frequency"), None),
+    ((1, "name_search"), (2, "efts_name_mismatch"), (1, "name_search"), None),
+    ((1, "efts_frequency_name_mismatch"), (2, "efts"), (2, "efts"), None),
+    # neither strong: no first-pass answer; a weak one is kept aside, the capped date's first
+    ((1, "efts_name_mismatch"), (None, "rejected_validation"), (None, "rejected_validation"), (1, "efts_name_mismatch")),
+    ((None, "rejected_validation"), (2, "rename"), (None, "rejected_validation"), (2, "rename")),
+    ((1, "efts_name_mismatch"), (2, "efts_name_mismatch"), (None, "none"), (1, "efts_name_mismatch")),
+    ((None, "none"), (None, "rejected_validation"), (None, "none"), None),
+])
+def test_the_first_pass_answer_of_two_lookups(capped, followed, answer, fallback):
+    got = choose_first_pass(_answer(*capped), _answer(*followed))
+    assert (got.answer.cik, got.answer.source) == answer
+    assert (got.fallback and (got.fallback.cik, got.fallback.source)) == fallback
+
+
+def test_a_pin_or_an_override_is_strong_and_a_miss_is_not():
+    assert _answer(1, "cik_map").strong and _answer(1, "manual").strong
+    assert not _answer(None, "rejected_validation").strong and not _answer(1, "rename").strong
+```
+
+- [ ] **Step 2: Run them and see them fail**
+
+Run: `PYTHONPATH=src ~/miniconda3/envs/rdagent4qlib/bin/python -m pytest tests/test_security_master.py -q -o addopts="" -k "capped or first_pass or strong"`
+Expected: an `ImportError` on `capped_sightings`.
+
+- [ ] **Step 3: The weak sources and the two dates**
+
+In `src/delist_detection/identity/ticker_resolver.py`, directly above `class TickerResolution`'s
+`@dataclass`, add:
+
+```python
+# A CIK a tier took although its EDGAR names do not agree with the observed name, or one reached through the rename
+# map: the lookup's last resort. `identity.choose_first_pass` never prefers it to an answer whose name agrees, and the
+# era-level passes may answer in its place.
+WEAK_SOURCES = frozenset({"efts_name_mismatch", "efts_frequency_name_mismatch", "rename"})
+```
+
+and at the end of `TickerResolution`:
+
+```python
+    @property
+    def strong(self) -> bool:
+        """A CIK from a pin, an override or a tier that checked the name (not one of `WEAK_SOURCES`, not a miss)."""
+        return self.cik is not None and self.source not in WEAK_SOURCES
+```
+
+In `src/delist_detection/identity/identity.py`, replace `era_last_seen` with these three
+functions (its docstring's facts move with them), and add `capped_sightings` after `last_sightings`:
+
+```python
+def _later_own_rows(era: TickerEra, ftd: FtdIndex, after: str, horizon_days: int, stop: str | None = None) -> list[str]:
+    """The days of the era's own rows (`_own_rows`) under its ticker in the `horizon_days` after `after`, before `stop`."""
+    lo = (date.fromisoformat(after) + timedelta(days=1)).isoformat()
+    hi = (date.fromisoformat(after) + timedelta(days=horizon_days)).isoformat()
+    return [r.date for r in _own_rows(era, ftd.by_symbol(era.ticker, lo, hi)) if stop is None or r.date < stop]
+
+
+def era_capped_seen(era: TickerEra, ftd: FtdIndex, horizon_days: int = 400) -> str:
+    """The era's capped date: its last observation, or a later FTD row of its
+    own (`_own_rows`) under its ticker within `horizon_days`. The names the
+    caller observed were in force around this date."""
+    return max([era.last, *_later_own_rows(era, ftd, era.last, horizon_days)])
+
+
+def era_last_seen(era: TickerEra, ftd: FtdIndex, horizon_days: int = 400, until: str | None = None) -> str:
+    """The era's last sighting: its capped date (`era_capped_seen`); an era with
+    FTD CUSIPs of its own is then followed along them, each step at most
+    `horizon_days` past the row before, to the last row before `until` (the
+    day the ticker's next era begins; None: no later era): the security's own
+    fails rows say how long it traded, whatever the caller observed (one seed
+    in 2008, Starwood's rows to 2016)."""
+    last = era_capped_seen(era, ftd, horizon_days)
+    while era.ftd_cusips:
+        more = _later_own_rows(era, ftd, last, horizon_days, until)
+        if not more:
+            break
+        last = max(more)
+    return last
+```
+
+```python
+def capped_sightings(eras: Sequence[TickerEra], ftd: FtdIndex) -> dict[str, str]:
+    """Each era's capped date by era key (`era_capped_seen`)."""
+    return {e.key: era_capped_seen(e, ftd) for e in eras}
+```
+
+- [ ] **Step 4: The choice**
+
+In `identity.py`, above `_Issuers`, add (import `WEAK_SOURCES` is not needed here; `strong` is a
+property of the answer):
+
+```python
+@dataclass(frozen=True)
+class FirstPass:
+    """One era's first-pass answer out of its two lookups (`choose_first_pass`): `answer`, what the era-level passes
+    see (a strong answer, or no CIK), and `fallback`, a weak answer kept aside, which stands only when no pass
+    infers an issuer."""
+    answer: TickerResolution
+    fallback: TickerResolution | None = None
+
+
+def choose_first_pass(capped: TickerResolution, followed: TickerResolution) -> FirstPass:
+    """The first-pass answer of an era asked at its capped date and at the end of its own fails rows
+    (`era_capped_seen`, `era_last_seen`; one answer given twice when they are one day).
+
+    The names the caller observed were in force at the capped date; the security's own Form 25 is at the end of the
+    rows. So: both strong (`TickerResolution.strong`) and one CIK, the capped date's answer; both strong and two
+    CIKs, the followed date's (ITC Holdings 2016, Sprint 2020: another company of the name answers early), unless
+    it is today's ticker map and the capped date's is not (by the end of the line a successor holds the ticker and
+    the name: Prologis 2011, Merck 2009); one strong, that one (a later rename rejects the right company at the
+    end: AMC Networks; a seed's early date finds no Form 25: Coca-Cola Enterprises); neither, no answer, with a
+    weak one kept aside (the capped date's first)."""
+    if capped.strong and followed.strong:
+        successor = followed.source == "company_tickers" and capped.source != "company_tickers"
+        return FirstPass(followed if followed.cik != capped.cik and not successor else capped)
+    if capped.strong or followed.strong:
+        return FirstPass(capped if capped.strong else followed)
+    fallback = capped if capped.cik is not None else followed if followed.cik is not None else None
+    blank = capped if capped.cik is None else followed if followed.cik is None else \
+        TickerResolution(capped.ticker, None, None, "none")
+    return FirstPass(blank, fallback)
+```
+
+Run: `PYTHONPATH=src ~/miniconda3/envs/rdagent4qlib/bin/python -m pytest tests/test_security_master.py -q -o addopts="" -k "capped or first_pass or strong or era_last_seen"`
+Expected: all pass.
+
+- [ ] **Step 5: Write the failing stage tests**
+
+In `tests/test_resolver_renamed.py`. Add a lookup double that answers by era and date, and give
+`_identify` optional `rows=` (the fails rows, default the fixture's `_rows()`):
+
+```python
+class _DatedLookup(CommittedLookup):
+    """The lookup answering by era and date: `dated` maps an era key to {lookup date: (CIK, tier)}; a date it does
+    not list is a miss. `asked` records every (era key, date). Other eras answer as `CommittedLookup` does."""
+
+    def __init__(self, dated, answers=None):
+        super().__init__(answers or {})
+        self.dated, self.asked = dated, []
+
+    def resolve(self, ticker, observed_date=None, *, pin=None, name=None, since=None):
+        key = f"{ticker}@{since}"
+        self.asked.append((key, observed_date))
+        if key not in self.dated:
+            return super().resolve(ticker, observed_date, pin=pin, name=name, since=since)
+        cik, tier = self.dated[key].get(observed_date, (None, "rejected_validation"))
+        return TickerResolution(ticker, cik, None, tier)
+```
+
+Each test below runs the identity stage (`_identify`) and reads `identity.issuers[key].cik` and
+`identity.tier(key)`. Use CIKs the file's `_Edgar` serves (or an `_Edgar` built with them), so
+the issuer's names read does not degrade the era. For the tests that need two different dates,
+use one observed ticker with one observation and own-CUSIP rows that run for years, as
+`test_the_capped_date_is_one_step_and_the_followed_date_the_end_of_the_rows` does; first assert
+the two dates the stage computes for it, so a reader sees them.
+
+| Test name | Lookup | Expected |
+| --- | --- | --- |
+| `test_an_era_is_asked_at_its_capped_date_and_at_the_end_of_its_rows` | any | `lookup.asked` for the era is the capped date, then the followed date, in that order |
+| `test_an_era_whose_two_dates_are_one_day_is_asked_once` | any | one entry in `lookup.asked` for an era with no row after its last observation |
+| `test_a_later_rename_does_not_lose_the_issuer` | capped: (A, `company_tickers`); followed: miss | issuer A, tier `company_tickers` |
+| `test_the_end_of_the_line_answers_for_a_seed` | capped: miss; followed: (A, `efts_frequency`) | issuer A, tier `efts_frequency` |
+| `test_two_strong_answers_take_the_end_of_the_line` | capped: (B, `name_search`); followed: (A, `efts`) | issuer A, tier `efts` |
+| `test_todays_ticker_map_at_the_end_does_not_replace_the_named_issuer` | capped: (A, `name_search`); followed: (B, `company_tickers`) | issuer A, tier `name_search` |
+| `test_a_weak_answer_gives_way_to_the_second_pass` | the fixture's KORS and CPRI eras through `CommittedLookup`: `KORS@2012-06-29` answers (some other CIK, `efts_name_mismatch`), `KORS@2014-12-31` (1530721, `name_search`), `CPRI@2018-12-31` (1530721, `cik_map`) | `KORS@2012-06-29` has issuer 1530721, tier `shared_cusip`, and an `issuer_inferred` review item; no `issuer_cusip_disagrees` item |
+| `test_a_weak_answer_stands_when_nothing_is_inferred` | one era with no CUSIP link and no frequency candidate: (A, `efts_name_mismatch`) at both dates | issuer A, tier `efts_name_mismatch` |
+| `test_an_era_degraded_at_either_date_is_flagged` | a lookup whose `is_degraded` is true only for the followed date | one `resolution_degraded` review item for the era |
+
+Add one test for the second pass's two runs, with `_passes()` and the fixture: an era that rule
+B answers with the capped dates and not with the followed dates keeps the answer when
+`_resolve_issuers` runs both. If the fixture has no such era, script the `frequency` fixture so
+the right candidate is listed for the capped day only, and name the test
+`test_the_second_pass_runs_with_the_capped_dates_first`.
+
+Run: `PYTHONPATH=src ~/miniconda3/envs/rdagent4qlib/bin/python -m pytest tests/test_resolver_renamed.py -q -o addopts="" -k "capped or end_of or weak or rename or ticker_map or asked or degraded_at"`
+Expected: the new tests fail (one lookup per era today; the weak answer blocks the second pass).
+
+- [ ] **Step 6: `_resolve_issuers` asks twice and chooses**
+
+In `identity.py`:
+
+`_Issuers` gains `capped: dict[str, str]` directly before `last_seen`, and its docstring says:
+"the two dates the lookup was asked at (`capped`, and `last_seen`, the end of the era's own
+fails rows)".
+
+Replace the body of `_resolve_issuers` from `resolver, record = ...` to the `second = ...` log
+line with:
+
+```python
+    resolver, record = clients.resolver, clients.issuers
+    capped, last_seen = capped_sightings(eras, ftd), last_sightings(eras, ftd)
+
+    def both(lookup, e: TickerEra) -> tuple[TickerResolution, TickerResolution]:
+        """The era's answers at its capped date and at the end of its rows (one lookup when they are one day)."""
+        at_cap = lookup.resolve(e.ticker, capped[e.key], pin=e.cik_pin, name=e.name, since=e.first)
+        if last_seen[e.key] <= capped[e.key]:
+            return at_cap, at_cap
+        return at_cap, lookup.resolve(e.ticker, last_seen[e.key], pin=e.cik_pin, name=e.name, since=e.first)
+
+    mark = meter.start()
+    if workers > 1:
+        # Warm the EDGAR caches: each era resolved on a worker thread by a shadow
+        # lookup (a snapshot of this memo that saves nothing), its answers thrown
+        # away. The resolve below then runs one era at a time, in order, on this
+        # thread, and finds its requests answered.
+        warm(eras, both, workers=workers, state=resolver.shadow, name="issuer resolution")
+    first = {e.key: choose_first_pass(*both(resolver, e)) for e in eras}
+    resolver.flush()
+    answers = {key: f.answer for key, f in first.items()}
+    log(f"issuer lookups: {sum(last_seen[k] > capped[k] for k in first)} eras asked at two dates, "
+        f"{sum(f.fallback is not None for f in first.values())} weak answers kept aside")
+    passes = EraIssuers(record, resolver.frequency_candidates)
+    tickers = {e.key: e.ticker for e in eras}
+    checked = passes.check_names(eras, ftd, last_seen, answers)                                          # 2b
+    for key, found in checked.items():
+        answers[key] = TickerResolution(tickers[key], found.cik, None, found.source)
+    log(f"name checks: {len(checked)} name-search answers replaced"
+        + (f" ({', '.join(f'{k} -> {v.cik}' for k, v in sorted(checked.items()))})" if checked else ""))
+    # The second pass with the capped dates, then with the followed ones, on the same first-pass answers: an era
+    # the first run answers keeps that answer (rule B reads the 8-K filers of the 120 days before its date).
+    ciks = {k: r.cik for k, r in answers.items()}
+    by_cap, by_end = (passes.infer(eras, ftd, dates, ciks, handoffs) for dates in (capped, last_seen))
+    inferred = {**by_end.inferred, **by_cap.inferred}
+    disagreements = {**by_end.disagreements, **by_cap.disagreements}
+    for key, found in inferred.items():
+        answers[key] = TickerResolution(tickers[key], found.cik, None, found.source)
+    for key, f in first.items():                 # a weak answer stands only where no pass inferred an issuer
+        if answers[key].cik is None and f.fallback is not None:
+            answers[key] = f.fallback
+    log(f"resolver's second pass: {len(inferred)} issuers inferred, "
+        f"{len(disagreements)} first-pass answers its CUSIP evidence contradicts")
+```
+
+and the rest of the function uses `inferred` and `disagreements` in place of `second.inferred`
+and `second.disagreements`, and returns
+`_Issuers(answers, issuers_by_era(ciks, issuer_names), capped, last_seen, names_degraded, {**checked, **inferred}, disagreements, set(passes.degraded))`
+(the `ciks = {k: r.cik for k, r in answers.items()}` line that feeds `issuers_by_era` stays where
+it is today, after the answers are final).
+
+The function's docstring: replace "resolved at the era's last sighting (index snapshots can be
+months apart, and the lookup's Form 25 search is anchored on this date)" with "resolved at two
+dates, its capped date and the end of its own fails rows, one answer chosen
+(`choose_first_pass`)", and say the second pass runs with each.
+
+In `_resolve_securities`, the degraded check reads both dates:
+
+```python
+        if any(clients.resolver.is_degraded(e.ticker, day, name=e.name)
+               for day in {found.capped[e.key], found.last_seen[e.key]}) or e.key in found.degraded:
+```
+
+The module docstring's line "each era's issuer CIK, asked at the era's last sighting
+(`era_last_seen`) ..." becomes "each era's issuer CIK, asked at the era's capped date and at the
+end of its own fails rows (`era_capped_seen`, `era_last_seen`; `choose_first_pass`) ...".
+
+Any other code that builds an `_Issuers` (search the package and the tests) passes `capped` too.
+
+- [ ] **Step 7: The two tests that call `era_last_seen` bare**
+
+`tests/test_issuer_code.py` lines 47 and 83 build `last_seen` with
+`{e.key: era_last_seen(e, ftd) for e in refined}`, which is not bounded by the ticker's next era.
+Change both to `last_sightings(refined, ftd)` and the import to match.
+
+- [ ] **Step 8: Run everything**
+
+Run: `PYTHONPATH=src ~/miniconda3/envs/rdagent4qlib/bin/python -m pytest -q -o addopts=""`
+Expected: every test passes (3,894 passed and 44 xfailed before this task, plus the new ones).
+The golden replay (`tests/test_golden_events.py`) stays green; a case that changes stops the
+task. An existing test whose expectation changes because an era is now asked twice (a spy that
+lists the resolver's calls, a memo file's keys) is updated to the two dates, and the report
+lists each such change with its old and new value.
+
+- [ ] **Step 9: Docs**
+
+`docs/architecture.md`, the `identity.py` and `ticker_resolver.py` entries, and
+`docs/data-flow.md`, where the issuer lookup's date is described (search both files for "last
+sighting" and for the sentences Task 2 added): say that an era is asked at its capped date and
+at the end of its own fails rows, give the rule of the choice in the words of
+`choose_first_pass`'s docstring, name `WEAK_SOURCES`, and say the second pass runs with each
+date. Keep the wording plain and do not restate what the code already says twice.
+
+- [ ] **Step 10: Commit**
+
+```bash
+git add src/delist_detection/identity/identity.py src/delist_detection/identity/ticker_resolver.py tests/test_security_master.py tests/test_resolver_renamed.py tests/test_issuer_code.py docs/architecture.md docs/data-flow.md
+git commit -m "The issuer is asked at the capped date and at the end of the line, and the answer whose name agrees stands"
+```
+
+---
+
+### Task 5: Parity checkpoint after the rework (network)
+
+The controller runs it, as Task 3. The reference for the full run is Task 3's "before" run (the
+code before Task 2, no resolver memo): the offline replay of the rule gave the same issuer for
+every era but WFT@2009-03-20.
+
+- [ ] **Step 1:** make sure no other SEC client is running (Task 3, Step 1).
+- [ ] **Step 2:** the full input at Task 4's commit on a copy of the cache the earlier full run
+  left, then the seeds on a copy of the cache that run leaves (Task 3, Step 3's commands).
+- [ ] **Step 3:** judge the full run against the "before" run: every era's issuer (expected: only
+  WFT@2009-03-20, to 1453090), the parity script's lists between the two, and the scorecard lines
+  that differ. Anything else that moved is reviewed against EDGAR and the truth sets before the
+  task goes on (Task 3, Step 4's rule).
+- [ ] **Step 4:** the parity numbers, full against seeds, and the check of the 22 tickers
+  (Task 3, Step 5). Then `--write-floor`.
+- [ ] **Step 5:** record the numbers under "Checkpoints" and commit `data/seeds_parity.json`
+  with the plan, message "Seeds-only parity after S1: the floor".
+
+---
+
 ## S2: The line after a CUSIP change is a line of the run
 
 Its step-by-step plan is written after Task 3, from that checkpoint's case lists. The outcome is
@@ -984,3 +1374,104 @@ Each needs a short trace before a plan, because none was followed to the decidin
   `last_sightings(eras, ftd) -> dict[str, str]` are used with those names in Task 2's tests, code
   and call site. The parity script's eight number names are the same in its tests, its code and
   Task 3.
+
+## Checkpoints
+
+### Checkpoint 1: S1 as first built (Task 3, 2026-10-10)
+
+Commits: `d999c39` (before Task 2) and `6299c06` (Task 2). All runs: `--as-of 2026-09-25
+--extract-merger-terms-llm`, `claude-sonnet-5-5`, 8 SEC workers, no degraded answer, exit 0.
+
+| Run | Code | Input | Cache | Time | SEC requests | LLM asked |
+| --- | --- | --- | --- | --- | --- | --- |
+| before | `d999c39` | full, no resolver memo | warm copy | 416 s | 1,226 | 0 |
+| full | `6299c06` | full | copy of "before"'s | 366 s | 656 | 6 |
+| seeds | `6299c06` | 2,589 seeds | copy of "full"'s | 322 s | 321 | 9 |
+
+**What the old memo was holding up (decision B's evidence).** The same code and cache with the
+old memo against none: 2 endings gained, 2 of another kind, 4 seeds placed differently, 1 truth
+case failing. Northwest Airlines (BBG000RFD341) and WestRock (BBG008NXC572) lose their merger; US
+Bancorp (BBG000FFDM15) and C3 AI (BBG00Y6G6X31) gain a blank uncertain ending; WW's four rows of
+2012-2013 are unplaced. A rebuilt memo costs these five unless the resolver is fixed first. The
+comparison was made against a run of the same code with the memo, not against the committed
+`output/`, which older code built on other LLM answers.
+
+**What S1 did to the full run ("before" against "full").** 21 eras got another issuer: 19
+regressions, 1 correction (WFT@2009-03-20, to the Swiss parent 1453090), 1 wrong both times (AI).
+
+| Cause | Eras |
+| --- | --- |
+| The name check reads the names in force within 30 days of the lookup date; a later rename rejects the right company | AMCX, DNOW, KAR, MDRX, ONL, WAFD |
+| A stale era holds a later holder's CUSIP and is followed along it to 2026 | CCU 2008-11, STN |
+| The Form 25 search at the new date finds another issuer's filing, taken although its name does not agree | AMB, ANN, BGC, MD |
+| The 8-K frequency tier answers with a wrong company where the first pass used to miss and the second pass repaired it | COH, HCP, LIZ |
+| The name window straddles the day a successor took the name | PLD |
+| The old answer was a wrong fallback; now none | AI |
+| Follow from the above, or rule B's window moved | PDX, WFSL, CEG |
+
+603 of 2,615 eras were asked at another date. First pass at the new date: 504 the same CIK from
+the same source, 58 the same CIK from another source, 6 another CIK, 12 an answer became a miss, 9
+a miss became an answer, 14 a miss both times.
+
+Scorecard, "before" to "full": `D.cases_matching` 275 to 271, `D.mismatches` 149 to 163, `G.pass`
+45 to 43 (golden PLD-2015 and LIZ fail), `L1.coverage_tickers` 0.976115 to 0.973862,
+`L1.coverage_securities` 0.979909 to 0.978568, unresolved observations 8 to 26,
+`R1.2.figi_without_cik` 5 to 13, `V.uncertain_securities` 19 to 31.
+
+**Parity at `6299c06`, full against seeds (not a floor).** `endings_lost` 2 (26 before S1),
+`endings_gained` 12, `kind_changed` 32 (29), `value_or_date_changed` 17, `securities_lost` 26
+(37), `securities_gained` 9, `seeds_placed_differently` 20, `truth_cases_failing_only_in_seeds`
+24 (39). Coverage of tickers 0.973862 full and 0.968004 seeds; `left_view` 4 and 9;
+`closed_no_event` 0 and 0. None of the 22 tickers S1 fixed in the subset test is under
+`endings_lost` or `kind_changed` (CCE's second line is still under `securities_lost`: C2). 22 of
+the 32 kind changes are a continuation in the full run and a merger in the seeds run (C2).
+VIACA, MEL, MYL and SPB are still under `kind_changed`.
+
+**Decision E: S1 as first built is not accepted.** It moves issuers away from the truth sets in
+the full run. The floor was not written. The lookup was reworked (Task 4) after three offline
+experiments on a replay of stages 1 and 2 that reproduces both real runs exactly. Each cell is
+the number of eras (full) or seed rows (seeds) whose final issuer differs from the "before" run:
+
+| Rule | Full (2,615 eras) | Seeds (2,589 rows) |
+| --- | --- | --- |
+| R0: the code before Task 2 | 0 | 64 |
+| R1: Task 2 as built (one lookup, at the end of the rows) | 21 | 26 |
+| R6: two lookups, the capped date's answer first when strong | 1 (CEG) | 26 |
+| R7: R6 with the second pass's rule B at the capped date first | 0 | 26 |
+| R9: Task 4's rule | 1 (WFT, the correction) | 14 |
+
+R6 fixed 16 seed rows and broke 16: a seed's capped date is only 400 days after the seed, and an
+answer there can be wrong although its name agrees (another company of the name: ITC, LENB, LPI,
+NSAM, S), a weak answer there blocked the second pass (BKC, DISH, MAN), and a name-agreeing
+frequency answer at the end was not taken (CCE, GGP, WRI). R9 answers each of these.
+
+The 14 seed rows R9 leaves different from the "before" run:
+
+- MRK 2008, MTCH 2015, SPB 2014: the seeds run names the company that carried the name on the
+  seed date (old Merck 64978, old Match Group 1575189, old Spectrum Brands 1487730); the full run
+  names the successor that took the ticker and the name later, because its era runs through the
+  event. PLD 2008 is the same event and the full run names the predecessor there. S2 follows the
+  line to the successor.
+- WW 2012, CTL 2008, WRK 2015, TFC 2012: the seeds run has an issuer where the "before" run has
+  none or another (WW 105319, CenturyLink 18926, WestRock 1636023, Truist 92230). To be checked
+  against EDGAR at the next checkpoint; the first two are right.
+- TT 2012: a weak answer where the "before" run has none.
+- GHC 2012 (Graham Corp 716314 for Graham Holdings), ANN 2008, MEL 2008: wrong.
+- AI 2021, CEG 2008, DHC 2012: no issuer.
+
+Unknowns in the experiment: 53 seed lookups were not in the cache (AI, BBT, CA, CIT, EMC, IVZ, NU,
+ONON, PCG, TWOU, USB, USG, XP). Task 5's real runs settle them.
+
+**Found on the way, not fixed here.**
+
+- The "before" run is not the truth everywhere: it gives US Bancorp the issuer 1045609 (Prologis).
+- A stale era can hold only a later holder's CUSIP (CCU@2008-11-18: Cervecerias Unidas; STN:
+  Stantec; UAG, ABI@2009, BSC@2008-11: exchange-traded notes). `_split_era` keeps any CUSIP with
+  a run of three rows and checks descriptions only when the era is contested, and the follow then
+  runs along it. Task 4's rule keeps the capped date's answer for these, so the issuer is not
+  lost, but the followed date is wrong.
+- BGC: on General Cable's own Form 25 day the full-text query returns BGC Partners' filing, an
+  exact ticker-token hit taken without a name check (`ticker_resolver.py:938-940`).
+
+**Decision B** is taken as recommended: the memo is rebuilt once, in its own commit, at S5. The
+five securities above are its known cost today.
