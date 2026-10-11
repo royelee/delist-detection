@@ -3526,6 +3526,99 @@ def test_the_cli_reads_the_history_file(tmp_path, monkeypatch, capsys):
 
 **Not in this task:** anything in `src/`, `classify_universe.py`, the parity script, the floor.
 
+### Task 20: Two small follow-ups (stage 4b's rename scan; the seed builder's ticker spelling)
+
+Two unrelated small changes, one commit each, in this order.
+
+#### Part A: the rename scan computes each first word once (equal result)
+
+**Why.** A repeat round of the derived-line loop runs stage 4b again, about 75 s warm. A profile put most of a warm pass
+in `line_follow.renamed_cusips`: for every fails row of the window it calls `_first_word` on the row's description and
+again on every candidate name (28 million calls of the regex). The names do not change inside the loop. Measured on a
+prototype: about 10 s less per stage 4b pass, the same result.
+
+**The change** (`src/delist_detection/identity/line_follow.py`, `renamed_cusips` only): build the names by their first
+word once, before the loop, and look the row's first word up in it:
+
+```python
+    by_first: dict[str, list[str]] = defaultdict(list)        # the names by their first word, computed once
+    for n in names:
+        by_first[_first_word(n)].append(n)
+    rows: dict[str, list[str]] = defaultdict(list)
+    for r in ftd.every_row(date.fromisoformat(lo), date.fromisoformat(hi) + timedelta(days=NAME_DAYS)):
+        if r.cusip not in cusips and is_line_symbol(r.symbol) \
+                and any(description_names(r.description, n) for n in by_first.get(_first_word(r.description), ())):
+            rows[r.cusip].append(r.date)
+```
+
+Nothing else in the function changes. The answer must be the same set for every input, including a name or a
+description with no word at all (both give the first word `""` and are compared with each other today) and two names
+that share a first word.
+
+**Tests** (`tests/test_line_follow*.py`, wherever `renamed_cusips` is tested today; find it by grep):
+- the existing tests of `renamed_cusips` stay green untouched;
+- one new test that pins equality with the old expression on a constructed index: keep the old expression as a small
+  reference function inside the test file (the generator with `_first_word(r.description) == _first_word(n) and
+  description_names(r.description, n)`), and assert `renamed_cusips` returns what a reference implementation built on it
+  returns for an index whose rows cover: a description that names the new name; one that shares only the first word;
+  one that matches only the name's second word; a name beginning with THE; two names with one first word; an empty
+  description. If building a reference implementation means copying most of `renamed_cusips`, instead assert the
+  expected set for each of those rows by hand and say so in the report.
+- Prove the new test bites: break the lookup (for example `by_first.get(_first_word(n), ())` with a wrong key) and see it
+  fail; restore.
+
+**Check on real data.** Clone the snapshot and run the five tickers as Tasks 16 and 17 did:
+`cp -cR E/psnap-full7 E/task20/code`, copy the worktree's `src/delist_detection` over the clone's, then
+`CODE=E/task20/code bash E/s2reg/sub_run.sh t20 SDRL CSAL UNIT CCE AAN` with these hosts allowed on that one call:
+`data.sec.gov`, `www.sec.gov`, `efts.sec.gov`, `api.openfigi.com`, `api.nasdaq.com`, `www.nasdaqtrader.com`,
+`api.anthropic.com`. Every CSV under `E/s2reg/out-t20` must equal the one under `E/s2reg/out-t17c` byte for byte
+(`E/same_tables.py E/s2reg/out-t17c E/s2reg/out-t20` prints "0 differ"). The controller checks the full universe.
+`E` is `/private/tmp/claude-501/-Users-royeli-repo-github-com-delist-detection/a6c3c0f4-120e-40f6-9019-80889ff3e772/scratchpad/exec`.
+
+Commit: "The rename scan computes each first word once".
+
+#### Part B: the seed builder compares tickers as the history spells them
+
+**Why.** `contract/security_history.csv` spells a ticker through `normalize_ticker`
+(`src/delist_detection/vocabulary/identifiers.py`: `.`, `/` and spaces become `-`, upper case).
+`scripts/seeds_from_observations.py` (Task 19) compares the observation's ticker with the history's as raw strings, so a
+caller whose file says `BF.B` or `brk b` gets nothing from `--security-history` for those tickers, and no warning.
+
+**The change** (`scripts/seeds_from_observations.py`): the history index is keyed by `normalize_ticker(ticker)` and the
+lookup normalizes the observation's ticker the same way. Nothing else changes: the grouping of the observations by
+ticker, the output rows and their spelling stay as they are.
+
+**Tests** (`tests/test_seeds_from_observations.py`), written first:
+
+```python
+def test_the_history_is_read_through_the_tickers_normal_spelling():
+    rows = [_o("BF.B", "2010-06-30", "BROWN FORMAN"), _o("BF.B", "2010-12-31", "BROWN FORMAN"),
+            _o("BF.B", "2011-06-30", "BROWN FORMAN")]
+    history = [_h("S1", "BF-B", "2010-01-04", "2010-12-31"), _h("S2", "BF-B", "2011-01-03")]
+    assert _keys(mod.seeds(rows, history=history)) == [("BF.B", "2010-06-30"), ("BF.B", "2011-06-30")]
+    lower = [{**r, "ticker": "bf b"} for r in rows]
+    assert _keys(mod.seeds(lower, history=history)) == [("bf b", "2010-06-30"), ("bf b", "2011-06-30")]
+
+
+def test_two_rows_on_one_date_and_overlapping_spans_of_one_security():
+    rows = [_o("AAA", "2010-06-30", "ALPHA"), _o("AAA", "2010-12-31", "ALPHA"), _o("AAA", "2010-12-31", "ALPHA")]
+    history = [_h("S1", "AAA", "2010-01-04", "2010-12-31"), _h("S1", "AAA", "2010-06-01")]
+    assert _keys(mod.seeds(rows, history=history)) == [("AAA", "2010-06-30")]
+```
+
+See the first fail for the missing normalization; the second may already pass (it pins behaviour the review asked to
+have pinned): say which.
+
+Commit: "The seed builder reads the history through the ticker's normal spelling".
+
+#### Both parts
+
+Run the whole suite once at the end (`PYTHONPATH=src ~/miniconda3/envs/rdagent4qlib/bin/python -m pytest -q -p no:cacheprovider`;
+expected 4,050 passed plus the new tests, 44 xfailed). Update `docs/commands.md` if Part B changes what it says about
+the option; Part A needs no doc change unless a doc describes the scan's inner loop.
+
+**Not in this task:** any other part of `line_follow.py`; reusing stage 4b's results between rounds; the seed rules.
+
 ## S4: Smaller causes
 
 Each needs a short trace before a plan, because none was followed to the deciding line.
@@ -3889,3 +3982,60 @@ row can carry a price that is not a close: AVGO 2016); the same bad row could sw
 timing, none known. An observed second era that joins by composite at a price that did not carry over (CFFN in the
 full run) is left as it is. The old seed file dropped 26 rows on which the caller pins another issuer (Task 19 found
 it): those pins reached every full run and no seeds run, so part of the numbers above is the seed builder's.
+
+### Checkpoint 5: S3, seeds cut where the holder changed, the floor (2026-10-11)
+
+Code `8722066` (Tasks 19 and 20 on top of checkpoint 4). The full run is the one of checkpoint 4 (its tables at
+`8722066` are byte-identical to those at `6395c78`; 386 s). The seeds are built by the committed
+`scripts/seeds_from_observations.py` from `data/observations.csv` in two passes: the seed file of the plain rules,
+a run, and then the seed file with that run's `contract/security_history.csv`.
+
+| Seed file | Seeds | Run | Wall |
+|---|---|---|---|
+| the old builder (checkpoint 4) | 2,589 | `pout-seeds6` | 546 s |
+| the pin rule only | 2,615 | `pout-seeds7p` | 640 s (beside another run) |
+| the pin rule and the history of `pout-seeds6` | 2,742 | `pout-seeds7h` | 520 s (beside another run) |
+
+The observation file carries `cik` pins on some rows, and the old builder dropped 26 rows on which the pin changes
+(IR 2020, AVGO 2018, JCI 2016 among them). Those pins reached every full run and no seeds run.
+
+| Number | Floor of checkpoint 4 | Pin rule only | With the history (the new floor) |
+|---|---|---|---|
+| endings_lost | 0 | 0 | 0 |
+| endings_gained | 8 | 7 | 1 |
+| kind_changed | 16 | 14 | 11 |
+| value_or_date_changed | 10 | 9 | 5 |
+| securities_lost | 17 | 18 | 8 |
+| securities_gained | 6 | 6 | 5 |
+| seeds_placed_differently | 18 | 17 | 16 |
+| truth_cases_failing_only_in_seeds | 16 | 16 | 13 |
+| observed_flag_differs (not floored) | 40 | 22 | 0 |
+
+Coverage with the history: tickers 0.9734 (full 0.9766), securities 0.9776 (full 0.9804), `left_view` 6 (full 5).
+
+**What the history-built seeds fixed.** The endings the seeds run had and the full run lacks: CFFN, GHC, IR, ENR,
+Z class C, FOXA, FOX. Kinds: CI, the four 2023 Liberty lines, ALEX, GDI. Securities the seeds run lacked: TCF, ABI,
+CIT, LMCA 2013, HTZ, CR, the four 2023 Liberty lines, Z class A. Value or date: TCF, MNST, LVNTA, TEAM, NE. Every
+derived line that stood for a line the caller observes is now an observed era, so `observed_flag_differs` is 0.
+
+**What they broke.** ITT 2016 and XRX 2019: the full run has the old line and the new one as two securities; with a
+second seed after the switch the seeds run has only the new line's security and the 2008 seed sits on it (one truth
+case each). ALEX: two seeds on a placeholder. DISCK 2022 and LVNTA 2018 changed kind. All five are traced below.
+
+**The residue, traced (two agents, evidence `E/s4/`).** About 26 securities still differ.
+
+| Cause | Cases | Rule found | Tested |
+|---|---|---|---|
+| A CUSIP run between two seeds holds no observation and is dropped (`_split_era`: "an FTD-only side is no era"); the full run's dense observations make it an era, and that era's composite is what puts the first seed's era on the old line | ITT, XRX, ALEX (5 seeds, 2 truth cases) | make such a middle part a derived era, with the pin of the era it follows | on a 69-ticker subset: the three come out as the full run; 76 eras on 68 tickers are added over the seed file, 64 of those tickers agree already, ESV newly differs |
+| A Form 25 filed more than 400 days after the last seed is not kept by the finder (`_alive_at`), where the seeds security has no fails rows to carry it | SUNW, VIACA/PARAA, LVNTA (2 truth cases) | keep it when the security's last sighting is an observation and the filing is after it | a one-line patch gives the three the full run's endings; not counted over the universe |
+| The seed builder keeps no row when only the class words of the name change, so the seeds run's share class is stale and the successor search ties | DISCA, DISCK 2022 (2 truth cases) | a seed when the class words change; or drop a tie candidate that itself ends that day | not tested |
+| Stage 4b reads the 8-K text sources only in its first round and only for a line with no step | RRI/GEN, and MIR's value through it | read them in every round for a line that moved and then stopped | RRI then matches the full run; not counted |
+| The snapshot after a ticker changed hands falls in the days when nobody holds it, and the next snapshot is no seed | the two Gannett lines | a seed for a snapshot whose ticker the previous history does not hold | not tested |
+| A rename that changes ticker and CUSIP at once, after the last observation | DDR | none (approving every unobserved part fixes it and adds 280 eras) | |
+| One case each, no rule | NFS (the fallback's anchor), UAG (a 30-day window for foreign rows), ANN (a weak issuer answer dropped), WLL (a fold of a reverse split), CEG and MEL (issuer blank in seeds), GM, NRF, ATVI, QRTEA, CBS (not finished), CLWR (not traced) | | |
+
+In SPB, MTCH and WRK the two runs take the issuer from different sources; for WRK and the QRTEA/QVCA/WW rows the seeds
+run looks like the better one.
+
+**Decision D** (when a caller may send seeds only) asks for `endings_lost`, `kind_changed`, `securities_lost`,
+`seeds_placed_differently` and `truth_cases_failing_only_in_seeds` at 0. They are 0, 11, 8, 16 and 13.
