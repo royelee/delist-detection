@@ -245,3 +245,52 @@ def test_a_failed_issuer_age_read_makes_the_rewritten_row_resolution_degraded():
     assert "resolution_degraded" in found[0].flags
     assert [i.flag for i in r1.review] == ["resolution_degraded"]
 
+
+# --- batch 3 gate, FNFV 2017: terms that failed the payout gate do not outvote the registrant's own statement ---
+
+class _TitanBooks(_RoviBooks):
+    """ROVI's books, with EDGAR's ticker file listing the new issuer."""
+
+    def company_tickers(self):
+        return {"TTEC": {"cik_str": 999, "ticker": "TTEC", "title": "TITAN TECHNOLOGIES CORP"}}
+
+
+def _failed_gate_stage(monkeypatch, *, flags, ratio=0.3066, target="Titan Technologies Corporation"):
+    """Stage 8b over a merger row whose LLM terms (`ratio` of another acquirer's shares, read from the wrong filing)
+    are not one share, `flags` the payout gate's; no 8-K12B candidate."""
+    monkeypatch.setattr(pipeline, "successor_search_name", lambda *a: "Rovi Corp")
+    monkeypatch.setattr(pipeline, "successor_from_8k12b", lambda *a, **k: None)
+    books = _TitanBooks(target)
+    clients = pipeline.Clients(edgar=books, resolver=None, classifier=None, figi=None, ftd_client=None,
+                               issuers=IssuerRecord(books))
+    ctx = pipeline._RunContext(clients, date(2026, 9, 25), lambda *a: None, 1,
+                               pipeline.run_manifest.StageMeter(lambda *a: None))
+    rec = DelistRecord("ROVI", 1, "2016-09-07", 231, CrspBucket.MERGER, "medium", "merger", {"flags": list(flags)},
+                       sec_id="R", delist_date="2016-09-08")
+    d = Delisting("R", 1, "ROVI", "2016-09-08", rec, LastTrade(date(2016, 9, 7), "midas", ()), None, None, "NASDAQ")
+    sec = Security("R", 1, "COMMON", "ROVI CORP", "Common Stock", True, "cusip")
+    values = MergerValues({d.key: MergerValue(d.key, llm=MergerTerms("stock", None, ratio, None, "BKI", "high", "x", ""),
+                                              flags=tuple(flags))})
+    return d, pipeline._r1_continuations(ctx, [d], {"R": sec}, {}, values)
+
+
+def test_terms_that_failed_the_gate_do_not_outvote_a_one_for_one_statement_into_a_new_issuer(monkeypatch):
+    """FNFV 2017: the LLM read BKI's 0.3066 from the wrong filing (terms_gate_failed:fail_sanity); the registrant's
+    own 8-K says each FNFV share was redeemed for one Cannae share, a new issuer the run does not hold. The row is a
+    continuation with its successor still unknown (stage 9 may find it), flagged r1_continuation."""
+    d, r1 = _failed_gate_stage(monkeypatch, flags=["terms_gate_failed:fail_sanity"])
+    assert (d.record.bucket, d.record.successor_sec_id) == (CrspBucket.EXCHANGE_TRANSFER, "")
+    assert pipeline.R1_CONTINUATION in d.flags and SUCCESSOR_UNKNOWN in d.flags
+    assert [i.flag for i in r1.review] == [pipeline.R1_REBUCKETED]
+
+
+def test_terms_the_gate_kept_still_outvote_the_statement(monkeypatch):
+    """Jefferies 2013: terms the gate has no complaint about (0.81 of Leucadia) keep the merger."""
+    d, r1 = _failed_gate_stage(monkeypatch, flags=[], ratio=0.81)
+    assert d.record.bucket is CrspBucket.MERGER and r1.links == {}
+
+
+def test_failed_terms_and_a_statement_into_no_new_issuer_keep_the_merger(monkeypatch):
+    d, r1 = _failed_gate_stage(monkeypatch, flags=["llm_gate_failed"], target="Some Other Holdings")
+    assert d.record.bucket is CrspBucket.MERGER and r1.links == {}
+

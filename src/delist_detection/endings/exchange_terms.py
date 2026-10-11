@@ -28,6 +28,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 
 from ..vocabulary.identifiers import CLASS_MODIFIERS, prose_class_letters
+from ..vocabulary.names import name_tokens
 
 _QUOTES = str.maketrans({"“": '"', "”": '"', "’": "'", "‘": "'", " ": " "})
 _NUMBER_WORDS = {"one": 1.0, "two": 2.0, "three": 3.0, "four": 4.0, "five": 5.0}
@@ -44,7 +45,9 @@ _SUFFIX_END = re.compile(r"\b(Inc|Corp|Co|Ltd|plc|N\.V|S\.A|L\.P)\.\s+(?=(?:Each
                          r"Effective|Also|Additionally|Except|When|If|Thereafter|Then|Parent|Newco|Holdco)\b)")
 _BREAK = "\x00"
 _PAREN = re.compile(r"\((?:[^()]|\([^()]*\))*\)")
-_DEFINED = re.compile(r'\(\s*(?:the\s+|each,?\s+an?\s+)?"\s*([^"()]{1,40}?)\s*"\s*(?:,[^()]{0,40})?\)')
+# also after a former name: 'Liberty Media Corporation (formerly known as Liberty CapStarz, Inc., "Splitco")'
+_DEFINED = re.compile(r'\(\s*(?:formerly\s+known\s+as\s+[^()"]{1,80}?,\s+)?(?:the\s+|each,?\s+an?\s+)?'
+                      r'"\s*([^"()]{1,40}?)\s*"\s*(?:,[^()]{0,40})?\)')
 # 'Howard Hughes Holdings Inc., a Delaware corporation and direct wholly owned subsidiary of the Company ("Holdco")':
 # the appositive between a name and its defined term
 _APPOSITIVE = re.compile(r",\s+an?\s+(?:(?:newly[- ]formed|direct|indirect|wholly[- ]owned|[A-Z][a-z]+)\s+){0,4}"
@@ -156,6 +159,9 @@ class OwnExchange:
     ambiguous: bool = False
     special_dividends: tuple[float, ...] = ()
     extra_leg: bool = False
+    # the filing calls the target the registrant's (former) subsidiary: a new issuer, even when it carries a name the
+    # registrant carried until then (Liberty Media Corporation's split-off of Liberty Media Corporation, 2011)
+    target_subsidiary: bool = False
 
     @property
     def one_for_one(self) -> bool:
@@ -221,6 +227,19 @@ def defined_terms(text: str) -> dict[str, str]:
             name = before[runs[-2].start():].strip()
         if name and alias.upper() != "COMPANY" and name != alias:
             out.setdefault(alias, name)
+    return out
+
+
+def subsidiary_terms(text: str) -> set[str]:
+    """The defined terms and names (upper case) a filing introduces as a subsidiary: 'its former wholly owned
+    subsidiary Cannae Holdings, Inc. ("Cannae")' gives {"CANNAE", "CANNAE HOLDINGS, INC."}."""
+    t = normalize(text)
+    names = defined_terms(t)
+    out: set[str] = set()
+    for m in _DEFINED.finditer(t):
+        if re.search(r"subsidiar", t[max(0, m.start() - 200):m.start()], re.I):
+            alias = m.group(1).strip()
+            out |= {alias.upper(), names.get(alias, alias).upper()}
     return out
 
 
@@ -349,14 +368,34 @@ def _first_party_own(head: str, own: set[str]) -> bool | None:
     return _names_own(first, own)
 
 
-def _class_ok(st: Statement, letter: str | None, class_words: Sequence[str]) -> bool:
+_GROUP_OF_SUBJECT = re.compile(r"(?:Series|Class)\s+[A-Z]\s+(.+?)\s+common\s+(?:stock|shares)", re.I)
+_GROUP_STOP = frozenset({"SPECIAL", "NON", "VOTING", "NONVOTING", "NEW", "OLD", "ORDINARY", "SUBORDINATE",
+                         "SUBORDINATED", "CONVERTIBLE", "RESTRICTED", "LIMITED", "PARTICIPATING", "REDEEMABLE",
+                         "EXCHANGEABLE", "MULTIPLE"})
+
+
+def _names_group(subject: str, security_name: str, issuer_names: Iterable[str]) -> bool:
+    """The subject ("its Series A Liberty Capital common stock") names a tracking group, and it is the security's:
+    a word of the group's name (less the registrant's own name words, Liberty Media's) is one of the security's name
+    words (LCAPA's "LIBERTY CAPITAL", not Liberty Starz)."""
+    m = _GROUP_OF_SUBJECT.search(subject)
+    if not m or not security_name:
+        return False
+    issuer_words = {w for n in issuer_names for w in name_tokens(n)}
+    group = name_tokens(m.group(1)) - issuer_words - _GROUP_STOP
+    return bool(group & name_tokens(security_name))
+
+
+def _class_ok(st: Statement, letter: str | None, class_words: Sequence[str], security_name: str = "",
+              issuer_names: Iterable[str] = ()) -> bool:
     """The subject is the security's class: no letter, or the security's (`letter` None: any class); and it names
-    each word that sets the security's class apart ("Class A Special"), and none the security lacks."""
+    each word that sets the security's class apart ("Class A Special"), and none the security lacks. A plain class
+    with no letter of its own takes a lettered statement only when it is its tracking group's (`_names_group`)."""
     if letter is None:
         return True
     if letter and st.subject_letters and letter not in st.subject_letters:
         return False
-    if not letter and len(st.subject_letters) == 1:
+    if not letter and len(st.subject_letters) == 1 and not _names_group(st.subject, security_name, issuer_names):
         return False
     head = st.subject[:120].upper()
     mods = {w.upper() for w in class_words}
@@ -376,7 +415,8 @@ def _terms_and_own(texts: Sequence[str], names: Sequence[str]) -> tuple[dict[str
 
 
 def own_statements(texts: Iterable[str], *, names: Sequence[str], class_letter: str | None = "",
-                   class_words: Sequence[str] = ()) -> list[Statement]:
+                   class_words: Sequence[str] = (), security_name: str = "",
+                   issuer_names: Iterable[str] = ()) -> list[Statement]:
     """The exchange statements of `texts` (not distributions) about the security's own shares (module docstring)."""
     texts = [normalize(t) for t in texts if t]
     _, own = _terms_and_own(texts, names)
@@ -386,7 +426,8 @@ def own_statements(texts: Iterable[str], *, names: Sequence[str], class_letter: 
             head = st.subject[:120]
             if st.distribution or _NOT_SHARES.search(head):
                 continue
-            if _first_party_own(head, own) is not False and _class_ok(st, class_letter, class_words):
+            if _first_party_own(head, own) is not False and _class_ok(st, class_letter, class_words,
+                                                                       security_name, issuer_names):
                 if _first_party_own(head, own) is None and not _OWN_PRONOUN.search(st.sentence) \
                         and not _names_own(st.sentence, own):
                     continue
@@ -411,12 +452,16 @@ def _cash_for_class(texts: Iterable[str], own: set[str], letter: str | None) -> 
 
 
 def own_exchange(texts: Iterable[str], *, names: Sequence[str], class_letter: str | None = "",
-                 class_words: Sequence[str] = ()) -> OwnExchange | None:
+                 class_words: Sequence[str] = (), security_name: str = "",
+                 issuer_names: Iterable[str] = ()) -> OwnExchange | None:
     """What the security's own shares became (module docstring): `names` the registrant's names before the event
     (`own_shares.registrant_names`), `class_letter` its class letter ("" for a plain common, None for any class),
-    `class_words` the words that set its class apart (`identifiers.class_of`). None when no filing states it."""
+    `class_words` the words that set its class apart (`identifiers.class_of`), `security_name` its name and
+    `issuer_names` the registrant's (a plain class takes its own tracking group's lettered statement:
+    `_class_ok`). None when no filing states it."""
     texts = [normalize(t) for t in texts if t]
-    found = own_statements(texts, names=names, class_letter=class_letter, class_words=class_words)
+    found = own_statements(texts, names=names, class_letter=class_letter, class_words=class_words,
+                           security_name=security_name, issuer_names=issuer_names)
     if not found:
         return None
     terms, own = _terms_and_own(texts, names)
@@ -436,9 +481,12 @@ def own_exchange(texts: Iterable[str], *, names: Sequence[str], class_letter: st
     target_own = bool(_OWN_PRONOUN.search(named)) or not parties(named)
     dividends = sorted({float((m.group(1) or m.group(2)).replace(",", ""))
                         for t in texts for m in _SPECIAL_DIVIDEND.finditer(t)})
+    subsidiaries = set().union(*(subsidiary_terms(t) for t in texts)) if texts else set()
+    target_subsidiary = any(n.upper() in subsidiaries or any(w in subsidiaries for w in n.upper().split())
+                            for n in target_names)
     return OwnExchange(st.ratio, st.cash or _cash_for_class(texts, own, class_letter), st.target,
                        tuple(dict.fromkeys(target_names)), letter, target_own, st.sentence,
-                       len({(s.ratio, s.cash) for s in found}) > 1, tuple(dividends), extra)
+                       len({(s.ratio, s.cash) for s in found}) > 1, tuple(dividends), extra, target_subsidiary)
 
 
 def acquires(texts: Iterable[str], *, names: Sequence[str]) -> str:

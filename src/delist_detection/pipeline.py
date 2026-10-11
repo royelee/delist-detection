@@ -26,7 +26,7 @@ from .sources.capabilities import CAPABILITIES, FULL_TEXT_SEARCH, Capability, Fu
 from .vocabulary.crsp_codes import CrspBucket
 from .endings.continuation_evidence import needs_doubt_check, needs_filing, read_continuation
 from .outputs.degraded import DegradedWatch, degraded_item, flag_degraded, report_halt_feed_failures
-from .endings.delistings import Delisting, DelistingFinder, SecurityContexts, unexplained_ending
+from .endings.delistings import SUCCESSOR_UNKNOWN, Delisting, DelistingFinder, SecurityContexts, unexplained_ending
 from .endings.distress import (
     BANKRUPTCY_WORDS, OTC_SYMBOL_DAYS, otc_symbol_from_fails, otc_symbol_from_text, plan_ratio,
     new_cusips as plan_new_cusips, price_only, substitutes_new_shares,
@@ -55,7 +55,7 @@ from .filings.listing_status import issuer_exchange, listed_on_run_date, listed_
 from .identity.observations import ObservationIndex, TickerEra, observation_conflicts
 from .endings.exchange_terms import one_share_no_cash
 from .vocabulary.exchanges import normalize_exchange
-from .endings.own_shares import OwnShares, Reader, new_issuer
+from .endings.own_shares import NEW_ISSUER, OwnShares, Reader, new_issuer
 from .endings.own_shares import of as own_shares_of
 from .terms.merger_value import MergerValues, value_mergers
 from .terms.payout_gate import DEFAULT_TOL
@@ -653,30 +653,40 @@ def _r1_continuations(ctx: _RunContext, delistings: list[Delisting], securities:
         if e.record.bucket is not CrspBucket.MERGER or e.sec_id not in securities:
             continue
         terms = values.read_terms(e.key)
-        if terms is None or not one_share_no_cash(terms[1], None):
+        if terms is None:
+            continue
+        # terms that are not one share count against the statement unless the payout gate refused them (FNFV 2017:
+        # the LLM read the Black Knight distribution's 0.3066 from another filing; the registrant's own 8-K says each
+        # FNFV share was redeemed for one Cannae share)
+        overruled = not one_share_no_cash(terms[1], None)
+        if overruled and not values.gate_failed(e.key):
             continue
         watch = ctx.clients.issuers.watch()
         sec = securities[e.sec_id]
         own = own_shares_of(e, _reader(ctx.clients), sec)
         link, pending = None, {}
-        if own.one_for_one and one_share_no_cash(terms[1], own.consideration(terms[0])):
+        if own.one_for_one and (overruled or one_share_no_cash(terms[1], own.consideration(terms[0]))):
             link = _r1_successor(ctx, e, sec, own, e.anchor, starts, securities, values.added, pending)
+        unknown = link is None and overruled and own.one_for_one and own.target_issuer() == NEW_ISSUER
         if watch.tripped() or own.degraded:
             watch_item = degraded_item(e.sec_id, e.ticker, e.cik, "the R1 reading", delist_date=e.delist_date)
             out.review.append(watch_item)
             flag_degraded(e)
             continue
-        if link is None:
+        if link is None and not unknown:
             continue
         out.added.update(pending)
-        sid, how = link
+        sid, how = link if link is not None else ("", "")
         old = (e.record.bucket.value, e.record.crsp_code, e.record.reason)
         continuation(e, sid, Rule.R1, confidence="medium", flag=R1_CONTINUATION, how=how,
                      evidence=own.statement.sentence[:300], payouts=values,
                      reason=continuation_reason("R1", f"each share became one "
                                                            f"{own.statement.target[:80].strip(' ,')}, no cash")
                      + successor_note(how))
-        out.links[e.key] = link
+        if link is not None:
+            out.links[e.key] = link
+        else:                                   # a new issuer the run does not hold: stage 9 may still find it
+            e.record.evidence["flags"] = [*e.flags, SUCCESSOR_UNKNOWN]
         out.review.append(ReviewItem(e.sec_id, e.ticker, e.cik, R1_REBUCKETED,
                                      f"was {old[0]} (CRSP {old[1]}: {old[2]}); R1 makes it a continuation into {sid}",
                                      delist_date=e.delist_date))

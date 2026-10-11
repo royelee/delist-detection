@@ -211,7 +211,8 @@ class OwnShares:
             texts = self.texts if with_notice else [self.text_of(f) for f in self.filings]
             letter, words = class_of(self.share_class, self.name)
             self._statements[with_notice] = own_exchange(texts, names=self.names, class_letter=letter,
-                                                         class_words=words)
+                                                         class_words=words, security_name=self.name,
+                                                         issuer_names=self.edgar_names)
             self.stated = True
         return self._statements[with_notice]
 
@@ -257,7 +258,7 @@ class OwnShares:
             return SAME_ISSUER
         if not own.target_names:
             return ""
-        if names_target(own, self.edgar_names):
+        if not own.target_subsidiary and names_target(own, self.edgar_names):
             return SAME_ISSUER
         for entry in self.reader.edgar.company_tickers().values():
             other = entry.get("cik_str")
@@ -265,7 +266,9 @@ class OwnShares:
                 continue
             if new_issuer(self._watched(self.reader.issuers.first_filed, int(other)), self.day):
                 return NEW_ISSUER
-        return ""
+        # a subsidiary of a name the registrant carried: a new issuer when another registrant is found, else the
+        # registrant itself (ONEOK's holding company, "Legacy ONEOK" into "ONEOK")
+        return SAME_ISSUER if own.target_subsidiary and names_target(own, self.edgar_names) else ""
 
     def survived(self, deal_days: Iterable[date]) -> str:
         """Rule 1 (5c): the sentence that says the registrant survived the transaction its 8-K items call a merger --
