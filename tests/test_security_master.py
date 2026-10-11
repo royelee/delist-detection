@@ -1,4 +1,5 @@
 import csv
+from dataclasses import replace
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -9,7 +10,7 @@ from delist_detection.sources.ftd import FtdIndex, FtdRow
 from delist_detection.identity.observations import Observation, ObservationIndex, load_observations, split_eras
 from delist_detection.identity.added_securities import AddedAcquirer, AddedSuccessor
 from delist_detection.identity.history import Range, Sighting, ranges_from_sightings
-from delist_detection.identity.identity import era_cusips, era_last_seen, refine_eras
+from delist_detection.identity.identity import _refine, era_cusips, era_last_seen, last_sightings, refine_eras
 from delist_detection.identity.security_master import (
     EraResolution, FigiResolver, Handoff, Issuer, Security, build_securities, cusip_handoffs, issuers_by_era,
 )
@@ -264,6 +265,51 @@ def test_era_last_seen_extends_past_the_last_snapshot():
     ])
     assert era_last_seen(era, ftd) == "2018-11-29"
     assert era_last_seen(_era("ZZZ", ("2018-06-29", "Z CO")), ftd) == "2018-06-29"
+
+
+def _own(symbol, cusip, dates, desc="X CO"):
+    return [FtdRow(d, cusip, symbol, desc, 10.0) for d in dates]
+
+
+def test_era_last_seen_follows_its_own_cusip_to_its_last_row():
+    # One seed in 2008; the security's own CUSIP keeps appearing under the ticker until 2016.
+    era = replace(_era("HOT", ("2008-01-16", "STARWOOD HOTELS & RESRTS")), ftd_cusips=("85590A401",))
+    own = ["2008-06-02", "2009-05-04", "2010-04-05", "2011-03-07", "2012-02-06", "2013-01-07", "2013-12-09",
+           "2014-11-10", "2015-10-12", "2016-09-20"]
+    ftd = FtdIndex(_own("HOT", "85590A401", own, "STARWOOD HOTELS&RESORTS WRLDWD")
+                   + _own("HOT", "99999999X", ["2017-01-03"], "ANOTHER HOLDER INC"))
+    assert era_last_seen(era, ftd) == "2016-09-20"
+
+
+def test_era_last_seen_stops_at_a_gap_longer_than_the_horizon():
+    era = replace(_era("X", ("2008-01-16", "X CO")), ftd_cusips=("AAA",))
+    ftd = FtdIndex(_own("X", "AAA", ["2008-06-02", "2010-01-04"]))        # 581 days apart
+    assert era_last_seen(era, ftd) == "2008-06-02"
+
+
+def test_era_last_seen_without_its_own_cusips_takes_one_step_only():
+    # No CUSIP of its own: rows are matched by name, which is too weak to follow for years.
+    era = _era("AET", ("2018-06-29", "AETNA INC"))
+    ftd = FtdIndex(_own("AET", "00817Y108", ["2018-11-29", "2019-10-01"], "AETNA INC.(NEW)"))
+    assert era_last_seen(era, ftd) == "2018-11-29"
+
+
+def test_era_last_seen_stops_before_the_tickers_next_era():
+    # The same CUSIP runs on under a later era of the ticker (a rename): the earlier era stops before it.
+    era = replace(_era("KORS", ("2012-06-29", "MICHAEL KORS HOLDINGS LTD")), ftd_cusips=("G60754101",))
+    rows = ["2012-09-04", "2013-06-03", "2014-03-03", "2014-11-03", "2015-08-03", "2016-05-02"]
+    ftd = FtdIndex(_own("KORS", "G60754101", rows, "MICHAEL KORS HLDGS LTD"))
+    assert era_last_seen(era, ftd, until="2014-12-31") == "2014-11-03"
+    assert era_last_seen(era, ftd) == "2016-05-02"
+
+
+def test_the_fails_window_runs_to_the_run_date_whatever_the_newest_observation():
+    # The newest observation of the whole input is from 2010; the security's own rows run to 2015.
+    obs = [Observation("HOT", "2010-01-04", "STARWOOD HOTELS & RESRTS")]
+    days = ["2010-02-01", "2010-12-01", "2011-10-03", "2012-08-01", "2013-06-03", "2014-04-01", "2015-02-02"]
+    rows = [FtdRow(d, "85590A401", "HOT", "STARWOOD HOTELS&RESORTS WRLDWD", 10.0) for d in days]
+    eras, _, ftd = _refine(ObservationIndex(obs), _RowsClient(rows), date(2026, 9, 25), None, lambda *a: None)
+    assert last_sightings(eras, ftd) == {"HOT@2010-01-04": "2015-02-02"}
 
 
 def test_resolve_many_orders_routes():

@@ -45,7 +45,7 @@ one observation per row per file).
                              │
                              ▼
               ┌────────────────────────────┐
-              │  era_last_seen, era_cusips │   FTD-confirmed true last sighting + CUSIPs
+              │  era_last_seen, era_cusips │   last sighting followed along the era's own CUSIP rows + CUSIPs
               └─────────────┬──────────────┘
                              │ TickerResolver.resolve (era ticker, era_last_seen)
                              ▼
@@ -493,7 +493,7 @@ rejects it, and the company search sees only today's name. The eras left with
 no CIK and no pin, with at least 3 fails rows of their own
 (`identity.era_rows`, `era_last_seen`'s row choice from the first
 observation to the last sighting), are answered in era-key order, and the
-answers are never saved (they depend on the run's other eras). A candidate CIK
+answers are never saved (they depend on the run's other eras). The date it asks at is the era's last sighting (`identity.last_sightings`): its last observation, then its own CUSIP's fails rows under its ticker for as long as they continue, each step at most 400 days, stopping before the ticker's next era. One seed in 2008 is asked at the security's real end. A candidate CIK
 must pass **guard G**: it existed by the era's first fails row, every row's
 description matches a name it carried by 30 days after the row's date
 (`names.description_matches`; an earlier name counts, since SEC updates

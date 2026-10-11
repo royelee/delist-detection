@@ -22,7 +22,7 @@ import requests
 
 from delist_detection.sources.edgar import EdgarSubmission
 from delist_detection.sources.ftd import FtdIndex, FtdRow
-from delist_detection.identity.identity import EraIssuers, InferredIssuer, era_last_seen, identify, refine_eras
+from delist_detection.identity.identity import EraIssuers, InferredIssuer, identify, last_sightings, refine_eras
 from delist_detection.identity.observations import ObservationIndex, load_observations
 from delist_detection.pipeline import Clients
 from delist_detection.identity.security_master import Handoff, cusip_handoffs
@@ -127,7 +127,7 @@ def _second_pass(eras, ftd, keys, resolved=None, edgar=None, unpin=(), handoffs=
     `resolved` (a cik pin otherwise), the eras `unpin` stripped of their pin
     (`handoffs`: the CUSIP links between them, else `cusip_handoffs`')."""
     chosen = [_unpinned(eras[k]) if k in unpin else eras[k] for k in keys]
-    last_seen = {e.key: era_last_seen(e, ftd) for e in chosen}
+    last_seen = last_sightings(chosen, ftd)
     ciks = {e.key: (resolved or {}).get(e.key, e.cik_pin) for e in chosen}     # the first pass answers a pin
     return _passes(edgar).infer(chosen, ftd, last_seen, ciks, handoffs)
 
@@ -139,10 +139,11 @@ def _infer(eras, ftd, keys, resolved=None, edgar=None, unpin=(), handoffs=None):
 
 
 def test_the_fixture_eras_and_last_sightings_are_the_real_ones(eras, ftd):
-    seen = {k: era_last_seen(e, ftd) for k, e in eras.items() if e.ticker in {"KORS", "NU", "LUK", "LMCA"}}
+    seen = {k: v for k, v in last_sightings(list(eras.values()), ftd).items()
+            if eras[k].ticker in {"KORS", "NU", "LUK", "LMCA"}}
     assert seen == {"KORS@2012-06-29": "2015-08-03", "KORS@2014-12-31": "2019-01-03",
                     "LMCA@2012-06-29": "2013-01-16", "LMCA@2013-06-28": "2016-04-18",
-                    "LUK@2008-01-16": "2010-07-13", "LUK@2012-06-29": "2015-08-04", "LUK@2014-12-31": "2018-05-25",
+                    "LUK@2008-01-16": "2012-06-26", "LUK@2012-06-29": "2015-08-04", "LUK@2014-12-31": "2018-05-25",
                     "NU@2008-01-16": "2015-02-20", "NU@2023-06-30": "2026-08-31"}
 
 
@@ -586,7 +587,7 @@ def test_the_second_pass_answer_is_used_flagged_and_never_saved(tmp_path):
         "KORS@2012-06-29": (1530721, "shared_cusip"), "KORS@2014-12-31": (1530721, "name_search"),
         "CPRI@2018-12-31": (1530721, "company_tickers")}
     saved = json.loads((tmp_path / "res.json").read_text())["entries"]
-    assert sorted(saved) == ["CPRI|2026-02-04|CAPRI HOLDINGS LTD", "KORS|2019-01-03|MICHAEL KORS HOLDINGS LTD"]
+    assert sorted(saved) == ["CPRI|2026-08-20|CAPRI HOLDINGS LTD", "KORS|2019-01-03|MICHAEL KORS HOLDINGS LTD"]
     inferred = [(i.ticker, i.cik, i.reason) for i in identity.review if i.flag == "issuer_inferred"]
     assert inferred == [("KORS", 1530721, "KORS@2012-06-29 CAPRI HOLDINGS LTD: issuer 1530721 by shared_cusip: "
                                           "shares CUSIP G60754101 with KORS@2014-12-31")]

@@ -603,7 +603,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   tier and is never written to the on-disk resolver cache. The pipeline looks
   each era up under its own pin and name (`resolve(..., pin=, name=)`) and
   its first sighting (`since=`): every search tier, and a cached answer from
-  one, takes only a company that had filed by then. The
+  one, takes only a company that had filed by then. The date it asks at is the era's last sighting (`identity.last_sightings`): its last observation, then its own CUSIP's fails rows under its ticker for as long as they continue, each step at most 400 days, stopping before the ticker's next era. One seed in 2008 is asked at the security's real end. The
   name search drops EDGAR's nameless multi-company hits and ranks up to 5
   candidates by the words the name shares with their EDGAR names (current
   and former). The era-level passes, which read the run's other eras and its fails rows and are never saved,
@@ -624,8 +624,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   (`security_master.cusip_handoffs`) are computed once, for the second pass and stage 3; a foreign era
   (`foreign_ticker_eras`) is given once, to `FigiResolver(foreign=)`, which guards it as an unconfirmed one. The era
   helpers live here: `era_cusips`/`candidate_cusips` (an era takes an FTD CUSIP only when a fails row's description
-  names its issuer, `names.description_matches` against the observed and EDGAR names — spec D21), `era_last_seen`
-  (the true last sighting), `era_rows`. `EraIssuers` is the era-level issuer passes, over the issuer record and the
+  names its issuer, `names.description_matches` against the observed and EDGAR names — spec D21), `era_last_seen`/`last_sightings`
+  (the last sighting, followed along the era's own CUSIP rows), `era_rows`. `EraIssuers` is the era-level issuer passes, over the issuer record and the
   lookup's frequency candidates, with their own state (`degraded`, by era key: a failed search, or an issuer read
   that failed or was stale since the era began, reported `resolution_degraded` beside the lookup's own
   `is_degraded`). `infer` is the second pass, never cached, for eras left

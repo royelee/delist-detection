@@ -197,7 +197,7 @@ def _refine(index: ObservationIndex, ftd_client: Any, as_of: date, limit: int | 
         raise ObservationError("no observations to process")
 
     lo = max(FTD_START, min(date.fromisoformat(e.first) for e in eras) - timedelta(days=30))
-    hi = min(as_of, max(date.fromisoformat(e.last) for e in eras) + timedelta(days=400))
+    hi = as_of        # an era is followed along its own fails rows for as long as they run (`era_last_seen`)
     class_names: dict[str, list[str]] = defaultdict(list)     # BF-B's names: checks FTD's "BFB" rows
     first_seen: dict[str, str] = {}                            # each ticker's first day (rule A's base-symbol bound)
     for e in eras:
@@ -244,7 +244,7 @@ def _resolve_issuers(eras: list[TickerEra], ftd: FtdIndex, handoffs: Sequence[Ha
     an issuer whose read failed has none (its eras are checked against their
     observed names only) and is reported degraded."""
     resolver, record = clients.resolver, clients.issuers
-    last_seen = {e.key: era_last_seen(e, ftd) for e in eras}
+    last_seen = last_sightings(eras, ftd)
     mark = meter.start()
     if workers > 1:
         # Warm the EDGAR caches: each era resolved on a worker thread by a shadow
@@ -586,12 +586,36 @@ def _own_rows(era: TickerEra, rows: Sequence[FtdRow]) -> list[FtdRow]:
     return list(rows)
 
 
-def era_last_seen(era: TickerEra, ftd: FtdIndex, horizon_days: int = 400) -> str:
+def era_last_seen(era: TickerEra, ftd: FtdIndex, horizon_days: int = 400, until: str | None = None) -> str:
     """The era's last sighting: its last observation, or a later FTD row of its
-    own (`_own_rows`) under its ticker within `horizon_days`."""
-    lo = (date.fromisoformat(era.last) + timedelta(days=1)).isoformat()
-    hi = (date.fromisoformat(era.last) + timedelta(days=horizon_days)).isoformat()
-    return max([era.last, *(r.date for r in _own_rows(era, ftd.by_symbol(era.ticker, lo, hi)))])
+    own (`_own_rows`) under its ticker within `horizon_days`. An era with FTD
+    CUSIPs of its own is then followed along them, each step at most
+    `horizon_days` past the row before, to the last row before `until` (the
+    day the ticker's next era begins; None: no later era): the security's own
+    fails rows say how long it traded, whatever the caller observed (one seed
+    in 2008, Starwood's rows to 2016)."""
+    def later(after: str, stop: str | None) -> list[str]:
+        lo = (date.fromisoformat(after) + timedelta(days=1)).isoformat()
+        hi = (date.fromisoformat(after) + timedelta(days=horizon_days)).isoformat()
+        return [r.date for r in _own_rows(era, ftd.by_symbol(era.ticker, lo, hi)) if stop is None or r.date < stop]
+
+    last = max([era.last, *later(era.last, None)])
+    while era.ftd_cusips:
+        more = later(last, until)
+        if not more:
+            break
+        last = max(more)
+    return last
+
+
+def last_sightings(eras: Sequence[TickerEra], ftd: FtdIndex) -> dict[str, str]:
+    """Each era's last sighting by era key (`era_last_seen`), an era followed no
+    further than the day its ticker's next era begins."""
+    starts: dict[str, list[str]] = defaultdict(list)
+    for e in eras:
+        starts[e.ticker].append(e.first)
+    return {e.key: era_last_seen(e, ftd, until=min((f for f in starts[e.ticker] if f > e.first), default=None))
+            for e in eras}
 
 
 def era_rows(era: TickerEra, ftd: FtdIndex, last_seen: str) -> list[FtdRow]:
