@@ -7,7 +7,9 @@ import pytest
 
 from delist_detection.identity.figi_resolution import FigiCandidate
 from delist_detection.sources.ftd import FtdIndex, FtdRow
-from delist_detection.identity.observations import Observation, ObservationIndex, load_observations, split_eras
+from delist_detection.identity.observations import (
+    Observation, ObservationIndex, TickerEra, load_observations, split_eras,
+)
 from delist_detection.identity.added_securities import AddedAcquirer, AddedSuccessor
 from delist_detection.identity.history import Range, Sighting, ranges_from_sightings
 from delist_detection.identity.identity import (
@@ -17,6 +19,7 @@ from delist_detection.identity.identity import (
 from delist_detection.identity.ticker_resolver import TickerResolution
 from delist_detection.identity.security_master import (
     EraResolution, FigiResolver, Handoff, Issuer, Security, build_securities, cusip_handoffs, issuers_by_era,
+    observation_conflict_review,
 )
 
 ERAS_FIX = Path(__file__).parent / "fixtures" / "eras"
@@ -1563,3 +1566,30 @@ def test_a_foreign_era_after_its_issuers_line_ended_is_the_dead_lines_stale_tail
 def test_a_foreign_era_long_after_the_line_ended_is_not_its_tail():
     res, _, tail = _stale_tail(401)
     assert (res[tail.key].sec_id, res[tail.key].source) == ("CIK777001-COMMON", "placeholder")
+
+
+def _derived_era(ticker="X", first="2020-09-01", name="X CO NEW"):
+    return TickerEra(ticker, first, first, [Observation(ticker, first, name, derived=True)])
+
+
+def test_a_security_is_observed_when_any_of_its_eras_is_the_callers():
+    caller = TickerEra("X", "2020-01-15", "2020-06-30", [Observation("X", "2020-01-15", "X CO")])
+    derived = _derived_era()
+    res = {e.key: EraResolution(e.key, "BBGX", "cusip", None, ()) for e in (caller, derived)}
+    eras = {e.key: e for e in (caller, derived)}
+    assert build_securities(res, eras, {})["BBGX"].observed is True
+    assert build_securities({derived.key: res[derived.key]}, {derived.key: derived}, {})["BBGX"].observed is False
+    early = _derived_era(first="2019-01-01")                                    # a derived era sorted before the caller's
+    res = {e.key: EraResolution(e.key, "BBGX", "cusip", None, ()) for e in (early, caller)}
+    assert build_securities(res, {e.key: e for e in (early, caller)}, {})["BBGX"].observed is True
+
+
+def test_a_derived_observation_is_no_conflict():
+    caller = TickerEra("X", "2020-09-01", "2020-09-01", [Observation("X", "2020-09-01", "OTHER CO")])
+    derived = _derived_era(first="2020-09-01")                                  # the same ticker and day, another name
+    res = {e.key: EraResolution(e.key, "BBGX", "cusip", None, ()) for e in (caller, derived)}
+    assert observation_conflict_review([caller, derived], res) == []
+    other = TickerEra("X", "2020-09-01", "2020-09-01", [Observation("X", "2020-09-01", "THIRD CO")], seq=1)
+    res[other.key] = EraResolution(other.key, "BBGY", "cusip", None, ())
+    (item,) = observation_conflict_review([caller, other, derived], res)        # two caller names do conflict
+    assert "X CO NEW" not in item.reason and "OTHER CO" in item.reason and "2 names" in item.reason

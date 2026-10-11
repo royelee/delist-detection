@@ -445,7 +445,7 @@ def _dead_before_sighting(ctx: _RunContext, securities: dict[str, Security], del
     eligible: list[tuple[str, str]] = []
     for sid, end in sorted(ends.items()):
         s = securities.get(sid)
-        seen = [o.as_of for era in (s.eras if s else ()) for o in era.observations]
+        seen = [o.as_of for era in (s.eras if s else ()) for o in era.caller_observations]
         if s is None or not seen or end >= min(seen):
             continue
         rows = ftd.trading_rows(sec_cusips.get(sid, []))
@@ -1355,7 +1355,7 @@ def _observation_map(ctx: _RunContext, index: ObservationIndex, eras: list[Ticke
     so a `--limit` subset's smaller count is not mistaken for a bug."""
     sec_id_of = {k: r.sec_id for k, r in resolutions.items()}
     issuer_cik_of = {k: cik_of(issuers, k) for k in resolutions}
-    conflicts = [(t, d) for t, d, _ in observation_conflicts(o for e in eras for o in e.observations)]
+    conflicts = [(t, d) for t, d, _ in observation_conflicts(o for e in eras for o in e.caller_observations)]
     rows = observation_map_rows(eras, sec_id_of, issuer_cik_of, history, conflicts)
     total = sum(len(e.observations) for e in index.eras())
     ctx.log(f"observation_map: {len(rows)} of {total} observations mapped")
@@ -1471,12 +1471,12 @@ def _other_issuers(ctx: _RunContext, eras: list[TickerEra], resolutions: dict[st
         touched.add(cik)
         return read(cik)
 
-    conflicts = {(t, d) for t, d, _ in observation_conflicts(o for e in eras for o in e.observations)}
+    conflicts = {(t, d) for t, d, _ in observation_conflicts(o for e in eras for o in e.caller_observations)}
     # an era whose issuer its ticker's fails rows decided (stage 2b) keeps it: its observed name was refuted
     sightings = [IssuerSighting(r.sec_id, o.as_of, "" if e.key in rows_decided else o.name or "",
                                 str(cik_of(issuers, e.key) or ""))
                  for e in eras if (r := resolutions.get(e.key)) is not None and r.sec_id
-                 for o in e.observations if (o.ticker, o.as_of) not in conflicts]
+                 for o in e.caller_observations if (o.ticker, o.as_of) not in conflicts]
     mark = ctx.meter.start()
     out: dict[str, int] = {}
     by_sec: dict[str, list[IssuerSighting]] = defaultdict(list)

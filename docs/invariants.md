@@ -438,7 +438,7 @@
   observation still gets its `sec_id` here, but adds no range to
   `ticker_history` (`history.filtered_ticker_sightings`) — index membership
   comes from this table, a ticker look-up by date from contract/security_history.csv keyed
-  on `history_ticker`, not the raw observed ticker.
+  on `history_ticker`, not the raw observed ticker. A derived era's observation is no row of it.
 
 ## Tests are fully offline
 

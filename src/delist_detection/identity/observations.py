@@ -44,6 +44,7 @@ class Observation:
     cusip: str | None = None
     cik: int | None = None
     sec_id: str | None = None
+    derived: bool = False     # made by the library from the fails rows (`identity.refine_eras`), not observed by the caller
 
 
 class ObservationError(ValueError):
@@ -120,6 +121,17 @@ class TickerEra:
     # eras starting the same day (one ticker seen under two names on one date),
     # so `key` stays unique while every other key stays "TICKER@DATE".
     seq: int = 0
+
+    @property
+    def caller_observations(self) -> list[Observation]:
+        """The observations the caller made: those not derived."""
+        return [o for o in self.observations if not o.derived]
+
+    @property
+    def derived(self) -> bool:
+        """Whether the library made the era from the fails rows (a line after a CUSIP change no caller observation
+        names): it has observations and every one is derived."""
+        return bool(self.observations) and not self.caller_observations
 
     @property
     def names(self) -> list[str]:

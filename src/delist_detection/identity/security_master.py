@@ -961,11 +961,12 @@ def build_securities(resolutions: Mapping[str, EraResolution], eras: Mapping[str
         if sec is None:
             name = era.name or (cand.name if cand else "")
             stype = cand.security_type if cand else ""
-            sec = Security(res.sec_id, cik_of(issuers, key), _share_class(res, era), name, stype, True,
+            sec = Security(res.sec_id, cik_of(issuers, key), _share_class(res, era), name, stype, not era.derived,
                            res.source, security_kind(stype, name))
             out[res.sec_id] = sec
         elif SOURCE_STRENGTH.index(res.source) < SOURCE_STRENGTH.index(sec.figi_source):
             sec.figi_source, sec.share_class = res.source, _share_class(res, era)
+        sec.observed = sec.observed or not era.derived      # observed when any of its eras is the caller's
         classes[res.sec_id].append(_share_class(res, era))
         sec.eras.append(era)
         if key in issuers:
@@ -1045,9 +1046,9 @@ def observation_conflict_review(eras: list[TickerEra], resolutions: dict) -> lis
     its era and the security that era resolved to. The date is in the flag so
     each (ticker, date) keeps its own row under review.csv's key."""
     out: list[ReviewItem] = []
-    for ticker, day, names in observation_conflicts(o for e in eras for o in e.observations):
+    for ticker, day, names in observation_conflicts(o for e in eras for o in e.caller_observations):
         seen = [f"{o.name} ({e.key} -> {resolutions[e.key].sec_id or 'unresolved'})"
-                for e in eras if e.ticker == ticker for o in e.observations if o.as_of == day and o.name]
+                for e in eras if e.ticker == ticker for o in e.caller_observations if o.as_of == day and o.name]
         out.append(ReviewItem("", ticker, None, f"observation_conflict:{day}",
                               f"{ticker} seen on {day} under {len(names)} names: " + "; ".join(dict.fromkeys(seen)),
                               last_seen=day))

@@ -697,3 +697,15 @@ def test_a_cusip_whose_description_names_another_company_is_not_this_ones_tradin
 def test_an_unheld_cusip_that_stopped_before_the_edge_does_not_keep_it_open():
     history = _holdco_history(["2026-07-06", "2026-07-20"])
     assert history.end("BBGXOM").listed is False
+
+
+def test_a_derived_observation_is_no_sighting_and_no_row_of_the_observation_map():
+    from delist_detection.identity.security_master import Security
+    caller = TickerEra("X", "2020-09-01", "2020-09-01", [Observation("X", "2020-09-01", "X CO")])
+    derived = TickerEra("X", "2020-09-02", "2020-09-02",
+                        [Observation("X", "2020-09-02", "X CO NEW", "123456789", derived=True)])
+    sec = Security("BBGX", 1, "COMMON", "X", "Common Stock", True, "cusip", eras=[caller, derived])
+    assert ticker_sightings(sec, FtdIndex(), []) == [Sighting("2020-09-01", "X", "observation")]
+    assert cusip_sightings(sec, FtdIndex(), []) == []
+    history = _plain_history({"BBGX": [Sighting("2020-09-01", "X", "ftd")]})
+    assert observation_map_rows([derived], {derived.key: "BBGX"}, {derived.key: 1}, history, []) == []

@@ -551,6 +551,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   caller's ticker. It no longer spells tickers itself, and imports nothing of FIGI's rules (step 13 removed the
   cycle). The second split, on the fails rows, is `identity.refine_eras`; `identity.identify` is the one
   place both run.
+  `Observation.derived` marks an observation the library made from the fails rows, not the caller; `TickerEra.derived`
+  (every observation derived) and `TickerEra.caller_observations` (those not derived) are what a reader of the
+  caller's observations uses.
 - `identity/figi_resolution.py` — pure rules turning an OpenFIGI answer into one US
   composite FIGI: `us_candidates()` groups rows by composite and keeps only US
   venues; `accept()` never trusts Bloomberg's current name alone (a dead line
@@ -670,7 +673,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
 - `identity/security_master.py` — `FigiResolver.resolve_many()` (a `sec_id` pin wins;
   else CUSIP jobs, then the ticker, then a name filter — see the spec's
   Implementation notes), `build_securities()` (merges eras sharing a
-  `sec_id`); `identity.identify` is the one stage that calls them. `Issuer` (a CIK and its EDGAR names;
+  `sec_id`; `Security.observed` is True when any of its eras is not derived, and `observation_conflict_review`
+  reads the caller's observations only); `identity.identify` is the one stage that calls them. `Issuer` (a CIK and its EDGAR names;
   `issuers_by_era` builds the era key -> `Issuer` map that `identity.candidate_cusips`,
   `resolve_many` and `build_securities` take, the one source of an era's CIK,
   read with `cik_of`) is its type. The identity guard: an era the fails
@@ -718,6 +722,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   trading row: Liberty's `CIK1355096-COMMON-53071M104` for LINTA/QVCA and `-53071M302` for LCAPA); one line keeps
   the unsuffixed id. `Identity.renames` leaves out a placeholder whose lines are suffixed (that is a split).
 - `identity/history.py` — a security's dated history: its sightings
+  (`ticker_sightings`, `cusip_sightings` and `observation_map_rows` read an era's `caller_observations`: a derived
+  observation is no sighting and no row of `observation_map.csv`)
   (`ticker_sightings`/`cusip_sightings`, and `span_sightings` for a successor the run added, stage 9d: its span's
   days, source `SPAN`, and its CUSIPs' fails rows; a fails row is a ticker
   sighting only when its symbol has a letter, because SEC's Aug–Dec 2007 files mask some symbols as "**********"),

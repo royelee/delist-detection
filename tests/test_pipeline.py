@@ -284,7 +284,7 @@ class _RecordingFtdClient(_WindowedFtdClient):
         yield from super().rows(url, symbols=symbols, cusips=cusips)
 
 
-def _stage_5b(rows, specs, endings, sec_cusips=None, loaded=()):
+def _stage_5b(rows, specs, endings, sec_cusips=None, loaded=(), derived=False):
     """Run stage 5b directly. specs: sid -> (ticker, first observation day);
     endings: (sid, last trade day, successor sid or None); loaded: rows already in the index."""
     from types import SimpleNamespace
@@ -293,8 +293,8 @@ def _stage_5b(rows, specs, endings, sec_cusips=None, loaded=()):
     from delist_detection.identity.observations import TickerEra
     securities = {}
     for sid, (ticker, first) in specs.items():
-        era = TickerEra(ticker, first, first, [Observation(ticker, first, "AETNA INC")])
-        securities[sid] = Security(sid, 1, "", "AETNA INC", "Common Stock", True, "ticker", eras=[era])
+        era = TickerEra(ticker, first, first, [Observation(ticker, first, "AETNA INC", derived=derived)])
+        securities[sid] = Security(sid, 1, "", "AETNA INC", "Common Stock", not derived, "ticker", eras=[era])
     delistings = [SimpleNamespace(sec_id=sid, delist_date=day, last_trade=SimpleNamespace(day=date.fromisoformat(day)),
                                   anchor=date.fromisoformat(day), record=SimpleNamespace(successor_sec_id=succ))
                   for sid, day, succ in endings]
@@ -3215,3 +3215,24 @@ def test_a_failed_read_under_the_successor_terms_reading_is_reported():
     assert [(r.sec_id, r.flag, r.delist_date, r.reason) for r in found.review] == [
         ("BBGOLD0001", "resolution_degraded", "2020-06-10",
          "the successor terms reading rested on a failed EDGAR request or a stale copy")]
+
+
+def test_stage_5b_does_not_back_fill_a_derived_line():
+    """A derived line's one observation is dated at its first fails row: no caller sighting, so no 'died before it was
+    seen' to repair."""
+    loaded = [FtdRow("2018-11-27", "00817Y108", "AET", "AETNA INC COM", 181.0),
+              FtdRow("2018-12-05", "00817Y108", "AET", "AETNA INC COM", 212.0),
+              FtdRow("2018-12-12", "00817Y108", "AET", "AETNA INC COM", 212.0)]
+    kw = dict(sec_cusips={"S1": ["00817Y108"]}, loaded=loaded)
+    fixed, *_ = _stage_5b(_aet_rows(), {"S1": ("AET", "2019-06-28")}, [("S1", "2018-11-28", None)], **kw)
+    assert fixed == ["S1"]
+    fixed, *_ = _stage_5b(_aet_rows(), {"S1": ("AET", "2019-06-28")}, [("S1", "2018-11-28", None)], derived=True, **kw)
+    assert fixed == []
+
+
+def test_the_other_issuer_in_force_reads_no_derived_observation():
+    obs = [Observation("SPB", d, "SPECTRUM BRANDS HOLDINGS INC", derived=True)
+           for d in ("2010-06-30", "2014-06-30", "2018-06-29")]
+    s, era, resolutions, issuers = _security_with_era("BBG000P4BQM9", 109177, "SPB", obs)
+    ctx = _in_force_run({109177: HRG, 1487730: OLD_SPB}, {"SPECTRUM BRANDS HOLDINGS INC": [109177, 1487730]})
+    assert pipeline._other_issuers(ctx, [era], resolutions, issuers, {s.sec_id: s}) == {}

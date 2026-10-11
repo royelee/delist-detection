@@ -114,7 +114,7 @@ def ranges_from_sightings(sightings: Iterable[Sighting], *, end: str | None,
 
 def ticker_sightings(sec: Security, ftd: FtdIndex, cusips: Sequence[str]) -> list[Sighting]:
     """Dated `(day, ticker, source)` sightings of the security: its observations
-    (under their era's ticker: a when-issued observation, EHAB-WI, is a sighting
+    (the caller's: a derived era has none; under their era's ticker: a when-issued observation, EHAB-WI, is a sighting
     of its regular-way ticker, EHAB) and the FTD rows of its CUSIPs. A ticker spelled with or without separators
     ("BF-B" / "BFB": snapshots write both, FTD keys rows by the separator form)
     is written one way per security: a spelling it was observed under, the one
@@ -123,7 +123,7 @@ def ticker_sightings(sec: Security, ftd: FtdIndex, cusips: Sequence[str]) -> lis
     symbol ("ORLYXXXX") is a fail still settling after the delisting, not a
     sighting of trading: it opens and extends no range, and counts in no
     `seen_after`, `last_seen` or sibling span (`trading_record.TradingRecord`)."""
-    return _sightings([Sighting(o.as_of, e.ticker, OBSERVATION) for e in sec.eras for o in e.observations],
+    return _sightings([Sighting(o.as_of, e.ticker, OBSERVATION) for e in sec.eras for o in e.caller_observations],
                       {e.ticker for e in sec.eras}, ftd, cusips)
 
 
@@ -164,7 +164,7 @@ def cusip_sightings(sec: Security, ftd: FtdIndex, cusips: Sequence[str],
 
     out = [Sighting(r.date, r.cusip, "ftd") for r in rows
            if r.date < successor_starts.get(r.symbol, "~") and not _settling(r)]
-    out += [Sighting(o.as_of, o.cusip, "observation") for e in sec.eras for o in e.observations if o.cusip]
+    out += [Sighting(o.as_of, o.cusip, "observation") for e in sec.eras for o in e.caller_observations if o.cusip]
     return sorted(set(out))
 
 
@@ -662,7 +662,7 @@ def observation_map_rows(eras: Iterable[TickerEra], sec_id_of: Mapping[str, str 
         ranges = ranges_by_sec.get(sec_id, []) if sec_id is not None else []
         cusips = history._cusips.get(sec_id, []) if sec_id is not None else ()
         end = history.end(sec_id) if sec_id else SecurityEnd()
-        for o in era.observations:
+        for o in era.caller_observations:
             # Status and coverage are read under the era's ticker (a when-issued observation's regular-way one);
             # the row keeps the ticker the caller observed, its join key.
             status = _observation_status(o.as_of, era.ticker, sec_id, end, (o.ticker, o.as_of) in conflict_set,

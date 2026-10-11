@@ -182,3 +182,13 @@ def test_a_when_issued_ticker_joins_its_regular_way_era():
         "EHAB@2022-06-30", "EHAB", ["EHAB-WI", "EHAB"])
     assert index.name_on("EHAB-WI", "2022-07-01") == "ENHABIT INC WHEN ISSUED"
     assert index.era_for("EHAB", "2022-07-01") is era
+
+
+def test_an_era_of_derived_observations_is_derived_and_has_no_caller_observation():
+    d = TickerEra("X", "2020-09-01", "2020-09-01", [Observation("X", "2020-09-01", "X CO NEW", derived=True)])
+    c = TickerEra("X", "2020-01-15", "2020-06-30", [Observation("X", "2020-01-15", "X CO"),
+                                                    Observation("X", "2020-06-30", "X CO")])
+    assert (d.derived, c.derived) == (True, False)
+    assert d.caller_observations == [] and c.caller_observations == c.observations
+    assert d.name == "X CO NEW" and d.cusips == [] and d.cik_pin is None and d.sec_id_pin is None
+    assert TickerEra("X", "2020-01-01", "2020-01-01").derived is False          # no observation at all: not derived
