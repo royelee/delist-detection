@@ -503,3 +503,46 @@ def test_own_continuation_filing_keeps_to_the_search_window():
     assert own_continuation_filing([_sub("8-K12B", "2019-06-30")], date(2019, 8, 1)) is None    # 32 days before
     assert own_continuation_filing([_sub("8-K12B", "2019-10-01")], date(2019, 8, 1)) is None    # 61 days after
     assert own_continuation_filing([_sub("8-K", "2019-07-31")], date(2019, 8, 1)) is None
+
+
+def test_a_derived_line_after_wendys_international_is_a_timing_continuation_that_the_merger_row_survives():
+    """WEN 2008: Wendy's International's merger into Triarc. The derived line (CUSIP 950587105) has fails rows from
+    2008-09-29 only, so it is a new line right after the old one's last row, across two issuers and a CUSIP switch:
+    `decide_handoff` says continuation by timing, and the merger row stands against it (`handoff_conflict`)."""
+    old = _sig(("2008-03-24", "WEN"), ("2008-09-26", "WEN"))
+    new = _sig(("2008-09-29", "WEN"), ("2008-10-01", "WEN"), ("2011-07-08", "WEN"))
+    (p,) = find_handoffs({"OLD": old, "NEW": new})
+    assert (p.ticker, p.a_last, p.b_first, p.b_first_any) == ("WEN", "2008-09-26", "2008-09-29", "2008-09-29")
+    d = decide_handoff(p, filing=None, same_issuer=False, cusip_switch=True, b_issuer_since="1993-01-04")
+    assert (d.kind, d.evidence) == ("continuation", "timing:cusip")
+    row = _delisting("OLD", "2008-09-29", CrspBucket.MERGER, "2008-09-26", ticker="WEN", cik=105668)
+    out = apply_handoffs([d], [row], {"OLD": _sec("OLD", 105668), "NEW": _sec("NEW", 30697)}, [])
+    assert row.record.bucket is CrspBucket.MERGER and row.record.successor_sec_id is None
+    assert [i.flag for i in out.review] == ["handoff_conflict"]
+
+
+def test_a_derived_line_whose_issuer_traded_before_under_another_ticker_takes_the_ticker_over():
+    """The same pair when the new line's CUSIPs include Triarc's, which traded as TRY until 2008-09-26: B existed."""
+    old = _sig(("2008-03-24", "WEN"), ("2008-09-26", "WEN"))
+    new = _sig(("2007-12-31", "TRY"), ("2008-09-26", "TRY"), ("2008-09-29", "WEN"), ("2011-07-08", "WEN"))
+    (p,) = find_handoffs({"OLD": old, "NEW": new})
+    assert (p.b_first, p.b_first_any) == ("2008-09-29", "2007-12-31")
+    d = decide_handoff(p, filing=None, same_issuer=False, cusip_switch=True, b_issuer_since="1993-01-04")
+    assert (d.kind, d.evidence) == ("takeover", "timing")
+    row = _delisting("OLD", "2008-09-29", CrspBucket.MERGER, "2008-09-26", ticker="WEN", cik=105668)
+    apply_handoffs([d], [row], {"OLD": _sec("OLD", 105668), "NEW": _sec("NEW", 30697)}, [])
+    assert row.record.bucket is CrspBucket.MERGER and row.record.ticker_successor_sec_id == "NEW"
+
+
+def test_a_derived_line_twenty_days_after_the_old_one_of_an_older_issuer_is_a_takeover():
+    """TCF 2019: Chemical Financial (an issuer filing since 1991) took the ticker TCF twenty days after TCF Financial's
+    last fails row: no continuation by timing (past `CONTINUATION_DAYS`), a takeover by the older issuer."""
+    old = _sig(("2017-05-10", "TCF"), ("2019-07-12", "TCF"))
+    new = _sig(("2019-08-01", "TCF"), ("2021-06-11", "TCF"))
+    (p,) = find_handoffs({"OLD": old, "NEW": new})
+    assert (p.a_last, p.b_first, p.gap) == ("2019-07-12", "2019-08-01", 20)
+    d = decide_handoff(p, filing=None, same_issuer=False, cusip_switch=True, b_issuer_since="1991-01-01")
+    assert (d.kind, d.evidence) == ("takeover", "timing:issuer")
+    row = _delisting("OLD", "2019-08-01", CrspBucket.MERGER, "2019-07-31", ticker="TCF", cik=814184)
+    apply_handoffs([d], [row], {"OLD": _sec("OLD", 814184), "NEW": _sec("NEW", 19612)}, [])
+    assert row.record.bucket is CrspBucket.MERGER and row.record.ticker_successor_sec_id == "NEW"
