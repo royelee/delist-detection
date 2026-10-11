@@ -388,7 +388,8 @@
   J: the new CUSIP's first fails price within `CARRIED_PRICE`, 2/3 to 3/2, of the old CUSIP's last, or either missing;
   a continuation is "same holders, same claim, one for one": Uniti 2025 is 1.65, a merger at 0.6029 share per share);
   otherwise the era is not made and the step stays refused. An era from a `merged_out` step never takes the old
-  line's issuer under a composite of its own (rule X: stage 4b found that issuer files no periodic report after the
+  line's issuer under a composite of its own, the origin's and the era's both FIGIs (a placeholder id is no second
+  composite; the fold decides, Thornburg Mortgage 2008) (rule X: stage 4b found that issuer files no periodic report after the
   step): it is asked again with that issuer excluded from every resolver tier, and what that answers stands, another
   issuer or none. A `other_registrant` or `name` step keeps the origin's issuer (CHTR 2016). The verdicts
   (`not_made`, `without_old_issuer`) go from round to round (`Identity.verdicts`); the lookup that excludes a CIK has a

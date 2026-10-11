@@ -256,6 +256,12 @@ def _excluded_issuers(eras: Sequence[TickerEra], derive: Mapping[tuple[str, str]
 GIVEN_ANSWERS = ("manual", "cik_map")
 
 
+def _two_composites(origin_id: str, era_id: str | None) -> bool:
+    """Whether the origin's security and the era's are two different composites (FIGI ids, neither a placeholder)."""
+    return (era_id is not None and not is_placeholder(origin_id) and not is_placeholder(era_id)
+            and era_id != origin_id)
+
+
 def _check_derived(eras: Sequence[TickerEra], derive: Mapping[tuple[str, str], DerivedFrom],
                    verdicts: Mapping[tuple[str, str], str], ftd: FtdIndex, resolutions: Mapping[str, EraResolution],
                    found: "_Issuers") -> dict[tuple[str, str], tuple[str, str]]:
@@ -266,7 +272,9 @@ def _check_derived(eras: Sequence[TickerEra], derive: Mapping[tuple[str, str], D
     `price_carried`; the issuers play no part): else `NOT_MADE`.
 
     Rule X: an era from a `merged_out` step whose issuer answer is the origin's issuer (`derived_from.issuer_cik`,
-    not None) while its security is another one, and which has no pin and no given answer (`GIVEN_ANSWERS`), is
+    not None) while its security is another composite than the origin's (both ids FIGIs: a placeholder is no second
+    composite, it only means the old line never got one, and the fold decides whether they are one line: Thornburg
+    Mortgage 2008), and which has no pin and no given answer (`GIVEN_ANSWERS`), is
     `WITHOUT_OLD_ISSUER`: by stage 4b's own finding the old issuer files no periodic report after a `merged_out` step,
     so it cannot be the issuer of the line after it (Coca-Cola Enterprises 2016)."""
     out: dict[tuple[str, str], tuple[str, str]] = {}
@@ -279,6 +287,7 @@ def _check_derived(eras: Sequence[TickerEra], derive: Mapping[tuple[str, str], D
             if not price_carried(step_price_ratio(ftd, e.ticker, origin.old_cusip, pair[1])):
                 out[pair] = (NOT_MADE, e.key)
         elif (origin.why == "merged_out" and origin.issuer_cik is not None
+              and _two_composites(origin.sec_id, resolutions[e.key].sec_id)
               and cik_of(found.issuers, e.key) == origin.issuer_cik
               and e.cik_pin is None and not e.sec_id_pin and found.answers[e.key].source not in GIVEN_ANSWERS):
             out[pair] = (WITHOUT_OLD_ISSUER, e.key)

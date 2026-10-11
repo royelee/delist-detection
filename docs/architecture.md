@@ -642,7 +642,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   security is the one its step was refused from is made only when the price carried over across the step
   (`carried_price.step_price_ratio` within `CARRIED_PRICE`, or either price missing); else the verdict is `not_made` and
   the step stays refused (Uniti 2025: 4.91 to 8.09; IR 2020, ENR 2015, CFFN 2010, WE 2023). Rule X: an era from a
-  `merged_out` step whose issuer answer is the origin's issuer while its security is another one, with no pin and no
+  `merged_out` step whose issuer answer is the origin's issuer while its security is another composite (both ids
+  FIGIs; a placeholder is no second composite: Thornburg Mortgage 2008), with no pin and no
   given answer (`manual`, `cik_map`), is asked again with the origin's issuer excluded from every resolver tier (and
   from an answer 2b or the second pass gives): verdict `without_old_issuer` (Coca-Cola Enterprises 2016, Aaron's 2020,
   IGT 2015); what that lookup answers stands, another issuer or none. A new verdict sends stages 1 to 3 around again

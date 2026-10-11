@@ -350,3 +350,22 @@ def test_an_origin_with_no_issuer_gives_no_rule_x_verdict():
     found = SimpleNamespace(issuers={}, answers={era.key: SimpleNamespace(source="efts")})
     assert _check_derived([era], {PAIR: origin}, {}, None, {era.key: SimpleNamespace(sec_id="BBGY")}, found) == {}
     # cik_of(issuers, key) is None for an era with no issuer answer: without the guard None == None gives a verdict
+
+
+def test_an_origin_that_is_a_placeholder_gives_no_rule_x_verdict_and_the_era_keeps_the_issuer():
+    """Thornburg Mortgage 2008: the old line never got a composite (`CIK101-COMMON`), the derived era's CUSIP has one.
+    That is no second composite under one issuer: the fold decides whether they are one line, so the era keeps its
+    issuer."""
+    origin = DerivedFrom("CIK101-COMMON", 101, "merged_out", "22222B202", "2021-03-01")
+    got, lookup = _run(_fails(10.0, 10.0), {PAIR: origin}, answers=OLD_ISSUER, excluded=SECOND, ccc=OWN_COMPOSITE)
+    assert got.verdicts == {} and got.issuers[DERIVED_KEY].cik == 101 and got.resolutions[DERIVED_KEY].sec_id == "BBGY"
+    assert all(not ex for _, ex in lookup.calls)
+
+
+def test_an_era_whose_own_id_is_a_placeholder_of_the_origins_issuer_gives_no_rule_x_verdict():
+    era = TickerEra("X", "2021-03-01", "2021-03-01", [Observation("X", "2021-03-01", "X CO NEW", derived=True)],
+                    ftd_cusips=("33333C303",), derived_from=ORIGIN)
+    found = SimpleNamespace(issuers={era.key: SimpleNamespace(cik=101)}, answers={era.key: SimpleNamespace(source="efts")})
+    check = lambda sec_id: _check_derived([era], {PAIR: ORIGIN}, {}, None, {era.key: SimpleNamespace(sec_id=sec_id)}, found)
+    assert check("CIK101-COMMON") == {}
+    assert check("BBGY") == {PAIR: ("without_old_issuer", era.key)}          # two composites: the verdict
