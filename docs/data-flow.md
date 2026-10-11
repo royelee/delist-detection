@@ -141,7 +141,8 @@ OpenFIGI responses are cached under `cache/openfigi/`, paced on the
 `cache/sec_data/ftd/` and `cache/sec_data/midas/` (MIDAS summarizes each
 quarterly ZIP once into a small JSON and deletes the ZIP). Each fails ZIP is
 parsed once into `cache/sec_data/ftd/parsed/<zip>.sqlite` (about 1.9 GB in
-all), rebuilt when the ZIP or the line rule changes. The Nasdaq halt feed
+all), rebuilt when the ZIP or the line rule changes. The fails folder must be writable, because the parsed copy is
+built on first read, so a read-only cache stops a run at its first fails read. The Nasdaq halt feed
 caches one file per day under `cache/nasdaq_halts/`. Each EDGAR payload records
 the day it was fetched (`__fetched__`; an older file is dated by its mtime). The
 resolver's checks and the classifier read a company's submissions fresh as of

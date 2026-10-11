@@ -19,7 +19,6 @@ the class ticker (sub-plan 5h).
 from __future__ import annotations
 
 import calendar
-import logging
 import re
 import threading
 import zipfile
@@ -38,8 +37,6 @@ from ..vocabulary.identifiers import bare_ticker, class_suffix, description_clas
 from ..vocabulary.names import names_agree
 from .sec_http import download, get_text
 from ..vocabulary.trading_calendar import add_trading_days, next_trading_day, previous_trading_day
-
-_log = logging.getLogger(__name__)
 
 FTD_INDEX_URL = "https://www.sec.gov/data-research/sec-markets-data/fails-deliver-data"
 _SEC = "https://www.sec.gov"
