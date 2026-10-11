@@ -6,9 +6,9 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from delist_detection.edgar import EdgarSubmission
-from delist_detection.llm_merger_extractor import MergerTerms
-from delist_detection.ticker_resolver import TickerResolver
+from delist_detection.sources.edgar import EdgarSubmission
+from delist_detection.terms.llm_merger_extractor import MergerTerms
+from delist_detection.identity.ticker_resolver import TickerResolver
 
 ROOT = Path(__file__).resolve().parents[1]
 FIX = ROOT / "tests" / "fixtures" / "golden"
@@ -59,6 +59,9 @@ def load_cases() -> list[GoldenCase]:
 
 
 class GoldenEdgar:
+    # the golden fixtures hold the resolver's EFTS answers (`patch_efts`), not the client's full-text searches
+    full_text_search = None      # the fixture recorded no full-text searches (`capabilities.FULL_TEXT_SEARCH`)
+
     def __init__(self, case: GoldenCase) -> None:
         self.case = case
         self.data = case.data

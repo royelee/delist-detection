@@ -8,10 +8,10 @@ from pathlib import Path
 
 import pytest
 
-from delist_detection.classifier import DelistRecord
-from delist_detection.crsp_codes import CrspBucket
-from delist_detection.edgar import EdgarSubmission
-from delist_detection.llm_merger_extractor import (
+from delist_detection.outputs.reconstruction import DelistRecord
+from delist_detection.vocabulary.crsp_codes import CrspBucket
+from delist_detection.sources.edgar import EdgarSubmission
+from delist_detection.terms.llm_merger_extractor import (
     LLMMergerTermsExtractor,
     MergerTerms,
     PROMPT_VERSION,
@@ -26,8 +26,11 @@ class _FakeLlm:
     """Returns canned dicts from a queue and records calls.
 
     ``responses`` is consumed in order; once exhausted the last entry repeats.
-    Set ``raises=True`` to make every ``extract`` call raise.
+    Set ``raises=True`` to make every ``extract`` call raise. It names no
+    model (``model``).
     """
+
+    model = None
 
     def __init__(self, responses, *, raises=False):
         self._responses = list(responses)
@@ -110,39 +113,6 @@ def test_cash_and_stock(tmp_path):
     assert terms.acquirer_ticker == "CVS"
     assert terms.confidence == "high"
     assert terms.source == "8-K:C1"
-    assert terms.to_merger_terms_dict() == {
-        "cash_per_share": 145.0, "stock_ratio": 0.8378, "acquirer_ticker": "CVS",
-    }
-
-
-def test_stock_only_omits_cash(tmp_path):
-    resp = {
-        "deal_type": "stock", "cash_per_share": None, "stock_ratio": 1.05,
-        "acquirer_name": "Buyer Inc", "acquirer_ticker": "BUY",
-        "confidence": "high", "quote": "1.05 shares",
-    }
-    edgar = _FakeEdgarText([_closing_8k()], {"C1": _USABLE_TEXT})
-    ext = LLMMergerTermsExtractor(edgar, _FakeLlm([resp]), cache_dir=tmp_path)
-    terms = ext.extract(_merger_rec())
-    assert terms.cash_per_share is None
-    assert terms.to_merger_terms_dict() == {
-        "stock_ratio": 1.05, "acquirer_ticker": "BUY",
-    }
-    assert "cash_per_share" not in terms.to_merger_terms_dict()
-
-
-def test_cash_only_omits_stock_and_ticker(tmp_path):
-    resp = {
-        "deal_type": "cash", "cash_per_share": 113.0, "stock_ratio": None,
-        "acquirer_name": "Buyer Inc", "acquirer_ticker": None,
-        "confidence": "high", "quote": "$113.00 in cash",
-    }
-    edgar = _FakeEdgarText([_closing_8k()], {"C1": _USABLE_TEXT})
-    ext = LLMMergerTermsExtractor(edgar, _FakeLlm([resp]), cache_dir=tmp_path)
-    terms = ext.extract(_merger_rec())
-    assert terms.to_merger_terms_dict() == {"cash_per_share": 113.0}
-    assert "stock_ratio" not in terms.to_merger_terms_dict()
-    assert "acquirer_ticker" not in terms.to_merger_terms_dict()
 
 
 def test_no_consideration_returns_none(tmp_path):
@@ -208,6 +178,29 @@ def test_cache_hit_second_call_served_from_disk(tmp_path):
     assert any(PROMPT_VERSION in p.name for p in cache_files)  # prompt version tags the cache key
 
 
+def test_usage_counts_the_runs_answers_by_where_they_came_from(tmp_path):
+    """run_manifest.json's `merger_terms` (FB-004's model provenance): the sequential pass's answers, each from the
+    cache as the run found it, asked of the model this run (a warm thread's fill included), or failed."""
+    from delist_detection.sources.sec_stats import fill_only
+    resp = {"deal_type": "cash", "cash_per_share": 113.0, "stock_ratio": None, "acquirer_name": None,
+            "acquirer_ticker": None, "confidence": "high", "quote": "$113.00 in cash"}
+    edgar = _FakeEdgarText([_closing_8k()], {"C1": _USABLE_TEXT})
+    LLMMergerTermsExtractor(edgar, _FakeLlm([resp]), model="m1", cache_dir=tmp_path).extract(_merger_rec())
+    cached = LLMMergerTermsExtractor(edgar, _FakeLlm([]), model="m1", cache_dir=tmp_path)   # a later run
+    cached.extract(_merger_rec())
+    assert cached.usage() == {"model": "m1", "answers": 1, "from_cache": 1, "asked": 0, "failed": 0}
+
+    warm = LLMMergerTermsExtractor(edgar, _FakeLlm([resp]), model="m2", cache_dir=tmp_path)
+    with fill_only():
+        warm.extract(_merger_rec())             # the warm pass asks; it is not the run's answer
+    warm.extract(_merger_rec())                 # the sequential pass reads what the warm pass cached
+    assert warm.usage() == {"model": "m2", "answers": 1, "from_cache": 0, "asked": 1, "failed": 0}
+
+    failing = LLMMergerTermsExtractor(edgar, _FakeLlm([], raises=True), model="m3", cache_dir=tmp_path)
+    failing.extract(_merger_rec())
+    assert failing.usage() == {"model": "m3", "answers": 0, "from_cache": 0, "asked": 0, "failed": 1}
+
+
 def test_cache_is_labelled_with_the_clients_own_model(tmp_path, monkeypatch):
     """The cache label is the model the injected client calls, ahead of
     $CHAT_MODEL: an answer cached for another model is not reused."""
@@ -215,7 +208,7 @@ def test_cache_is_labelled_with_the_clients_own_model(tmp_path, monkeypatch):
     resp = {"deal_type": "cash", "cash_per_share": 113.0, "stock_ratio": None, "acquirer_name": None,
             "acquirer_ticker": None, "confidence": "high", "quote": "$113.00 in cash"}
     edgar = _FakeEdgarText([_closing_8k()], {"C1": _USABLE_TEXT})
-    other = _FakeLlm([dict(resp, cash_per_share=1.0)])           # no model of its own: labelled $CHAT_MODEL
+    other = _FakeLlm([dict(resp, cash_per_share=1.0)])           # states no model (None): labelled $CHAT_MODEL
     LLMMergerTermsExtractor(edgar, other, cache_dir=tmp_path).extract(_merger_rec())
     llm = _FakeLlm([resp])
     llm.model = "m2"
@@ -223,7 +216,19 @@ def test_cache_is_labelled_with_the_clients_own_model(tmp_path, monkeypatch):
     assert llm.calls == 1
     assert terms.cash_per_share == 113.0
     assert sorted(p.name for p in tmp_path.glob("*.json")) == [
-        f"C1_m1_{PROMPT_VERSION}.json", f"C1_m2_{PROMPT_VERSION}.json"]
+        f"C1_m1_{PROMPT_VERSION}_AET.json", f"C1_m2_{PROMPT_VERSION}_AET.json"]
+
+
+def test_an_llm_client_that_states_no_model_at_all_is_refused(tmp_path):
+    """`llm_client`'s interface: a client states the model it calls, or None; one that states nothing is never
+    labelled by a default."""
+    class Silent:
+        def extract(self, system, user, schema):
+            return {}
+
+    with pytest.raises(AttributeError):
+        LLMMergerTermsExtractor(_FakeEdgarText([], {}), Silent(), cache_dir=tmp_path)
+    assert LLMMergerTermsExtractor(_FakeEdgarText([], {}), Silent(), model="m", cache_dir=tmp_path).model == "m"
 
 
 def test_an_answer_cut_off_mid_write_leaves_no_cache_file(tmp_path, writes_fail_midway):
@@ -326,7 +331,6 @@ def test_empty_text_skipped_does_not_count(tmp_path):
     assert llm.calls == 1
 
 
-from delist_detection.llm_merger_extractor import LLMMergerTermsExtractor as _Ext
 
 
 def test_relevant_excerpts_windows_keywords(tmp_path):
@@ -372,3 +376,81 @@ def test_network_error_returns_none(tmp_path):
 
     ext = LLMMergerTermsExtractor(_RaisingEdgar(), _FakeLlm([]), cache_dir=tmp_path)
     assert ext.extract(_merger_rec()) is None
+
+
+def test_threads_asking_for_one_answer_file_pay_for_one_call(tmp_path):
+    """Two mergers can ask for one file (the same filing and target ticker) and the warm threads run them at once:
+    the second waits for the first's call and reads its answer, so the model is called once."""
+    import threading
+    import time
+    resp = {"deal_type": "cash", "cash_per_share": 10.0, "stock_ratio": None, "acquirer_name": "X",
+            "acquirer_ticker": None, "confidence": "high", "quote": "$10.00 in cash", "package_basis": "fixed"}
+
+    class _Slow(_FakeLlm):
+        def extract(self, system, user, schema):
+            time.sleep(0.2)                   # long enough for every thread to be waiting for the answer
+            return super().extract(system, user, schema)
+
+    llm = _Slow([resp])
+    edgar = _FakeEdgarText([_closing_8k()], {"C1": _USABLE_TEXT})
+    ext = LLMMergerTermsExtractor(edgar, llm, cache_dir=tmp_path)
+    got: list = []
+    threads = [threading.Thread(target=lambda: got.append(ext.extract(_merger_rec()))) for _ in range(6)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert llm.calls == 1 and len(got) == 6 and all(t == got[0] and t.cash_per_share == 10.0 for t in got)
+
+
+def _concurrent_extract(ext, n, *, warm):
+    import threading
+
+    from delist_detection.sources.sec_stats import fill_only
+
+    def ask():
+        if warm:
+            with fill_only():
+                ext.extract(_merger_rec())
+        else:
+            ext.extract(_merger_rec())
+
+    threads = [threading.Thread(target=ask) for _ in range(n)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+
+def _slow_ext(tmp_path):
+    import time
+    resp = {"deal_type": "cash", "cash_per_share": 10.0, "stock_ratio": None, "acquirer_name": "X",
+            "acquirer_ticker": None, "confidence": "high", "quote": "$10.00 in cash", "package_basis": "fixed"}
+
+    class _Slow(_FakeLlm):
+        def extract(self, system, user, schema):
+            time.sleep(0.2)
+            return super().extract(system, user, schema)
+
+    llm = _Slow([resp])
+    return LLMMergerTermsExtractor(_FakeEdgarText([_closing_8k()], {"C1": _USABLE_TEXT}), llm, cache_dir=tmp_path), llm
+
+
+def test_threads_that_waited_for_one_answer_count_it_as_any_cache_read_is_counted(tmp_path):
+    """Six sequential-pass threads ask for one file: one asked the model (`asked`), the five that waited read its
+    answer (`asked` too, since this run asked for it): the count is that of six cache reads after one call."""
+    ext, llm = _slow_ext(tmp_path)
+    _concurrent_extract(ext, 6, warm=False)
+    u = ext.usage()
+    assert llm.calls == 1 and (u["asked"], u["from_cache"], u["failed"], u["answers"]) == (6, 0, 0, 6)
+
+
+def test_a_warm_pass_counts_nothing_and_the_sequential_read_after_it_counts_asked(tmp_path):
+    """The warm threads' own reads are not counted, however many wait on the lock; the sequential pass then reads the
+    file the warm pass asked for and counts it once as `asked`."""
+    ext, llm = _slow_ext(tmp_path)
+    _concurrent_extract(ext, 6, warm=True)
+    assert llm.calls == 1 and ext.usage()["answers"] == 0 and ext.usage()["asked"] == 0
+    ext.extract(_merger_rec())
+    u = ext.usage()
+    assert (u["asked"], u["from_cache"], u["failed"]) == (1, 0, 0)

@@ -12,9 +12,9 @@ from datetime import date
 import pytest
 import requests
 
-from delist_detection import atomic_io, edgar, sec_limiter
-from delist_detection.edgar import EdgarClient
-from delist_detection.sec_stats import fill_only, filling_only
+from delist_detection.sources import atomic_io, edgar, sec_limiter
+from delist_detection.sources.edgar import EdgarClient
+from delist_detection.sources.sec_stats import fill_only, filling_only
 
 UA = "Test Co test@example.com"
 SUB_URL = "https://data.sec.gov/submissions/CIK0000000042.json"
@@ -152,11 +152,11 @@ def test_temp_files_left_by_a_killed_process_are_removed_at_start(tmp_path):
 
 
 def _cache_writers():
-    from delist_detection.ftd import FtdClient
-    from delist_detection.llm_merger_extractor import LLMMergerTermsExtractor
-    from delist_detection.midas import MidasClient
-    from delist_detection.nasdaq_halts import NasdaqHaltClient
-    from delist_detection.openfigi import OpenFigiClient
+    from delist_detection.sources.ftd import FtdClient
+    from delist_detection.terms.llm_merger_extractor import LLMMergerTermsExtractor
+    from delist_detection.sources.midas import MidasClient
+    from delist_detection.sources.nasdaq_halts import NasdaqHaltClient
+    from delist_detection.sources.openfigi import OpenFigiClient
     return {"ftd": FtdClient, "midas": MidasClient, "halts": NasdaqHaltClient, "openfigi": OpenFigiClient,
             "llm": lambda d: LLMMergerTermsExtractor(None, None, cache_dir=d)}
 

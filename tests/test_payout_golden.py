@@ -2,10 +2,10 @@ from pathlib import Path
 
 import pytest
 
-from delist_detection.classifier import DelistRecord
-from delist_detection.crsp_codes import CrspBucket
-from delist_detection.edgar import EdgarSubmission
-from delist_detection.payout_extractor import PayoutExtractor
+from delist_detection.outputs.reconstruction import DelistRecord
+from delist_detection.vocabulary.crsp_codes import CrspBucket
+from delist_detection.sources.edgar import EdgarSubmission
+from delist_detection.terms.payout_extractor import PayoutExtractor
 
 FIX = Path(__file__).parent / "fixtures"
 

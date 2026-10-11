@@ -2,12 +2,12 @@ import json
 
 import pytest
 
-from delist_detection.classifier import DelistRecord
-from delist_detection.crsp_codes import CrspBucket
-from delist_detection.edgar import EdgarBlocked, EdgarClient, EdgarSubmission
-from delist_detection.llm_merger_extractor import LLMMergerTermsExtractor
-from delist_detection.payout_extractor import PayoutExtractor
-from delist_detection.ticker_resolver import TickerResolver
+from delist_detection.outputs.reconstruction import DelistRecord
+from delist_detection.vocabulary.crsp_codes import CrspBucket
+from delist_detection.sources.edgar import EdgarBlocked, EdgarClient, EdgarSubmission
+from delist_detection.terms.llm_merger_extractor import LLMMergerTermsExtractor
+from delist_detection.terms.payout_extractor import PayoutExtractor
+from delist_detection.identity.ticker_resolver import TickerResolver
 
 
 class _Resp:
@@ -131,6 +131,8 @@ def test_payout_extractor_propagates_refusal():
 
 def test_llm_merger_extractor_propagates_refusal(tmp_path):
     class _BoomLlm:
+        model = None
+
         def extract(self, system, user, schema):
             raise AssertionError("LLM must not be called when EDGAR is blocked")
 

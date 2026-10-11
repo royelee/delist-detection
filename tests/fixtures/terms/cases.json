@@ -1,0 +1,1069 @@
+{
+ "cases": {
+  "BBG000BB2N27_2014-12-25": {
+   "acquirer_price": null,
+   "acquirer_sec_id": "BBG0076WG2V1",
+   "delist_date": "2014-12-25",
+   "filing": {
+    "accession": "0001193125-14-441344",
+    "form": "8-K"
+   },
+   "last_close": 85.92,
+   "last_trade_date": "2014-12-12",
+   "legacy": {
+    "acquirer_name": "Restaurant Brands International Inc.",
+    "acquirer_ticker": "QSR",
+    "cash_per_share": 65.5,
+    "confidence": "high",
+    "deal_type": "election",
+    "quote": "each holder of a Tim Hortons common share was entitled to receive C$65.50 in cash and 0.8025 newly issued Restaurant Brands International common shares",
+    "stock_ratio": 0.8025
+   },
+   "llm": {
+    "acquirer_name": "Restaurant Brands International Inc.",
+    "acquirer_share_class": null,
+    "acquirer_ticker": "QSR",
+    "cash_currency": "CAD",
+    "cash_per_share": 65.5,
+    "confidence": "high",
+    "contingent_note": "",
+    "deal_type": "election",
+    "election_note": "C$88.50 cash or 3.0879 Restaurant Brands International common shares, subject to proration; non-electing holders received mixed consideration",
+    "other_stock_legs": [],
+    "package_basis": "default",
+    "quote": "each holder of a Tim Hortons common share was entitled to receive C$65.50 in cash and 0.8025 newly issued Restaurant Brands International common shares",
+    "stock_ratio": 0.8025,
+    "stock_value_per_share": null
+   },
+   "name": "TIM HORTONS INC",
+   "note": "THI: C$65.50 + 0.8025 QSR, CAD; the gate skips the CAD leg (R5)",
+   "price_ticker": "QSR",
+   "published_last_trade_date": "2014-12-12",
+   "regex": null,
+   "sec_id": "BBG000BB2N27",
+   "ticker": "THI",
+   "truth": {
+    "cash_currency": "CAD",
+    "cash_per_share": "65.50",
+    "price_ticker": "QSR",
+    "stock_ratio": "0.8025",
+    "value_rule": "cash_plus_stock"
+   },
+   "truth_legs": []
+  },
+  "BBG000BB5HV5_2010-12-19": {
+   "acquirer_price": null,
+   "acquirer_sec_id": "",
+   "delist_date": "2010-12-19",
+   "filing": {
+    "accession": "0001299933-10-004380",
+    "form": "8-K"
+   },
+   "last_close": 12.76,
+   "last_trade_date": "2010-12-09",
+   "legacy": {
+    "acquirer_name": "Tyco Electronics Ltd.",
+    "acquirer_ticker": "TEL",
+    "cash_per_share": 12.75,
+    "confidence": "high",
+    "deal_type": "cash",
+    "quote": "to acquire all of the outstanding common shares of ADC at a purchase price of $12.75 per share in cash",
+    "stock_ratio": null
+   },
+   "llm": {
+    "acquirer_name": "Tyco Electronics Ltd.",
+    "acquirer_share_class": null,
+    "acquirer_ticker": "TEL",
+    "cash_currency": "USD",
+    "cash_per_share": 12.75,
+    "confidence": "high",
+    "contingent_note": "",
+    "deal_type": "cash",
+    "election_note": "",
+    "other_stock_legs": [],
+    "package_basis": "fixed",
+    "quote": "acquire all of the outstanding common shares of ADC at a purchase price of $12.75 per share in cash",
+    "stock_ratio": null,
+    "stock_value_per_share": null
+   },
+   "name": "ADC TELECOMMUNICATIONS",
+   "note": "ADCT: a regex cash read, USD (R5)",
+   "price_ticker": "",
+   "published_last_trade_date": "",
+   "regex": {
+    "confidence": "medium",
+    "currency": "USD",
+    "source": "8K_1.01",
+    "value": 12.75
+   },
+   "sec_id": "BBG000BB5HV5",
+   "ticker": "ADCT",
+   "truth": {
+    "cash_currency": "USD",
+    "cash_per_share": "12.75",
+    "price_ticker": "",
+    "stock_ratio": "",
+    "value_rule": "cash"
+   },
+   "truth_legs": []
+  },
+  "BBG000BF6F94_wave2-r1": {
+   "acquirer_price": 342.11,
+   "acquirer_sec_id": "BBG000BHLYP4",
+   "delist_date": "2008-09-05",
+   "filing": {
+    "accession": "0001193125-08-187293",
+    "form": "8-K"
+   },
+   "last_close": 80.14,
+   "last_trade_date": "2008-08-21",
+   "legacy": {
+    "acquirer_name": "CME Group Inc.",
+    "acquirer_ticker": "CME",
+    "cash_per_share": 81.16,
+    "confidence": "high",
+    "deal_type": "election",
+    "quote": "The cash consideration per share... is equal to $81.16... The stock consideration... is 0.2378 shares of CME Group Class A Common Stock",
+    "stock_ratio": 0.2378
+   },
+   "llm": {
+    "acquirer_name": "CME Group Inc.",
+    "acquirer_share_class": "A",
+    "acquirer_ticker": "CME",
+    "cash_currency": "USD",
+    "cash_per_share": 7.29,
+    "confidence": "high",
+    "contingent_note": "",
+    "deal_type": "election",
+    "election_note": "$81.16 cash or 0.2378 shares of CME Group Class A common stock, subject to proration",
+    "other_stock_legs": [],
+    "package_basis": "final_prorated",
+    "quote": "Because the mandatory cash component was undersubscribed, NYMEX Holdings stockholders who elected to receive stock consideration... will receive... approximately $7.29 in cash and 0.2164 shares",
+    "stock_ratio": 0.2164,
+    "stock_value_per_share": null
+   },
+   "name": "NYMEX HOLDINGS INC",
+   "note": "NMX 2008: no stated default, never the stock electors' result: the base's cash 81.16 (R4)",
+   "price_ticker": "CME",
+   "published_last_trade_date": "2008-08-21",
+   "regex": null,
+   "sec_id": "BBG000BF6F94",
+   "ticker": "NMX",
+   "truth": {
+    "cash_currency": "USD",
+    "cash_per_share": "81.160000",
+    "price_ticker": "",
+    "stock_ratio": "",
+    "value_rule": "cash"
+   },
+   "truth_legs": []
+  },
+  "BBG000BGFLL5_2013-11-23": {
+   "acquirer_price": 199.84,
+   "acquirer_sec_id": "BBG000C1FB75",
+   "delist_date": "2013-11-23",
+   "filing": {
+    "accession": "0001193125-13-440079",
+    "form": "8-K"
+   },
+   "last_close": 45.29,
+   "last_trade_date": "2013-11-12",
+   "legacy": null,
+   "llm": {
+    "acquirer_name": "IntercontinentalExchange Group, Inc.",
+    "acquirer_share_class": null,
+    "acquirer_ticker": "ICE",
+    "cash_currency": "USD",
+    "cash_per_share": 11.27,
+    "confidence": "high",
+    "contingent_note": "",
+    "deal_type": "election",
+    "election_note": "$33.12 cash, or 0.2581 ICE Group share, or default mixed consideration; stock election prorated",
+    "other_stock_legs": [],
+    "package_basis": "default",
+    "quote": "those that failed to make a valid election... were deemed to have elected the Standard Consideration, will receive... 0.1703... and cash equal to $11.27",
+    "stock_ratio": 0.1703,
+    "stock_value_per_share": null
+   },
+   "name": "NYSE EURONEXT",
+   "note": "NYX (guard): the default package 11.27 + 0.1703 ICE passes",
+   "price_ticker": "ICE",
+   "published_last_trade_date": "2013-11-12",
+   "regex": null,
+   "sec_id": "BBG000BGFLL5",
+   "ticker": "NYX",
+   "truth": {
+    "cash_currency": "USD",
+    "cash_per_share": "11.27",
+    "price_ticker": "ICE",
+    "stock_ratio": "0.1703",
+    "value_rule": "cash_plus_stock"
+   },
+   "truth_legs": []
+  },
+  "BBG000BK1FD3_2014-12-04": {
+   "acquirer_price": null,
+   "acquirer_sec_id": "",
+   "delist_date": "2014-12-04",
+   "filing": {
+    "accession": "0001144204-14-067433",
+    "form": "8-K"
+   },
+   "last_close": null,
+   "last_trade_date": "",
+   "legacy": null,
+   "llm": {
+    "acquirer_name": "Amec Foster Wheeler plc",
+    "acquirer_share_class": null,
+    "acquirer_ticker": null,
+    "cash_currency": "USD",
+    "cash_per_share": 16,
+    "confidence": "high",
+    "contingent_note": "",
+    "deal_type": "election",
+    "election_note": "$32.00 cash or 1.7996 Amec Foster Wheeler securities, subject to election and proration; non-electing holders received the mixed consideration",
+    "other_stock_legs": [],
+    "package_basis": "default",
+    "quote": "consideration per Share ... consisting of a combination of $16.00 in cash and 0.8998 Amec Foster Wheeler securities",
+    "stock_ratio": 0.8998,
+    "stock_value_per_share": null
+   },
+   "name": "FOSTER WHEELER AG",
+   "note": "FWLT: $16.00 + 0.8998 with no last close: the package over the $32.00 headline",
+   "price_ticker": "",
+   "published_last_trade_date": "",
+   "regex": {
+    "confidence": "medium",
+    "currency": "USD",
+    "source": "8K_1.01",
+    "value": 32.0
+   },
+   "sec_id": "BBG000BK1FD3",
+   "ticker": "FWLT",
+   "truth": {
+    "cash_currency": "USD",
+    "cash_per_share": "16.00",
+    "price_ticker": "AMFW",
+    "stock_ratio": "0.8998",
+    "value_rule": "cash_plus_stock"
+   },
+   "truth_legs": []
+  },
+  "BBG000BMDV41_2016-09-16": {
+   "acquirer_price": 48.9,
+   "acquirer_sec_id": "BBG000BVWLJ6",
+   "delist_date": "2016-09-16",
+   "filing": {
+    "accession": "0001104659-16-143072",
+    "form": "8-K"
+   },
+   "last_close": 45.04,
+   "last_trade_date": "2016-09-02",
+   "legacy": {
+    "acquirer_name": "Tyco",
+    "acquirer_ticker": "JCI",
+    "cash_per_share": 5.7293,
+    "confidence": "high",
+    "deal_type": "election",
+    "quote": "holders of shares of Company common stock that elected to receive the share consideration... became entitled to receive... $5.7293 in cash... and 0.8357 Johnson Controls ordinary shares",
+    "stock_ratio": 0.8357
+   },
+   "llm": {
+    "acquirer_name": "Johnson Controls International plc",
+    "acquirer_share_class": null,
+    "acquirer_ticker": "JCI",
+    "cash_currency": "USD",
+    "cash_per_share": 5.7293,
+    "confidence": "high",
+    "contingent_note": "",
+    "deal_type": "election",
+    "election_note": "$34.88 cash or share consideration, subject to proration; no-election holders received mixed consideration",
+    "other_stock_legs": [],
+    "package_basis": "final_prorated",
+    "quote": "holders of shares of Company common stock that made no election... became entitled to receive... $5.7293 in cash... and 0.8357 Johnson Controls ordinary shares",
+    "stock_ratio": 0.8357,
+    "stock_value_per_share": null
+   },
+   "name": "JOHNSON CONTROLS INC",
+   "note": "JCI: the default package $5.7293 + 0.8357, not the stock alternative (R4)",
+   "price_ticker": "JCI",
+   "published_last_trade_date": "2016-09-02",
+   "regex": {
+    "confidence": "high",
+    "currency": "USD",
+    "source": "8K_2.01",
+    "value": 34.88
+   },
+   "sec_id": "BBG000BMDV41",
+   "ticker": "JCI",
+   "truth": {
+    "cash_currency": "USD",
+    "cash_per_share": "5.7293",
+    "price_ticker": "JCI",
+    "stock_ratio": "0.8357",
+    "value_rule": "cash_plus_stock"
+   },
+   "truth_legs": []
+  },
+  "BBG000BNVNY4_2021-12-12": {
+   "acquirer_price": null,
+   "acquirer_sec_id": "",
+   "delist_date": "2021-12-12",
+   "filing": {
+    "accession": "0001193125-21-345548",
+    "form": "8-K"
+   },
+   "last_close": 59.07,
+   "last_trade_date": "2021-12-01",
+   "legacy": {
+    "acquirer_name": "Gray",
+    "acquirer_ticker": "GTN",
+    "cash_per_share": 16.99,
+    "confidence": "high",
+    "deal_type": "cash",
+    "quote": "each share of Meredith Stock ... were automatically converted into the right to receive $16.99 in cash",
+    "stock_ratio": null
+   },
+   "llm": {
+    "acquirer_name": "Gray Television, Inc.",
+    "acquirer_share_class": null,
+    "acquirer_ticker": "GTN",
+    "cash_currency": "USD",
+    "cash_per_share": 59.17,
+    "confidence": "high",
+    "contingent_note": "",
+    "deal_type": "cash",
+    "election_note": "",
+    "other_stock_legs": [],
+    "package_basis": "fixed",
+    "quote": "distributed the issued and outstanding shares of Meredith Holdings to the Company\u2019s shareholders on a one-to-one basis... converted into the right to receive $16.99 in cash... Meredith Holdings Stock... converted into the right to receive $42.18 in cash",
+    "stock_ratio": null,
+    "stock_value_per_share": null
+   },
+   "name": "MEREDITH CORP",
+   "note": "MDP: $16.99 + $42.18 = $59.17 total cash",
+   "price_ticker": "",
+   "published_last_trade_date": "2021-12-01",
+   "regex": {
+    "confidence": "medium",
+    "currency": "USD",
+    "source": "8K_1.01",
+    "value": 42.18
+   },
+   "sec_id": "BBG000BNVNY4",
+   "ticker": "MDP",
+   "truth": {
+    "cash_currency": "USD",
+    "cash_per_share": "59.17",
+    "price_ticker": "",
+    "stock_ratio": "",
+    "value_rule": "cash"
+   },
+   "truth_legs": []
+  },
+  "BBG000BPQVR5_2015-07-12": {
+   "acquirer_price": 62.4,
+   "acquirer_sec_id": "BBG008NXC572",
+   "delist_date": "2015-07-12",
+   "filing": {
+    "accession": "0000950157-15-000751",
+    "form": "8-K"
+   },
+   "last_close": 61.97,
+   "last_trade_date": "2015-07-01",
+   "legacy": {
+    "acquirer_name": "WestRock",
+    "acquirer_ticker": "WRK",
+    "cash_per_share": 51.7514,
+    "confidence": "high",
+    "deal_type": "election",
+    "quote": "shareholders of the Company who elected to receive the Cash Consideration received... 0.1856... shares of WestRock Common Stock and... $51.7514",
+    "stock_ratio": 0.1856
+   },
+   "llm": {
+    "acquirer_name": "WestRock Company",
+    "acquirer_share_class": null,
+    "acquirer_ticker": "WRK",
+    "cash_currency": null,
+    "cash_per_share": null,
+    "confidence": "high",
+    "contingent_note": "",
+    "deal_type": "election",
+    "election_note": "$63.549 cash or 1 share of WestRock common stock, prorated; non-electing holders received stock",
+    "other_stock_legs": [],
+    "package_basis": "default",
+    "quote": "shareholders of the Company who failed to make a valid election... received the Stock Consideration",
+    "stock_ratio": 1,
+    "stock_value_per_share": null
+   },
+   "name": "ROCK-TENN CO. CL A",
+   "note": "RKT: the default package 1 WRK, not the cash electors' (R4)",
+   "price_ticker": "WRK",
+   "published_last_trade_date": "2015-07-01",
+   "regex": null,
+   "sec_id": "BBG000BPQVR5",
+   "ticker": "RKT",
+   "truth": {
+    "cash_currency": "",
+    "cash_per_share": "",
+    "price_ticker": "WRK",
+    "stock_ratio": "1.0",
+    "value_rule": "stock"
+   },
+   "truth_legs": []
+  },
+  "BBG000BTMDX4_2012-04-06": {
+   "acquirer_price": 41.32,
+   "acquirer_sec_id": "BBG000BM2FL9",
+   "delist_date": "2012-04-06",
+   "filing": {
+    "accession": "0000203248-12-000027",
+    "form": "8-K"
+   },
+   "last_close": 41.1,
+   "last_trade_date": "2012-03-26",
+   "legacy": {
+    "acquirer_name": "ETE",
+    "acquirer_ticker": "ETE",
+    "cash_per_share": 44.25,
+    "confidence": "high",
+    "deal_type": "election",
+    "quote": "each outstanding share of Southern Union common stock for $44.25 of cash or 1.00x ETE common unit",
+    "stock_ratio": 1.0
+   },
+   "llm": {
+    "acquirer_name": "Energy Transfer Equity, L.P.",
+    "acquirer_share_class": null,
+    "acquirer_ticker": "ETE",
+    "cash_currency": null,
+    "cash_per_share": null,
+    "confidence": "high",
+    "contingent_note": "",
+    "deal_type": "election",
+    "election_note": "$44.25 cash or 1.00 ETE common unit, subject to caps/proration; non-electing holders deemed to receive ETE common units",
+    "other_stock_legs": [],
+    "package_basis": "default",
+    "quote": "holders either did not make an election... and, therefore, will be deemed to have elected to receive ETE common units",
+    "stock_ratio": 1.0,
+    "stock_value_per_share": null
+   },
+   "name": "SOUTHERN UNION CO",
+   "note": "SUG: non-electors got 1.0 ETE unit; the regex's $44.25 alternative is dropped (R4)",
+   "price_ticker": "ETE",
+   "published_last_trade_date": "2012-03-26",
+   "regex": {
+    "confidence": "high",
+    "currency": "USD",
+    "source": "8K_2.01",
+    "value": 44.25
+   },
+   "sec_id": "BBG000BTMDX4",
+   "ticker": "SUG",
+   "truth": {
+    "cash_currency": "",
+    "cash_per_share": "",
+    "price_ticker": "ETE",
+    "stock_ratio": "1.0",
+    "value_rule": "stock"
+   },
+   "truth_legs": []
+  },
+  "BBG000BTN971_2012-10-20": {
+   "acquirer_price": 41.62,
+   "acquirer_sec_id": "BBG000GYC3G0",
+   "delist_date": "2012-10-20",
+   "filing": {
+    "accession": "0001193125-12-421137",
+    "form": "8-K"
+   },
+   "last_close": 46.75,
+   "last_trade_date": "2012-10-04",
+   "legacy": {
+    "acquirer_name": "Energy Transfer Partners, L.P.",
+    "acquirer_ticker": "ETP",
+    "cash_per_share": 25,
+    "confidence": "high",
+    "deal_type": "election",
+    "quote": "each share ... was converted into the right to receive $25.00 in cash and 0.5245 of an ETP common unit",
+    "stock_ratio": 0.5245
+   },
+   "llm": {
+    "acquirer_name": "Energy Transfer Partners, L.P.",
+    "acquirer_share_class": null,
+    "acquirer_ticker": "ETP",
+    "cash_currency": "USD",
+    "cash_per_share": 25.0,
+    "confidence": "high",
+    "contingent_note": "",
+    "deal_type": "election",
+    "election_note": "$50.00 cash or 1.0490 ETP common units, subject to proration; non-electing holders received the standard mix",
+    "other_stock_legs": [],
+    "package_basis": "default",
+    "quote": "each share of the Company\u2019s common stock... was converted into the right to receive $25.00 in cash and 0.5245 of an ETP common unit",
+    "stock_ratio": 0.5245,
+    "stock_value_per_share": null
+   },
+   "name": "SUNOCO INC.",
+   "note": "SUN (guard): 25.00 + 0.5245 ETP passes",
+   "price_ticker": "ETP",
+   "published_last_trade_date": "2012-10-04",
+   "regex": {
+    "confidence": "high",
+    "currency": "USD",
+    "source": "8K_2.01",
+    "value": 25.0
+   },
+   "sec_id": "BBG000BTN971",
+   "ticker": "SUN",
+   "truth": {
+    "cash_currency": "USD",
+    "cash_per_share": "25.00",
+    "price_ticker": "ETP",
+    "stock_ratio": "0.5245",
+    "value_rule": "cash_plus_stock"
+   },
+   "truth_legs": []
+  },
+  "BBG000C11MQ5_2015-06-05": {
+   "acquirer_price": null,
+   "acquirer_sec_id": "BBG0025Y4RY4",
+   "delist_date": "2015-06-05",
+   "filing": {
+    "accession": "0001104659-15-040558",
+    "form": "8-K"
+   },
+   "last_close": 0.01,
+   "last_trade_date": "2015-05-22",
+   "legacy": {
+    "acquirer_name": "AbbVie Inc.",
+    "acquirer_ticker": "ABBV",
+    "cash_per_share": 152.25,
+    "confidence": "high",
+    "deal_type": "election",
+    "quote": "stockholders were entitled to elect to receive... (1) $261.25 in cash... or (2) a number of shares of AbbVie common stock equal to $261.25 divided by the AbbVie Trading Price",
+    "stock_ratio": null
+   },
+   "llm": {
+    "acquirer_name": "AbbVie Inc.",
+    "acquirer_share_class": null,
+    "acquirer_ticker": "ABBV",
+    "cash_currency": "USD",
+    "cash_per_share": 152.25,
+    "confidence": "high",
+    "contingent_note": "",
+    "deal_type": "election",
+    "election_note": "$261.25 cash or AbbVie stock worth $261.25, subject to proration; no-election holders received mixed consideration",
+    "other_stock_legs": [],
+    "package_basis": "default",
+    "quote": "each of the Pharmacyclics shares accepted by Offeror was exchanged for the right to receive: \u00b7 $152.25 in cash; and \u00b7 a number of shares of AbbVie common stock equal to $109.00 divided by",
+    "stock_ratio": null,
+    "stock_value_per_share": 109
+   },
+   "name": "PHARMACYCLICS INC",
+   "note": "PCYC: $152.25 + $109.00 of AbbVie, a dollar-valued leg",
+   "price_ticker": "ABBV",
+   "published_last_trade_date": "2015-05-22",
+   "regex": null,
+   "sec_id": "BBG000C11MQ5",
+   "ticker": "PCYC",
+   "truth": {
+    "cash_currency": "USD",
+    "cash_per_share": "152.25",
+    "price_ticker": "ABBV",
+    "stock_ratio": "*",
+    "value_rule": "cash_plus_stock"
+   },
+   "truth_legs": []
+  },
+  "BBG000C4FB79_wave2-r1": {
+   "acquirer_price": null,
+   "acquirer_sec_id": "BBG000BX6BJ3",
+   "delist_date": "2012-03-16",
+   "filing": {
+    "accession": "0001193125-12-098329",
+    "form": "8-K"
+   },
+   "last_close": null,
+   "last_trade_date": "2012-03-05",
+   "legacy": {
+    "acquirer_name": "Alleghany Corporation",
+    "acquirer_ticker": "Y",
+    "cash_per_share": 14.22,
+    "confidence": "high",
+    "deal_type": "election",
+    "quote": "converted into the right to receive either shares of Alleghany common stock or cash consideration... equal to $61.14, which is the sum of (i) 0.145 shares... and (ii) $14.22",
+    "stock_ratio": 0.145
+   },
+   "llm": {
+    "acquirer_name": "Alleghany Corporation",
+    "acquirer_share_class": null,
+    "acquirer_ticker": "Y",
+    "cash_currency": null,
+    "cash_per_share": null,
+    "confidence": "medium",
+    "contingent_note": "",
+    "deal_type": "election",
+    "election_note": "either shares of Alleghany common stock or cash, depending upon the election of the stockholder, with a value equal to $61.14",
+    "other_stock_legs": [],
+    "package_basis": "none",
+    "quote": "each outstanding share of Common Stock ... was cancelled and automatically converted into the right to receive either shares of Alleghany common stock or cash ... with a value equal to $61.14",
+    "stock_ratio": null,
+    "stock_value_per_share": 61.14
+   },
+   "name": "TRANSATLANTIC HLDGS INC",
+   "note": "TRH 2012: an election with no stated default keeps the base's 14.22 + 0.145 Y (R4)",
+   "price_ticker": "",
+   "published_last_trade_date": "2012-03-05",
+   "regex": null,
+   "sec_id": "BBG000C4FB79",
+   "ticker": "TRH",
+   "truth": {
+    "cash_currency": "",
+    "cash_per_share": "14.220000",
+    "price_ticker": "Y",
+    "stock_ratio": "0.145000",
+    "value_rule": "cash_plus_stock"
+   },
+   "truth_legs": []
+  },
+  "BBG000G61VB6_2007-07-23": {
+   "acquirer_price": 584.5,
+   "acquirer_sec_id": "BBG000BHLYP4",
+   "delist_date": "2007-07-23",
+   "filing": {
+    "accession": "0001193125-07-150679",
+    "form": "8-K"
+   },
+   "last_close": 219.45,
+   "last_trade_date": "2007-07-12",
+   "legacy": null,
+   "llm": {
+    "acquirer_name": "Chicago Mercantile Exchange Holdings Inc.",
+    "acquirer_share_class": "A",
+    "acquirer_ticker": "CME",
+    "cash_currency": null,
+    "cash_per_share": null,
+    "confidence": "high",
+    "contingent_note": "",
+    "deal_type": "stock",
+    "election_note": "",
+    "other_stock_legs": [],
+    "package_basis": "fixed",
+    "quote": "for each share of the Registrant\u2019s Class A common stock owned, the Registrant\u2019s Class A stockholders will be entitled to receive 0.3750 shares of CME Holdings Class A common stock.",
+    "stock_ratio": 0.375,
+    "stock_value_per_share": null
+   },
+   "name": "CBOT HOLDINGS INC",
+   "note": "BOT: the amended 0.375 CME, the 8-K after the proxy",
+   "price_ticker": "CME",
+   "published_last_trade_date": "2007-07-12",
+   "regex": null,
+   "sec_id": "BBG000G61VB6",
+   "ticker": "BOT",
+   "truth": {
+    "cash_currency": "",
+    "cash_per_share": "",
+    "price_ticker": "CME",
+    "stock_ratio": "0.375",
+    "value_rule": "stock"
+   },
+   "truth_legs": []
+  },
+  "BBG000N8Y8W6_2017-07-27": {
+   "acquirer_price": null,
+   "acquirer_sec_id": "",
+   "delist_date": "2017-07-27",
+   "filing": {
+    "accession": "0001104659-17-044656",
+    "form": "8-K"
+   },
+   "last_close": null,
+   "last_trade_date": "",
+   "legacy": {
+    "acquirer_name": "Fairfax",
+    "acquirer_ticker": "FRFHF",
+    "cash_per_share": 28,
+    "confidence": "high",
+    "deal_type": "cash_and_stock",
+    "quote": "for each Share, (i) cash consideration of $23.00... and (ii) 0.057937... share of Fairfax. In addition, the Company paid a special dividend of $5.00 per share",
+    "stock_ratio": 0.057937
+   },
+   "llm": {
+    "acquirer_name": "Fairfax Financial Holdings Limited",
+    "acquirer_share_class": "subordinate voting",
+    "acquirer_ticker": "FFH",
+    "cash_currency": "USD",
+    "cash_per_share": 23.0,
+    "confidence": "high",
+    "contingent_note": "",
+    "deal_type": "cash_and_stock",
+    "election_note": "",
+    "other_stock_legs": [],
+    "package_basis": "fixed",
+    "quote": "for each Share, (i) cash consideration of $23.00, without interest and (ii) 0.057937 of a fully paid and nonassessable subordinate voting share of Fairfax.",
+    "stock_ratio": 0.057937,
+    "stock_value_per_share": null
+   },
+   "name": "ALLIED WORLD ASSURANCE COMPANY HOL",
+   "note": "AWH: $23.00 + 0.057937 Fairfax with no last close: the package over the regex cash",
+   "price_ticker": "FFH",
+   "published_last_trade_date": "",
+   "regex": {
+    "confidence": "high",
+    "currency": "USD",
+    "source": "8K_2.01",
+    "value": 23.0
+   },
+   "sec_id": "BBG000N8Y8W6",
+   "ticker": "AWH",
+   "truth": {
+    "cash_currency": "USD",
+    "cash_per_share": "23.00",
+    "price_ticker": "FFH",
+    "stock_ratio": "0.057937",
+    "value_rule": "cash_plus_stock"
+   },
+   "truth_legs": []
+  },
+  "BBG000PTXBV3_2016-07-22": {
+   "acquirer_price": 10.85,
+   "acquirer_sec_id": "BBG000BJFJ98",
+   "delist_date": "2016-07-22",
+   "filing": {
+    "accession": "0001193125-16-646386",
+    "form": "8-K"
+   },
+   "last_close": 16.29,
+   "last_trade_date": "2016-07-12",
+   "legacy": {
+    "acquirer_name": "Annaly Capital Management, Inc.",
+    "acquirer_ticker": "NLY",
+    "cash_per_share": 5.55,
+    "confidence": "high",
+    "deal_type": "election",
+    "quote": "each Hatteras Common Share... was exchanged for the right to receive, at the election of the holder thereof... $5.55 in cash and 0.9894 shares of Annaly common stock",
+    "stock_ratio": 0.9894
+   },
+   "llm": {
+    "acquirer_name": "Annaly Capital Management, Inc.",
+    "acquirer_share_class": null,
+    "acquirer_ticker": "NLY",
+    "cash_currency": "USD",
+    "cash_per_share": 5.55,
+    "confidence": "high",
+    "contingent_note": "",
+    "deal_type": "election",
+    "election_note": "$15.85 cash, or 1.5226 Annaly shares, or default mixed consideration of $5.55 cash + 0.9894 Annaly shares; cash/stock elections subject to proration",
+    "other_stock_legs": [],
+    "package_basis": "default",
+    "quote": "Holders of Hatteras Common Shares who tendered into the Offer but did not make a valid election received the Mixed Consideration",
+    "stock_ratio": 0.9894,
+    "stock_value_per_share": null
+   },
+   "name": "HATTERAS FINANCIAL CORP.",
+   "note": "HTS (guard): 5.55 + 0.9894 NLY passes",
+   "price_ticker": "NLY",
+   "published_last_trade_date": "2016-07-12",
+   "regex": null,
+   "sec_id": "BBG000PTXBV3",
+   "ticker": "HTS",
+   "truth": {
+    "cash_currency": "USD",
+    "cash_per_share": "5.55",
+    "price_ticker": "NLY",
+    "stock_ratio": "0.9894",
+    "value_rule": "cash_plus_stock"
+   },
+   "truth_legs": []
+  },
+  "BBG0017T9998_2020-07-30": {
+   "acquirer_price": null,
+   "acquirer_sec_id": "",
+   "delist_date": "2020-07-30",
+   "filing": {
+    "accession": "0001193125-20-196345",
+    "form": "8-K"
+   },
+   "last_close": 12.37,
+   "last_trade_date": "2020-07-20",
+   "legacy": {
+    "acquirer_name": "New Caesars",
+    "acquirer_ticker": "ERI",
+    "cash_per_share": 12.41,
+    "confidence": "high",
+    "deal_type": "election",
+    "quote": "each share ... was converted into the right to receive, at the election of the holder thereof ... approximately $12.41 in cash ... or approximately 0.3085 shares of New Caesars Common Stock",
+    "stock_ratio": 0.3085
+   },
+   "llm": {
+    "acquirer_name": "Caesars Entertainment, Inc.",
+    "acquirer_share_class": null,
+    "acquirer_ticker": "CZR",
+    "cash_currency": "USD",
+    "cash_per_share": 12.41,
+    "confidence": "high",
+    "contingent_note": "",
+    "deal_type": "election",
+    "election_note": "Approximately $12.41 cash or approximately 0.3085 shares of New Caesars common stock, subject to proration",
+    "other_stock_legs": [],
+    "package_basis": "default",
+    "quote": "each holder of Cash Election Shares or No Election Shares became entitled to receive the Cash Election Consideration",
+    "stock_ratio": null,
+    "stock_value_per_share": null
+   },
+   "name": "CAESARS ENTERTAINMENT CORP",
+   "note": "CZR (guard): the no-election cash default, 12.41",
+   "price_ticker": "",
+   "published_last_trade_date": "",
+   "regex": null,
+   "sec_id": "BBG0017T9998",
+   "ticker": "CZR",
+   "truth": {
+    "cash_currency": "USD",
+    "cash_per_share": "12.41",
+    "price_ticker": "",
+    "stock_ratio": "",
+    "value_rule": "cash"
+   },
+   "truth_legs": []
+  },
+  "BBG0077VS2C0_2026-07-11": {
+   "acquirer_price": null,
+   "acquirer_sec_id": "BBG000BV5627",
+   "delist_date": "2026-07-11",
+   "filing": {
+    "accession": "0001104659-26-079876",
+    "form": "8-K"
+   },
+   "last_close": 354.53,
+   "last_trade_date": "2026-06-30",
+   "legacy": {
+    "acquirer_name": "QXO",
+    "acquirer_ticker": "QXO",
+    "cash_per_share": 249.67,
+    "confidence": "high",
+    "deal_type": "election",
+    "quote": "all of such outstanding TopBuild Shares were converted into the right to receive approximately $249.67 in cash and 10.212 QXO Shares per TopBuild Share",
+    "stock_ratio": 10.212
+   },
+   "llm": {
+    "acquirer_name": "QXO, Inc.",
+    "acquirer_share_class": null,
+    "acquirer_ticker": "QXO",
+    "cash_currency": "USD",
+    "cash_per_share": 249.67,
+    "confidence": "high",
+    "contingent_note": "",
+    "deal_type": "election",
+    "election_note": "$505.00 cash or 20.200 QXO shares, subject to proration; no-election shares deemed stock election",
+    "other_stock_legs": [],
+    "package_basis": "final_prorated",
+    "quote": "all of such outstanding TopBuild Shares were converted into the right to receive approximately $249.67 in cash and 10.212 QXO Shares per TopBuild Share",
+    "stock_ratio": 10.212,
+    "stock_value_per_share": null
+   },
+   "name": "TOPBUILD CORP",
+   "note": "BLD (guard): the prorated aggregate 249.67 + 10.212 QXO, never 505 or 20.2 summed",
+   "price_ticker": "QXO",
+   "published_last_trade_date": "2026-06-30",
+   "regex": null,
+   "sec_id": "BBG0077VS2C0",
+   "ticker": "BLD",
+   "truth": {
+    "cash_currency": "USD",
+    "cash_per_share": "249.67",
+    "price_ticker": "QXO",
+    "stock_ratio": "10.212",
+    "value_rule": "cash_plus_stock"
+   },
+   "truth_legs": []
+  },
+  "BBG00FFJY867_2025-05-17": {
+   "acquirer_price": null,
+   "acquirer_sec_id": "",
+   "delist_date": "2025-05-17",
+   "filing": {
+    "accession": "0001193125-25-114510",
+    "form": "8-K"
+   },
+   "last_close": 7.69,
+   "last_trade_date": "2025-05-06",
+   "legacy": {
+    "acquirer_name": null,
+    "acquirer_ticker": null,
+    "cash_per_share": null,
+    "confidence": "low",
+    "deal_type": "other",
+    "quote": "Old Lionsgate completed the separation of the businesses of New Lionsgate and Starz... resulting in two separately traded public companies",
+    "stock_ratio": null
+   },
+   "llm": {
+    "acquirer_name": "Lionsgate Studios Corp.",
+    "acquirer_share_class": null,
+    "acquirer_ticker": "LION",
+    "cash_currency": null,
+    "cash_per_share": null,
+    "confidence": "high",
+    "contingent_note": "",
+    "deal_type": "other",
+    "election_note": "",
+    "other_stock_legs": [
+     {
+      "issuer_name": "Starz Entertainment Corp.",
+      "ratio": 1,
+      "share_class": null,
+      "ticker": "STRZ"
+     }
+    ],
+    "package_basis": "fixed",
+    "quote": "in exchange for each New Lionsgate Class B share... together with each New Lionsgate Class C preferred share... one New Lionsgate Common Share and one Starz Common Share",
+    "stock_ratio": 1,
+    "stock_value_per_share": null
+   },
+   "name": "LIONS GATE ENTERTAINMENT NON VOTIN",
+   "note": "LGFB: 1 LION + 1 STRZ, a basket (R3; the truth's 1/15 is Starz's later consolidation)",
+   "price_ticker": "",
+   "published_last_trade_date": "2025-05-06",
+   "regex": null,
+   "sec_id": "BBG00FFJY867",
+   "ticker": "LGFB",
+   "truth": {
+    "cash_currency": "",
+    "cash_per_share": "",
+    "price_ticker": "",
+    "stock_ratio": "",
+    "value_rule": "basket"
+   },
+   "truth_legs": [
+    {
+     "leg": "1",
+     "price_ticker": "LION",
+     "ratio": "1"
+    },
+    {
+     "leg": "2",
+     "price_ticker": "STRZ",
+     "ratio": "0.0666667"
+    }
+   ]
+  },
+  "BBG00LT2PDY4_2021-08-05": {
+   "acquirer_price": null,
+   "acquirer_sec_id": "",
+   "delist_date": "2021-08-05",
+   "filing": {
+    "accession": "0001104659-21-098240",
+    "form": "8-K"
+   },
+   "last_close": null,
+   "last_trade_date": "2021-07-26",
+   "legacy": null,
+   "llm": {
+    "acquirer_name": "Brookfield Asset Management Inc.",
+    "acquirer_share_class": "A",
+    "acquirer_ticker": "BAM",
+    "cash_currency": "USD",
+    "cash_per_share": 12.38,
+    "confidence": "high",
+    "contingent_note": "",
+    "deal_type": "cash_and_stock",
+    "election_note": "",
+    "other_stock_legs": [
+     {
+      "issuer_name": "Brookfield Property Partners L.P.",
+      "ratio": 0.0657,
+      "share_class": "preferred unit",
+      "ticker": "BPY"
+     }
+    ],
+    "package_basis": "fixed",
+    "quote": "each holder of class A stock... received $12.38 in cash, 0.0913 of a BAM class A limited voting share and 0.0657 of a BPY preferred unit",
+    "stock_ratio": 0.0913,
+    "stock_value_per_share": null
+   },
+   "name": "BROOKFIELD PROPERTY REIT INC CLASS",
+   "note": "BPYU: $12.38 + 0.0913 BAM + 0.0657 BPY preferred, a basket (R3)",
+   "price_ticker": "",
+   "published_last_trade_date": "2021-07-26",
+   "regex": {
+    "confidence": "medium",
+    "currency": "USD",
+    "source": "8K_1.01",
+    "value": 12.38
+   },
+   "sec_id": "BBG00LT2PDY4",
+   "ticker": "BPYU",
+   "truth": {
+    "cash_currency": "USD",
+    "cash_per_share": "12.38",
+    "price_ticker": "",
+    "stock_ratio": "",
+    "value_rule": "basket"
+   },
+   "truth_legs": [
+    {
+     "leg": "1",
+     "price_ticker": "BAM",
+     "ratio": "0.0913"
+    },
+    {
+     "leg": "2",
+     "price_ticker": "*",
+     "ratio": "0.0657"
+    }
+   ]
+  },
+  "CIK804055-COMMON_2010-10-15": {
+   "acquirer_price": 22.01,
+   "acquirer_sec_id": "BBG000BF5RY1",
+   "delist_date": "2010-10-15",
+   "filing": {
+    "accession": "0001341004-10-001684",
+    "form": "8-K"
+   },
+   "last_close": 31.08,
+   "last_trade_date": "2010-10-01",
+   "legacy": {
+    "acquirer_name": "The Coca-Cola Company",
+    "acquirer_ticker": "KO",
+    "cash_per_share": 10.0,
+    "confidence": "high",
+    "deal_type": "cash_and_stock",
+    "quote": "each outstanding share of Company common stock... was converted into the right to receive one share of New CCE common stock and $10.00 in cash",
+    "stock_ratio": 1.0
+   },
+   "llm": {
+    "acquirer_name": "Coca-Cola Enterprises, Inc.",
+    "acquirer_share_class": null,
+    "acquirer_ticker": "CCE",
+    "cash_currency": "USD",
+    "cash_per_share": 10.0,
+    "confidence": "high",
+    "contingent_note": "",
+    "deal_type": "cash_and_stock",
+    "election_note": "",
+    "other_stock_legs": [],
+    "package_basis": "fixed",
+    "quote": "each outstanding share of Company common stock ... was converted into the right to receive one share of New CCE common stock and $10.00 in cash",
+    "stock_ratio": 1.0,
+    "stock_value_per_share": null
+   },
+   "name": "COCA COLA ENTERPRISE",
+   "note": "CCE 2010: $10.00 + 1 New CCE (CCE), not KO",
+   "price_ticker": "CCE",
+   "published_last_trade_date": "2010-10-01",
+   "regex": null,
+   "sec_id": "CIK804055-COMMON",
+   "ticker": "CCE",
+   "truth": {
+    "cash_currency": "USD",
+    "cash_per_share": "10.00",
+    "price_ticker": "CCE",
+    "stock_ratio": "1.0",
+    "value_rule": "cash_plus_stock"
+   },
+   "truth_legs": []
+  }
+ },
+ "model": "gpt-5.4"
+}

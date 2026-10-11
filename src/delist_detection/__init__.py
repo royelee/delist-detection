@@ -1,43 +1,46 @@
-"""Delist Detection: classify CRSP-style delisting reasons from SEC EDGAR."""
+"""Delist Detection: a FIGI-keyed security master and Form-25-driven delistings, from SEC EDGAR.
 
-from .crsp_codes import CrspBucket, DLST_CODE_TO_BUCKET, bucket_for_code
-from .edgar import EdgarClient, EdgarSubmission
-from .ticker_resolver import TickerResolver
-from .classifier import DelistClassifier, DelistRecord
-from .exchanges import Exchange, normalize_exchange
-from .bmp_correction import (
-    SHUMWAY_NYSE_AMEX, SHUMWAY_NASDAQ,
-    compute_dlret, bmp_firm_month_return,
-)
-from .handling import (
-    TrainLabelAdjustment, BacktestExit, FirmMonthReturn,
-    build_train_label_adjustment, build_backtest_exit, adjustments_from_rows,
-    build_firm_month_correction,
-)
-from .payout_extractor import PayoutExtractor, PayoutResult
+The package is laid out by concept, and imports run one way between its subpackages (tests/test_import_closure.py
+reads them from the real import graph):
 
-__all__ = [
-    "CrspBucket",
-    "DLST_CODE_TO_BUCKET",
-    "bucket_for_code",
-    "EdgarClient",
-    "EdgarSubmission",
-    "TickerResolver",
-    "DelistClassifier",
-    "DelistRecord",
-    "TrainLabelAdjustment",
-    "BacktestExit",
-    "build_train_label_adjustment",
-    "build_backtest_exit",
-    "adjustments_from_rows",
-    "Exchange",
-    "normalize_exchange",
-    "SHUMWAY_NYSE_AMEX",
-    "SHUMWAY_NASDAQ",
-    "compute_dlret",
-    "bmp_firm_month_return",
-    "FirmMonthReturn",
-    "build_firm_month_correction",
-    "PayoutExtractor",
-    "PayoutResult",
-]
+    vocabulary   the leaves every part reads: identifier spelling, name agreement, the trading calendar, CRSP
+                 codes, exchanges, the row vocabulary; imports nothing of the package
+    sources      the SEC, OpenFIGI, Nasdaq and LLM clients and their plumbing; imports the vocabulary
+    filings      what SEC filings say, read by several stages; imports sources
+    outputs      what a run publishes, as rows; imports the sources' plumbing, no client and no stage
+    identity     a security's identity (stages 1 to 4c); imports filings and outputs
+    endings      every delisting, found, dated and classified (stages 5 to 9g); imports identity
+    terms        what one share of a merger ending became (stage 8); imports endings
+    measurement  how far a published run is from the truth; imports outputs
+    handling     delistings.csv for training and backtests; imports outputs
+    pipeline     the run, every stage in order (`run`, `default_clients`); nothing imports it
+
+Importing the package loads none of its modules. The names below, the ones the README and the scripts import from
+here, load their module on first use.
+"""
+
+_LAZY = {                                   # name: the module that defines it
+    "EdgarClient": "sources.edgar",
+    "TickerResolver": "identity.ticker_resolver",
+    "DelistClassifier": "endings.classifier",
+    "PayoutExtractor": "terms.payout_extractor",
+    "Exchange": "vocabulary.exchanges",
+    "build_train_label_adjustment": "handling.handling",
+    "build_backtest_exit": "handling.handling",
+    "build_firm_month_correction": "handling.handling",
+}
+__all__ = list(_LAZY)
+
+
+def __getattr__(name: str):
+    module = _LAZY.get(name)
+    if module is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    from importlib import import_module
+    value = getattr(import_module(f"{__name__}.{module}"), name)
+    globals()[name] = value
+    return value
+
+
+def __dir__() -> list[str]:
+    return sorted({*globals(), *_LAZY})

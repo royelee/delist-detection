@@ -8,7 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from delist_detection import edgar as edgar_mod
+from delist_detection.sources import edgar as edgar_mod
+from delist_detection.measurement.scorecard import Window
+from delist_detection.measurement.truth import TRUTH_COLUMNS
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location("classify_universe_cli", ROOT / "scripts" / "classify_universe.py")
@@ -20,19 +22,22 @@ class _FakeSummary:
     def __init__(self, review_flags, review_counts=None):
         self.counts, self.buckets, self.figi_sources = {}, {}, {}
         self.review_flags = review_flags
+        self.scorecard_drops, self.golden_failures = [], []
+        self.uncertain = {}
         self.review_counts = review_counts or {"fix": 0, "check": 0, "info_hidden": 0, "accepted": 0,
                                                "cleared": 0, "unmatched_decisions": 0}
 
 
-def _run_main(monkeypatch, review_flags, *argv):
+def _run_main(monkeypatch, review_flags, *argv, summary=None):
     monkeypatch.setenv("EDGAR_USER_AGENT", "Test Co test@example.com")
     monkeypatch.setattr(cli, "use_machine_wide_limit", lambda *a, **k: None)
+    monkeypatch.setattr(cli, "DEFAULT_SCORECARD", "/nonexistent/scorecard.json")
     monkeypatch.setattr(cli, "load_observations", lambda path: [])
     monkeypatch.setattr(cli, "ObservationIndex", lambda obs: obs)
     clients_kw = {}
     monkeypatch.setattr(cli, "default_clients", lambda *a, **kw: clients_kw.update(kw) or object())
     seen = {}
-    monkeypatch.setattr(cli, "run", lambda *a, **kw: seen.update(kw) or _FakeSummary(review_flags))
+    monkeypatch.setattr(cli, "run", lambda *a, **kw: seen.update(kw) or summary or _FakeSummary(review_flags))
     monkeypatch.setattr(sys, "argv", ["classify_universe.py", "--observations", "x.csv", *argv])
     _run_main.seen, _run_main.clients_kw = seen, clients_kw
     return cli.main()
@@ -83,7 +88,7 @@ def test_an_openfigi_outage_exits_4_with_no_outputs_written(monkeypatch, capsys)
     """OpenFIGI down after its retries is not a refusal (exit 2) nor a crash
     (exit 1) but an outage: exit 4, and the message says nothing was written
     and to rerun later."""
-    from delist_detection.openfigi import OpenFigiUnavailable
+    from delist_detection.sources.openfigi import OpenFigiUnavailable
 
     rc = _entry_with_run_raising(monkeypatch, OpenFigiUnavailable("OpenFIGI /mapping kept failing after 6 attempts"))
     assert rc == 4
@@ -92,8 +97,8 @@ def test_an_openfigi_outage_exits_4_with_no_outputs_written(monkeypatch, capsys)
 
 
 def test_a_refusal_still_exits_2(monkeypatch, capsys):
-    from delist_detection.edgar import EdgarBlocked
-    from delist_detection.openfigi import OpenFigiBlocked
+    from delist_detection.sources.edgar import EdgarBlocked
+    from delist_detection.sources.openfigi import OpenFigiBlocked
 
     rc = _entry_with_run_raising(monkeypatch, OpenFigiBlocked("OpenFIGI returned 403 for /mapping"))
     assert rc == 2 and "ABORTED" in capsys.readouterr().err
@@ -104,9 +109,9 @@ def test_every_fatal_exception_has_its_own_exit_code_and_nothing_else_is_caught(
     """The CLI catches fatal.FATAL, the one list of exceptions that stop a run,
     each with its exit code: a refusal 2, an OpenFIGI outage 4. Any other
     exception is an unexpected crash: it is not caught, so Python exits 1."""
-    from delist_detection.edgar import EdgarBlocked
-    from delist_detection.fatal import FATAL
-    from delist_detection.openfigi import OpenFigiBlocked, OpenFigiUnavailable
+    from delist_detection.sources.edgar import EdgarBlocked
+    from delist_detection.sources.fatal import FATAL
+    from delist_detection.sources.openfigi import OpenFigiBlocked, OpenFigiUnavailable
 
     expected = {EdgarBlocked: 2, OpenFigiBlocked: 2, OpenFigiUnavailable: 4}
     assert set(FATAL) == set(expected)              # a new fatal exception needs its code here
@@ -121,7 +126,7 @@ def test_every_fatal_exception_has_its_own_exit_code_and_nothing_else_is_caught(
 def test_an_override_row_that_matches_no_delisting_exits_2_on_one_line(monkeypatch, capsys):
     """The pipeline finds an override row that names no delisting mid-run, before
     anything is written: a bad input file (exit 2), not a crash (exit 1)."""
-    from delist_detection.reconstruction import OverrideFileError
+    from delist_detection.outputs.reconstruction import OverrideFileError
 
     rc = _entry_with_run_raising(monkeypatch, OverrideFileError(
         "override rows that match no delisting: --recoveries rec.csv line 3: BBG999"))
@@ -133,7 +138,7 @@ def test_an_override_row_that_matches_no_delisting_exits_2_on_one_line(monkeypat
 def test_no_observations_to_process_exits_2(monkeypatch, capsys):
     """An observations file with no rows (or a --limit that leaves none) is bad
     input, like a malformed file: exit 2, not an unexpected crash."""
-    from delist_detection.observations import ObservationError
+    from delist_detection.identity.observations import ObservationError
 
     assert _entry_with_run_raising(monkeypatch, ObservationError("no observations to process")) == 2
     assert "no observations to process" in capsys.readouterr().err
@@ -148,9 +153,55 @@ def _entry_with_inputs(monkeypatch, tmp_path, *argv, observations="ticker,as_of\
     monkeypatch.setenv("EDGAR_USER_AGENT", "Test Co test@example.com")
     monkeypatch.setattr(cli, "use_machine_wide_limit", lambda *a, **k: None)
     monkeypatch.setattr(cli, "DEFAULT_REVIEW_DECISIONS", default_decisions or str(tmp_path / "no-decisions.csv"))
+    monkeypatch.setattr(cli, "DEFAULT_SCORECARD", str(tmp_path / "no-scorecard.json"))
     monkeypatch.setattr(cli, "default_clients", lambda *a, **kw: pytest.fail("no client may be built"))
     monkeypatch.setattr(sys, "argv", ["classify_universe.py", "--observations", str(obs), *argv])
     return cli.entry()
+
+
+def test_a_bad_id_baseline_exits_2(tmp_path, monkeypatch, capsys):
+    bad = tmp_path / "securities.csv"
+    bad.write_text("sec_id,oops\nX,1\n")
+    rc = _entry_with_inputs(monkeypatch, tmp_path, "--id-baseline", str(bad))
+    assert rc == 2 and "securities.csv" in capsys.readouterr().err
+
+
+_HISTORY = ("sec_id,issuer_id,start_date,end_date,ticker,security_name,share_class\n"
+            "CIK100-COMMON,100,2010-01-04,,AAA,A Co,COMMON\n")
+
+
+def test_a_previous_runs_security_history_is_an_id_baseline(tmp_path):
+    """FB-010: --id-baseline takes a contract/security_history.csv as well as a securities.csv, and with no
+    flag the output folder's own contract/security_history.csv stands in when securities.csv is gone."""
+    import argparse
+    hist = tmp_path / "security_history.csv"
+    hist.write_text(_HISTORY)
+    expected = [{"sec_id": "CIK100-COMMON", "issuer_cik": "100", "share_class": "COMMON",
+                 "figi_source": "placeholder"}]
+    assert cli.read_id_baseline(argparse.Namespace(id_baseline=str(hist), output_dir=str(tmp_path))) == expected
+    out = tmp_path / "out"
+    (out / "contract").mkdir(parents=True)
+    no_flag = argparse.Namespace(id_baseline=None, output_dir=str(out))
+    assert cli.read_id_baseline(no_flag) == []
+    (out / "contract" / "security_history.csv").write_text(_HISTORY)
+    assert cli.read_id_baseline(no_flag) == expected
+
+
+def test_the_baseline_history_is_the_contract_file_beside_the_baseline(tmp_path):
+    """FB-005: the split rows compare ranges: --id-baseline's own security_history.csv, the contract/ folder beside a
+    securities.csv, else the output folder's; none when there is no such file."""
+    import argparse
+    out = tmp_path / "out"
+    (out / "contract").mkdir(parents=True)
+    (out / "securities.csv").write_text("sec_id,issuer_cik,share_class,name,security_type,observed,figi_source\n")
+    none = argparse.Namespace(id_baseline=str(out / "securities.csv"), output_dir=str(tmp_path / "elsewhere"))
+    assert cli.read_id_baseline_history(none) == []
+    (out / "contract" / "security_history.csv").write_text(_HISTORY)
+    assert [r["sec_id"] for r in cli.read_id_baseline_history(none)] == ["CIK100-COMMON"]
+    own = argparse.Namespace(id_baseline=None, output_dir=str(out))
+    assert [r["sec_id"] for r in cli.read_id_baseline_history(own)] == ["CIK100-COMMON"]
+    direct = argparse.Namespace(id_baseline=str(out / "contract" / "security_history.csv"), output_dir=str(tmp_path))
+    assert [r["sec_id"] for r in cli.read_id_baseline_history(direct)] == ["CIK100-COMMON"]
 
 
 @pytest.mark.parametrize("flag,text,where", [
@@ -167,7 +218,8 @@ def test_a_malformed_override_file_exits_2_naming_the_file_and_line(monkeypatch,
     assert "\n" not in err and f"{path} {where}" in err
 
 
-@pytest.mark.parametrize("flag", ["--merger-terms", "--last-trade-closes", "--recoveries", "--review-decisions"])
+@pytest.mark.parametrize("flag", ["--merger-terms", "--last-trade-closes", "--recoveries", "--review-decisions",
+                                  "--scorecard"])
 def test_a_missing_input_file_exits_2_naming_it(monkeypatch, capsys, tmp_path, flag):
     missing = tmp_path / "nope.csv"
     assert _entry_with_inputs(monkeypatch, tmp_path, flag, str(missing)) == 2
@@ -218,6 +270,20 @@ def test_an_unreadable_as_of_is_refused(monkeypatch, capsys, bad):
 def test_main_passes_sec_workers_to_run(monkeypatch):
     assert _run_main(monkeypatch, {}, "--sec-workers", "3") == 0
     assert _run_main.seen["sec_workers"] == 3
+
+
+def test_llm_workers_default_to_8_and_are_passed_to_run(monkeypatch):
+    assert _run_main(monkeypatch, {}) == 0
+    assert _run_main.seen["llm_workers"] == 8
+    assert _run_main(monkeypatch, {}, "--sec-workers", "1", "--llm-workers", "16") == 0
+    assert (_run_main.seen["sec_workers"], _run_main.seen["llm_workers"]) == (1, 16)
+
+
+@pytest.mark.parametrize("n", ["0", "17"])
+def test_llm_workers_outside_1_to_16_is_refused(monkeypatch, n):
+    with pytest.raises(SystemExit) as exc:
+        _run_main(monkeypatch, {}, "--llm-workers", n)
+    assert exc.value.code == 2
 
 
 @pytest.mark.parametrize("n", ["0", "9"])
@@ -287,3 +353,52 @@ def test_an_unusable_rate_lock_stops_the_run_before_any_request(monkeypatch):
     with pytest.raises(SystemExit) as exc:
         cli.main()
     assert exc.value.code == 2
+
+
+@pytest.mark.parametrize("text, where", [
+    ('{"floor": {"nope": 1}}', "floor entries"),
+    ('{"golden": "golden.csv"}', "golden.csv:2"),
+])
+def test_a_bad_scorecard_config_or_truth_file_exits_2_on_one_line(monkeypatch, capsys, tmp_path, text, where):
+    cfg = tmp_path / "scorecard.json"
+    cfg.write_text(text)
+    (tmp_path / "golden.csv").write_text(",".join(TRUTH_COLUMNS) + "\nX,golden,,2010-06-30" + "," * 14 + "\n")
+    assert _entry_with_inputs(monkeypatch, tmp_path, "--scorecard", str(cfg)) == 2
+    err = capsys.readouterr().err.strip()
+    assert "\n" not in err and where in err
+
+
+def test_main_passes_the_scorecard_config_to_run(monkeypatch, tmp_path):
+    cfg = tmp_path / "scorecard.json"
+    cfg.write_text('{"window": {"start": "2006-01-02", "end": "2024-12-29"}}')
+    assert _run_main(monkeypatch, {}, "--scorecard", str(cfg)) == 0
+    assert _run_main.seen["scorecard"].window == Window("2006-01-02", "2024-12-29")
+
+
+def test_no_scorecard_config_at_the_default_path_means_an_empty_one(monkeypatch):
+    assert _run_main(monkeypatch, {}) == 0
+    assert _run_main.seen["scorecard"].window is None and not _run_main.seen["scorecard"].floor
+
+
+def test_scorecard_drops_and_golden_failures_warn_without_changing_the_exit_code(monkeypatch, capsys):
+    summary = _FakeSummary({})
+    summary.scorecard_drops = ["L1.coverage_tickers: 0.9 -> 0.8"]
+    summary.golden_failures = ["ICPT: last_trade_date 2023-11-08 != 2023-11-07"]
+    assert _run_main(monkeypatch, {}, summary=summary) == 0
+    err = capsys.readouterr().err
+    assert "1 scorecard number(s) got worse" in err and "L1.coverage_tickers: 0.9 -> 0.8" in err
+    assert "1 golden case(s) now fail" in err and "ICPT" in err
+
+
+def test_main_prints_the_uncertain_counts(monkeypatch, capsys):
+    summary = _FakeSummary({})
+    summary.uncertain = {"seed": 3, "security": 1, "ending": 2}
+    assert _run_main(monkeypatch, {}, summary=summary) == 0
+    assert "Uncertain (uncertain.csv): 1 securities, 2 endings, 3 seeds" in capsys.readouterr().out
+
+
+def test_a_bad_price_answers_file_exits_2(tmp_path, monkeypatch, capsys):
+    bad = tmp_path / "answers.csv"
+    bad.write_text("sec_id,last_trade_date,kind,lookup_sec_id,lookup_ticker,date,price\nA,2018-11-28,last_close,A,AET,2018-11-28,abc\n")
+    rc = _entry_with_inputs(monkeypatch, tmp_path, "--price-answers", str(bad))
+    assert rc == 2 and "answers.csv:2" in capsys.readouterr().err

@@ -1,0 +1,508 @@
+diff --git a/scripts/classify_universe.py b/scripts/classify_universe.py
+index 6c0749a..ec8f463 100644
+--- a/scripts/classify_universe.py
++++ b/scripts/classify_universe.py
+@@ -101,6 +101,8 @@ MANUAL_OVERRIDES: dict[str, int] = {
+ 
+ DEFAULT_SEC_WORKERS = 4     # threads prefetching SEC data; each stage itself stays sequential
+ MAX_SEC_WORKERS = 8         # one process's ceiling: all threads share one 8 requests/s limit
++DEFAULT_LLM_WORKERS = 8     # threads making LLM calls ahead of the merger stage (a call waits on the model, not SEC)
++MAX_LLM_WORKERS = 16
+ DEFAULT_REVIEW_DECISIONS = str(ROOT / "data" / "review_decisions.csv")
+ DEFAULT_SCORECARD = str(ROOT / "data" / "scorecard.json")
+ 
+@@ -184,6 +186,13 @@ def build_parser() -> argparse.ArgumentParser:
+                         "from every other SEC client on this machine through the lock file "
+                         "$DELIST_DETECTION_SEC_RATE_LOCK (default ~/.cache/delist_detection/sec_rate.lock), "
+                         "shares one 8 requests/s limit, so more threads only fill that limit sooner.")
++    p.add_argument("--llm-workers", type=int, default=DEFAULT_LLM_WORKERS,
++                   help=f"Threads that make the --extract-merger-terms-llm calls ahead of the merger stage (default "
++                        f"%(default)s, at most {MAX_LLM_WORKERS}; 1 = one call at a time). Independent of "
++                        "--sec-workers: a call waits on the model, and the tables are the same for any count. These "
++                        "threads also read a candidate filing's text from EDGAR when it is not cached, so up to this "
++                        "many SEC requests can be in flight (the 8 requests/s limit still holds); for one SEC "
++                        "request at a time give --sec-workers 1 --llm-workers 1.")
+     p.add_argument("--as-of", type=run_date, default=None, metavar="YYYY-MM-DD",
+                    help="The run date every freshness rule reads (default: today). Pin it to an earlier run's "
+                         "date (run_manifest.json's as_of) to reproduce that run's tables from the same caches.")
+@@ -275,6 +284,8 @@ def main() -> int:
+     args = p.parse_args()
+     if not 1 <= args.sec_workers <= MAX_SEC_WORKERS:
+         p.error(f"--sec-workers must be between 1 and {MAX_SEC_WORKERS}")
++    if not 1 <= args.llm_workers <= MAX_LLM_WORKERS:
++        p.error(f"--llm-workers must be between 1 and {MAX_LLM_WORKERS}")
+     try:
+         require_user_agent()           # SEC 403s the fallback: stop before the first request
+         use_machine_wide_limit()       # every SEC client on this machine shares the 8 requests/s
+@@ -297,7 +308,8 @@ def main() -> int:
+     )
+     log = (lambda *a: None) if args.quiet else None
+     summary = run(index, clients, overrides, out_dir=Path(args.output_dir), tol=args.merger_terms_sanity_tol,
+-                  limit=args.limit, sec_workers=args.sec_workers, review_decisions=review_decisions,
++                  limit=args.limit, sec_workers=args.sec_workers, llm_workers=args.llm_workers,
++                  review_decisions=review_decisions,
+                   scorecard=scorecard, id_baseline=id_baseline,
+                   id_baseline_history=id_baseline_history, **({"log": log} if log else {}))
+     print("Rows written:", summary.counts)
+diff --git a/src/delist_detection/pipeline.py b/src/delist_detection/pipeline.py
+index 440a2af..3386800 100644
+--- a/src/delist_detection/pipeline.py
++++ b/src/delist_detection/pipeline.py
+@@ -210,7 +210,7 @@ def _warm_delisting_search(clients: Clients, ordered: list[Security], listing: d
+ 
+ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_dir: Path,
+         tol: float = DEFAULT_TOL, limit: int | None = None, log: Callable = _stderr,
+-        sec_workers: int = 1, review_decisions: Sequence[Decision] = (),
++        sec_workers: int = 1, llm_workers: int | None = None, review_decisions: Sequence[Decision] = (),
+         scorecard: run_scorecard.ScorecardConfig = run_scorecard.ScorecardConfig(),
+         id_baseline: Sequence[Mapping[str, str]] = (),
+         id_baseline_history: Sequence[Mapping[str, str]] = ()) -> RunSummary:
+@@ -242,7 +242,11 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
+     many threads (`prefetch.warm`: fill-only, every thread under the one limiter).
+     Each stage itself still runs one item at a time, in its usual order, on this
+     thread, so the same caches and run date (`clients.as_of`) give byte-identical
+-    tables for any worker count. A refusal on any thread aborts the run before
++    tables for any worker count. `llm_workers` (default: `sec_workers`) is the same for the LLM merger-terms calls
++    (`merger_value._read_terms`), which wait on the model, so a run with one SEC worker can still make them on many
++    threads. Those threads also read a candidate filing's text from EDGAR when it is not cached, so up to
++    `llm_workers` SEC requests can then be in flight at once (the shared 8 requests/s limit still holds); one SEC
++    request at a time takes `sec_workers=1, llm_workers=1`. A refusal on any thread aborts the run before
+     anything is written. The resolver's memo is written after issuer resolution,
+     after the acquirer lookups, and on the way out, error or not. On the way out
+     of an aborted run, a memo that cannot be written is logged and the abort (a
+@@ -250,8 +254,8 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
+     still exits with that abort's code (2 for a refusal, 4 for an OpenFIGI outage)."""
+     try:
+         summary = _run(index, clients, overrides, out_dir=out_dir, tol=tol, limit=limit, log=log,
+-                       sec_workers=sec_workers, review_decisions=review_decisions, scorecard=scorecard,
+-                       id_baseline=id_baseline, id_baseline_history=id_baseline_history)
++                       sec_workers=sec_workers, llm_workers=llm_workers, review_decisions=review_decisions,
++                       scorecard=scorecard, id_baseline=id_baseline, id_baseline_history=id_baseline_history)
+     except BaseException:
+         try:
+             _flush_memo(clients)
+@@ -265,12 +269,17 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
+ @dataclass
+ class _RunContext:
+     """What every stage of one run shares: the clients, the one run date (every
+-    window ends on it), the log, the prefetch worker count and the SEC meter."""
++    window ends on it), the log, the prefetch worker counts (SEC reads, LLM calls) and the SEC meter."""
+     clients: Clients
+     as_of: date
+     log: Callable
+     sec_workers: int
+     meter: run_manifest.StageMeter
++    llm_workers: int | None = None       # None: as many as `sec_workers`
++
++    def __post_init__(self) -> None:
++        if self.llm_workers is None:
++            self.llm_workers = self.sec_workers
+ 
+ 
+ @dataclass
+@@ -506,7 +515,7 @@ def _merger_values(ctx: _RunContext, delistings: list[Delisting], securities: di
+     values = value_mergers(delistings, acquirer_line.LineIndex(securities, sightings, sec_cusips, ftd),
+                            clients=ctx.clients, closes=closes.closes, own_closes=closes.own,
+                            caller_terms=overrides.merger_terms, answers=answers, tol=tol, ftd_lo=ftd_lo,
+-                           workers=ctx.sec_workers, log=ctx.log)
++                           workers=ctx.sec_workers, llm_workers=ctx.llm_workers, log=ctx.log)
+     _flush_memo(ctx.clients)
+     ctx.meter.done("payouts", mark)
+     return values
+@@ -1477,14 +1486,15 @@ def _merger_terms_usage(extractor) -> dict | None:
+ 
+ 
+ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_dir: Path, tol: float,
+-         limit: int | None, log: Callable, sec_workers: int,
++         limit: int | None, log: Callable, sec_workers: int, llm_workers: int | None = None,
+          review_decisions: Sequence[Decision] = (),
+          scorecard: run_scorecard.ScorecardConfig = run_scorecard.ScorecardConfig(),
+          id_baseline: Sequence[Mapping[str, str]] = (),
+          id_baseline_history: Sequence[Mapping[str, str]] = ()) -> RunSummary:
+     """The run's stages in order (each function's docstring says what it does);
+     `run` wraps it with the resolver memo's final flush."""
+-    ctx = _RunContext(clients, clients.as_of or date.today(), log, sec_workers, run_manifest.StageMeter(log))
++    ctx = _RunContext(clients, clients.as_of or date.today(), log, sec_workers, run_manifest.StageMeter(log),
++                      llm_workers)
+     for capability in clients.absent():       # each once, before anything is read (production's offer them all)
+         log(f"capability absent: {capability.name}: {capability.without}")
+     clients.issuers.forget()                  # one issuer record per run: each issuer is read afresh, once
+diff --git a/src/delist_detection/terms/llm_merger_extractor.py b/src/delist_detection/terms/llm_merger_extractor.py
+index 01dfdeb..3980bcb 100644
+--- a/src/delist_detection/terms/llm_merger_extractor.py
++++ b/src/delist_detection/terms/llm_merger_extractor.py
+@@ -526,6 +526,7 @@ class LLMMergerTermsExtractor:
+         self.max_filings = max_filings
+         clean_orphan_temps(self.cache_dir)    # a killed run's cut-off answer
+         self._lock = threading.Lock()
++        self._path_locks: dict[Path, threading.Lock] = {}     # one per answer file asked for on a warm thread
+         self._asked: set[Path] = set()        # the answers this run asked the model for, on any thread
+         self._usage = {"from_cache": 0, "asked": 0, "failed": 0}
+ 
+@@ -739,41 +740,52 @@ class LLMMergerTermsExtractor:
+         (cached or fresh) payload is not a usable dict.
+         """
+         cache_path = self.cache_path(filing, record)
+-
+-        raw: object
+-        if cache_path.exists():
+-            try:
+-                raw = json.loads(cache_path.read_text())
+-            except (json.JSONDecodeError, OSError):
+-                raw = None
+-        else:
+-            raw = None
+-
+-        if isinstance(raw, dict):
+-            with self._lock:
+-                asked = cache_path in self._asked
+-            self._count("asked" if asked else "from_cache")
+-        else:
+-            user_prompt = self._user_prompt(excerpt, record, filing, security_name)
+-            try:
+-                raw = self.llm.extract(SYSTEM_PROMPT, user_prompt, RESULT_SCHEMA)
+-            except Exception:
+-                self._count("failed")
+-                raise
++        with self._path_lock(cache_path):
++            raw = self._cached(cache_path)
+             if isinstance(raw, dict):
+-                self.cache_dir.mkdir(parents=True, exist_ok=True)
+-                write_atomic(cache_path, json.dumps(raw))
+                 with self._lock:
+-                    self._asked.add(cache_path)
+-                self._count("asked")
++                    asked = cache_path in self._asked
++                self._count("asked" if asked else "from_cache")
+             else:
+-                # an answer that is no JSON object is never cached, so it is asked again on every run: it counts
+-                # itself degraded, like a failed call, and the delisting's row carries `resolution_degraded`
+-                SEC_STATS.degraded("llm_call")
+-                self._count("failed")
++                user_prompt = self._user_prompt(excerpt, record, filing, security_name)
++                try:
++                    raw = self.llm.extract(SYSTEM_PROMPT, user_prompt, RESULT_SCHEMA)
++                except Exception:
++                    self._count("failed")
++                    raise
++                if isinstance(raw, dict):
++                    self.cache_dir.mkdir(parents=True, exist_ok=True)
++                    write_atomic(cache_path, json.dumps(raw))
++                    with self._lock:
++                        self._asked.add(cache_path)
++                    self._count("asked")
++                else:
++                    # an answer that is no JSON object is never cached, so it is asked again on every run: it counts
++                    # itself degraded, like a failed call, and the delisting's row carries `resolution_degraded`
++                    SEC_STATS.degraded("llm_call")
++                    self._count("failed")
+ 
+         return self._to_terms(raw, filing)
+ 
++    @staticmethod
++    def _cached(cache_path: Path) -> object:
++        """The answer stored at `cache_path`, None when there is none or it cannot be read."""
++        if not cache_path.exists():
++            return None
++        try:
++            return json.loads(cache_path.read_text())
++        except (json.JSONDecodeError, OSError):
++            return None
++
++    def _path_lock(self, cache_path: Path) -> threading.Lock:
++        """The lock of one answer file. Two mergers can ask for one file (the same filing and target ticker), and
++        the warm threads (`merger_value._read_terms`) run them at once: the second waits for the first's call and
++        reads its answer, so a call is never paid for twice. The answer is read and counted under the lock, so a
++        thread that waited counts what it read as any cache hit is counted (`from_cache`, or `asked` when this run
++        asked for it), and a warm thread's reads are still not counted (`_count`)."""
++        with self._lock:
++            return self._path_locks.setdefault(cache_path, threading.Lock())
++
+     @staticmethod
+     def _user_prompt(excerpt: str, record: DelistRecord, filing: EdgarSubmission | None = None,
+                      security_name: str = "") -> str:
+diff --git a/src/delist_detection/terms/merger_value.py b/src/delist_detection/terms/merger_value.py
+index 91c6a59..9ad2344 100644
+--- a/src/delist_detection/terms/merger_value.py
++++ b/src/delist_detection/terms/merger_value.py
+@@ -222,12 +222,13 @@ def _quiet(*_: object) -> None:
+ class _Stage:
+     """What every step of the stage shares: the run's clients (edgar, resolver, issuers, figi, payout_extractor,
+     llm_extractor: `pipeline.Clients`), the run's securities as acquirer lines (with the run's fails index, the only
+-    reader of the fails files), the first day the run loaded fails rows from, the prefetch worker count and the
+-    log."""
++    reader of the fails files), the first day the run loaded fails rows from, the prefetch worker count, the
++    number of threads that make the LLM calls ahead and the log."""
+     clients: Any
+     index: acquirer_line.LineIndex
+     ftd_lo: date | None
+     workers: int
++    llm_workers: int
+     log: Callable
+ 
+     @property
+@@ -246,16 +247,17 @@ class _Stage:
+ def value_mergers(delistings: Sequence[Delisting], index: acquirer_line.LineIndex, *, clients: Any,
+                   closes: Mapping[DelistingKey, float], caller_terms: Mapping, answers: PriceAnswers, tol: float,
+                   own_closes: Mapping[DelistingKey, float] | None = None, ftd_lo: date | None = None,
+-                  workers: int = 1, log: Callable = _quiet) -> MergerValues:
++                  workers: int = 1, llm_workers: int | None = None, log: Callable = _quiet) -> MergerValues:
+     """Stage 8 (see the module docstring): every merger-bucket delisting of `delistings`, valued. `index` holds the
+     run's securities, their ticker sightings, CUSIPs and the fails index (asked here for the acquirer tickers' rows
+     around every merger, `FtdIndex.around`; an early merger's lines are read apart, `FtdIndex.apart`); `clients` the
+     run's edgar, resolver, issuers (the issuer record), figi, payout_extractor and llm_extractor (`extract(record,
+     security_name=)`). `closes` are the last closes the values read (stage 7's: a caller's answered close in place of
+     the run's own); `own_closes` the run's own (a --last-trade-closes row, else the fails close; None: `closes` are
+-    the run's own), which the reads and the first gate pass read."""
++    the run's own), which the reads and the first gate pass read. `workers` threads fill the EDGAR caches ahead;
++    `llm_workers` (default: `workers`) threads make the LLM calls ahead, since a call waits on the model, not on SEC."""
+     own = closes if own_closes is None else own_closes
+-    st = _Stage(clients, index, ftd_lo, workers, log)
++    st = _Stage(clients, index, ftd_lo, workers, workers if llm_workers is None else llm_workers, log)
+     mergers = [e for e in delistings if e.record.bucket is CrspBucket.MERGER]
+     raw, llm_terms, review = _read_terms(st, mergers, own, {sid: s.name or "" for sid, s in st.securities.items()})
+     trade_day = {e.key: e.last_trade.day for e in delistings}
+@@ -319,15 +321,15 @@ def _read_terms(st: _Stage, mergers: list[Delisting], closes: Mapping[DelistingK
+         extractor = clients.payout_extractor
+         warm(mergers, lambda e: extractor.extract(e.record, last_close=closes.get(e.key)),
+              workers=st.workers, name="payouts")
+-    if st.workers > 1 and clients.llm_extractor is not None:
++    if st.llm_workers > 1 and clients.llm_extractor is not None:
+         # The LLM calls the sequential pass makes, filled ahead on the worker threads (sub-plan 5f: a new prompt
+-        # version asks every merger again). Each call fills the cache entry the sequential pass then reads: the
+-        # same candidates in the same order, and a failed call is never cached, so the tables do not depend on the
+-        # worker count. A warm thread pays for a call the sequential pass skips only when an EDGAR text read
+-        # fails on one thread and not the other.
++        # version asks every merger again; a call takes seconds, so one at a time is most of such a run). Each call
++        # fills the cache entry the sequential pass then reads: the same candidates in the same order, and a failed
++        # call is never cached, so the tables do not depend on the worker count. A warm thread pays for a call the
++        # sequential pass skips only when an EDGAR text read fails on one thread and not the other.
+         llm = clients.llm_extractor
+         warm(mergers, lambda e: llm.extract(e.record, security_name=names.get(e.sec_id, "")),
+-             workers=st.workers, name="llm terms")
++             workers=st.llm_workers, name="llm terms")
+     for e in mergers:
+         key = e.key
+         watch = DegradedWatch()
+diff --git a/tests/test_classify_universe_cli.py b/tests/test_classify_universe_cli.py
+index d9340dc..4bf4b0e 100644
+--- a/tests/test_classify_universe_cli.py
++++ b/tests/test_classify_universe_cli.py
+@@ -272,6 +272,20 @@ def test_main_passes_sec_workers_to_run(monkeypatch):
+     assert _run_main.seen["sec_workers"] == 3
+ 
+ 
++def test_llm_workers_default_to_8_and_are_passed_to_run(monkeypatch):
++    assert _run_main(monkeypatch, {}) == 0
++    assert _run_main.seen["llm_workers"] == 8
++    assert _run_main(monkeypatch, {}, "--sec-workers", "1", "--llm-workers", "16") == 0
++    assert (_run_main.seen["sec_workers"], _run_main.seen["llm_workers"]) == (1, 16)
++
++
++@pytest.mark.parametrize("n", ["0", "17"])
++def test_llm_workers_outside_1_to_16_is_refused(monkeypatch, n):
++    with pytest.raises(SystemExit) as exc:
++        _run_main(monkeypatch, {}, "--llm-workers", n)
++    assert exc.value.code == 2
++
++
+ @pytest.mark.parametrize("n", ["0", "9"])
+ def test_sec_workers_outside_1_to_8_is_refused(monkeypatch, n):
+     with pytest.raises(SystemExit) as exc:
+diff --git a/tests/test_llm_merger_extractor.py b/tests/test_llm_merger_extractor.py
+index d75e27f..38dc3ba 100644
+--- a/tests/test_llm_merger_extractor.py
++++ b/tests/test_llm_merger_extractor.py
+@@ -376,3 +376,81 @@ def test_network_error_returns_none(tmp_path):
+ 
+     ext = LLMMergerTermsExtractor(_RaisingEdgar(), _FakeLlm([]), cache_dir=tmp_path)
+     assert ext.extract(_merger_rec()) is None
++
++
++def test_threads_asking_for_one_answer_file_pay_for_one_call(tmp_path):
++    """Two mergers can ask for one file (the same filing and target ticker) and the warm threads run them at once:
++    the second waits for the first's call and reads its answer, so the model is called once."""
++    import threading
++    import time
++    resp = {"deal_type": "cash", "cash_per_share": 10.0, "stock_ratio": None, "acquirer_name": "X",
++            "acquirer_ticker": None, "confidence": "high", "quote": "$10.00 in cash", "package_basis": "fixed"}
++
++    class _Slow(_FakeLlm):
++        def extract(self, system, user, schema):
++            time.sleep(0.2)                   # long enough for every thread to be waiting for the answer
++            return super().extract(system, user, schema)
++
++    llm = _Slow([resp])
++    edgar = _FakeEdgarText([_closing_8k()], {"C1": _USABLE_TEXT})
++    ext = LLMMergerTermsExtractor(edgar, llm, cache_dir=tmp_path)
++    got: list = []
++    threads = [threading.Thread(target=lambda: got.append(ext.extract(_merger_rec()))) for _ in range(6)]
++    for t in threads:
++        t.start()
++    for t in threads:
++        t.join()
++    assert llm.calls == 1 and len(got) == 6 and all(t == got[0] and t.cash_per_share == 10.0 for t in got)
++
++
++def _concurrent_extract(ext, n, *, warm):
++    import threading
++
++    from delist_detection.sources.sec_stats import fill_only
++
++    def ask():
++        if warm:
++            with fill_only():
++                ext.extract(_merger_rec())
++        else:
++            ext.extract(_merger_rec())
++
++    threads = [threading.Thread(target=ask) for _ in range(n)]
++    for t in threads:
++        t.start()
++    for t in threads:
++        t.join()
++
++
++def _slow_ext(tmp_path):
++    import time
++    resp = {"deal_type": "cash", "cash_per_share": 10.0, "stock_ratio": None, "acquirer_name": "X",
++            "acquirer_ticker": None, "confidence": "high", "quote": "$10.00 in cash", "package_basis": "fixed"}
++
++    class _Slow(_FakeLlm):
++        def extract(self, system, user, schema):
++            time.sleep(0.2)
++            return super().extract(system, user, schema)
++
++    llm = _Slow([resp])
++    return LLMMergerTermsExtractor(_FakeEdgarText([_closing_8k()], {"C1": _USABLE_TEXT}), llm, cache_dir=tmp_path), llm
++
++
++def test_threads_that_waited_for_one_answer_count_it_as_any_cache_read_is_counted(tmp_path):
++    """Six sequential-pass threads ask for one file: one asked the model (`asked`), the five that waited read its
++    answer (`asked` too, since this run asked for it): the count is that of six cache reads after one call."""
++    ext, llm = _slow_ext(tmp_path)
++    _concurrent_extract(ext, 6, warm=False)
++    u = ext.usage()
++    assert llm.calls == 1 and (u["asked"], u["from_cache"], u["failed"], u["answers"]) == (6, 0, 0, 6)
++
++
++def test_a_warm_pass_counts_nothing_and_the_sequential_read_after_it_counts_asked(tmp_path):
++    """The warm threads' own reads are not counted, however many wait on the lock; the sequential pass then reads the
++    file the warm pass asked for and counts it once as `asked`."""
++    ext, llm = _slow_ext(tmp_path)
++    _concurrent_extract(ext, 6, warm=True)
++    assert llm.calls == 1 and ext.usage()["answers"] == 0 and ext.usage()["asked"] == 0
++    ext.extract(_merger_rec())
++    u = ext.usage()
++    assert (u["asked"], u["from_cache"], u["failed"]) == (1, 0, 0)
+diff --git a/tests/test_merger_value.py b/tests/test_merger_value.py
+index 63cc054..4a8be74 100644
+--- a/tests/test_merger_value.py
++++ b/tests/test_merger_value.py
+@@ -57,13 +57,13 @@ class _Terms:
+ 
+ def _value(delistings, *, llm=None, payout=None, edgar=None, resolver=None, name_index=None, ftd_client=None,
+            securities=None, closes=None, own_closes=None, caller_terms=None, answers=None, workers=1,
+-           log=None) -> MergerValues:
++           llm_workers=None, log=None) -> MergerValues:
+     clients = Clients(edgar=edgar, resolver=resolver, classifier=None, figi=None, ftd_client=ftd_client or _NoFtd(),
+                       payout_extractor=payout, llm_extractor=llm, issuers=IssuerRecord(edgar, name_index=name_index))
+     index = LineIndex(securities or {}, {}, {}, FtdIndex(source=clients.ftd_client))
+     return value_mergers(delistings, index, clients=clients, closes=closes or {}, own_closes=own_closes,
+                          caller_terms=caller_terms or {}, answers=answers or PriceAnswers(), tol=0.15,
+-                         workers=workers, log=log or (lambda *a: None))
++                         workers=workers, llm_workers=llm_workers, log=log or (lambda *a: None))
+ 
+ 
+ def _stock(ratio, ticker, *, cash=None, value=None, name=None):
+@@ -306,3 +306,25 @@ def test_the_contract_inputs_are_the_mergers_records(bucket):
+         return
+     assert (got[K].llm, got[K].acquirer_sec_id, got[K].price_ticker, got[K].leg_sec_ids) == (
+         llm, "BBG0ACQ", "ACQN", {"B": "BBG0B"})
++
++
++def test_the_llm_calls_are_filled_ahead_on_their_own_threads_whatever_the_sec_workers():
++    """`llm_workers` sets the threads that make the LLM calls ahead, apart from the SEC `workers`: one SEC request
++    at a time still gets the LLM calls on many threads, and the terms are the one-thread run's."""
++    import threading
++    threads, cache, guard = [], {}, threading.Lock()
++
++    class Ext:
++        def extract(self, record, security_name=""):
++            with guard:
++                threads.append(threading.current_thread().name)
++                return cache.setdefault(record.ticker, MergerTerms("cash", 10.0 + len(cache), None, None, None, "high",
++                                                                   "8-K:x", "", package_basis="fixed"))
++
++    es = [_merger(t, t, "2016-09-16", date(2016, 9, 15)) for t in ("AAA", "BBB", "CCC")]
++    one = {k: v.llm for k, v in _value(es, llm=Ext(), workers=1, llm_workers=1).records.items()}
++    assert threads == [threading.main_thread().name] * 3
++    threads.clear()
++    many = {k: v.llm for k, v in _value(es, llm=Ext(), workers=1, llm_workers=4).records.items()}
++    assert many == one
++    assert sum(n.startswith("sec-warm") for n in threads) == 3 and threads[-3:] == [threading.main_thread().name] * 3
+diff --git a/tests/test_pipeline_prefetch.py b/tests/test_pipeline_prefetch.py
+index c4fe2d2..80a6ab4 100644
+--- a/tests/test_pipeline_prefetch.py
++++ b/tests/test_pipeline_prefetch.py
+@@ -408,6 +408,60 @@ def test_payouts_and_llm_calls_are_filled_ahead_and_no_llm_answer_is_paid_for_tw
+     assert len(llm) == len(keys)                   # no answer paid for twice
+ 
+ 
++def test_llm_calls_are_filled_ahead_on_llm_workers_while_sec_reads_stay_on_one_thread(fake_edgar, tmp_path):
++    """--llm-workers sets the threads for the LLM calls apart from --sec-workers: with one SEC worker the regex
++    payout reads stay on the main thread and the LLM calls still run on the warm threads, each paid for once."""
++    index, clients = _clients(fake_edgar)
++    regex, llm, guard = [], [], threading.Lock()
++
++    class _Regex:
++        def extract(self, record, last_close=None):
++            with guard:
++                regex.append(threading.current_thread().name)
++            return PayoutResult.none()
++
++    class _Client:
++        model = "m"
++
++        def extract(self, system, user, schema):
++            with guard:
++                llm.append(threading.current_thread().name)
++            return {"deal_type": "cash", "cash_per_share": 212.70, "stock_ratio": None, "acquirer_name": "CVS",
++                    "acquirer_ticker": "CVS", "confidence": "high", "quote": "$212.70 in cash",
++                    "package_basis": "fixed"}
++
++    clients.payout_extractor = _Regex()
++    clients.llm_extractor = LLMMergerTermsExtractor(fake_edgar, _Client(), cache_dir=tmp_path / "llm")
++    run(index, clients, Overrides(), out_dir=tmp_path / "out", log=lambda *_: None, sec_workers=1, llm_workers=4)
++    assert regex and set(regex) == {threading.main_thread().name}
++    assert llm and all(n.startswith("sec-warm") for n in llm)
++    assert len(llm) == len(list((tmp_path / "llm").glob("*.json")))
++
++
++def test_llm_answers_and_tables_do_not_depend_on_the_llm_worker_count(fake_edgar, tmp_path):
++    """One LLM thread and four leave the same answer files and the same tables: a warm thread only fills the cache
++    entry the sequential pass would fill itself."""
++    class _Client:
++        model = "m"
++
++        def extract(self, system, user, schema):
++            return {"deal_type": "cash", "cash_per_share": 212.70, "stock_ratio": None, "acquirer_name": "CVS",
++                    "acquirer_ticker": "CVS", "confidence": "high", "quote": "$212.70 in cash",
++                    "package_basis": "fixed"}
++
++    for n in (1, 4):
++        index, clients = _clients(fake_edgar)
++        clients.llm_extractor = LLMMergerTermsExtractor(fake_edgar, _Client(), cache_dir=tmp_path / f"llm{n}")
++        run(index, clients, Overrides(), out_dir=tmp_path / f"out{n}", log=lambda *_: None, sec_workers=1,
++            llm_workers=n)
++
++    def files(root):
++        return {p.name: p.read_bytes() for p in sorted(root.glob("*.json" if root.name.startswith("llm") else "*.csv"))}
++
++    assert files(tmp_path / "llm1") and files(tmp_path / "llm1") == files(tmp_path / "llm4")
++    assert files(tmp_path / "out1") and files(tmp_path / "out1") == files(tmp_path / "out4")
++
++
+ def test_the_successor_search_is_warmed_with_the_query_the_sequential_pass_sends(fake_edgar, tmp_path,
+                                                                                  monkeypatch):
+     fake_edgar.company_map["GOOGL"] = {"cik_str": 1288776, "ticker": "GOOGL", "title": "Google Inc."}

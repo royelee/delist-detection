@@ -1,6 +1,6 @@
-from delist_detection.classifier import DelistRecord
-from delist_detection.crsp_codes import CrspBucket
-from delist_detection.handling import (
+from delist_detection.outputs.reconstruction import DelistRecord
+from delist_detection.vocabulary.crsp_codes import CrspBucket
+from delist_detection.handling.handling import (
     adjustments_from_rows,
     build_backtest_exit,
     build_train_label_adjustment,
@@ -99,7 +99,7 @@ def test_adjustments_from_rows_warns_on_skipped_rows(caplog):
         {"sec_id": "BBG2", "delist_date": "2024-06-30", "ticker": "BETA", "bucket": "compliance_failure",
          "confidence": "high", "reason": "test", "last_trade_date": "2024-06-28"},  # no last_trade_close
     ]
-    with caplog.at_level(logging.WARNING, logger="delist_detection.handling"):
+    with caplog.at_level(logging.WARNING, logger="delist_detection.handling.handling"):
         train, exits = adjustments_from_rows(rows)
     assert train == [] and exits == []
     assert len(caplog.records) == 1
@@ -117,7 +117,7 @@ def test_adjustments_from_rows_skips_continuing_security(caplog):
          "confidence": "high", "reason": "test", "last_trade_date": "2024-06-28", "last_trade_close": "50.0",
          "successor_sec_id": "BBG3"},
     ]
-    with caplog.at_level(logging.WARNING, logger="delist_detection.handling"):
+    with caplog.at_level(logging.WARNING, logger="delist_detection.handling.handling"):
         train, exits = adjustments_from_rows(rows)
     assert train == [] and exits == []
     assert caplog.records == []

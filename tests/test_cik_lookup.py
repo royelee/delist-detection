@@ -6,9 +6,10 @@ from pathlib import Path
 import pytest
 import requests
 
-from delist_detection.cik_lookup import CIK_LOOKUP_URL, CikLookupClient, CikNameIndex, normalize_name
-from delist_detection.edgar import EdgarBlocked
-from delist_detection.sec_stats import SEC_STATS
+from delist_detection.sources.cik_lookup import (
+    CIK_LOOKUP_URL, CikLookupClient, CikNameIndex, NameHit, normalize_name)
+from delist_detection.sources.edgar import EdgarBlocked
+from delist_detection.sources.sec_stats import SEC_STATS
 
 EXCERPT = (Path(__file__).parent / "fixtures" / "cik_lookup" / "excerpt.txt").read_text(encoding="latin-1")
 
@@ -44,6 +45,15 @@ def test_exact_matches_come_before_prefix_matches():
     assert _ciks(hits) == [890491]
     exact, prefix = _index().split_search("AMERICREDIT CORP")
     assert (_ciks(exact), _ciks(prefix)) == ([804269], [1037688])
+
+
+def test_the_entries_holding_a_word_are_found_wherever_the_word_stands():
+    """FB-004 part c: a name spelled in another order is no prefix of the observed one; its entries are found by a
+    word it holds. A word is a whole word of the normalized name (NEMOURS is no part of DENEMOURS)."""
+    idx = CikNameIndex.from_text("DUPONT E I DE NEMOURS & CO:0000030554:\nE I DUPONT DENEMOURS & CO:0000944975:\n"
+                                 "NEMOURS FOUNDATION:0001243868:\nDU PONT NEMOURS:0000001111:\nOTHER CO:0000002222:\n")
+    assert sorted(_ciks(idx.containing("nemours"))) == [1111, 30554, 1243868]
+    assert idx.containing("") == [] and idx.containing("ABSENT") == []
 
 
 def test_a_prefix_matches_by_character_as_edgar_does():
@@ -99,7 +109,7 @@ class _Session:
 
 @pytest.fixture
 def _no_throttle(monkeypatch):
-    monkeypatch.setattr("delist_detection.sec_limiter.throttle", lambda: None)
+    monkeypatch.setattr("delist_detection.sources.sec_limiter.throttle", lambda: None)
 
 
 def test_the_client_downloads_once_and_reads_the_cache_after(tmp_path, _no_throttle):
@@ -136,3 +146,15 @@ def test_a_refusal_raises(tmp_path, _no_throttle):
     with pytest.raises(EdgarBlocked):
         CikLookupClient(tmp_path, session=_Session(_Resp(429)), user_agent="ua").index()
     assert not (tmp_path / "cik-lookup-data.txt").exists()
+
+
+def test_split_search_gives_the_exact_then_prefix_entries_a_plain_scan_gives():
+    """The search walks the sorted entries from the first key that can match, without copying the rest of them."""
+    names = ["ALPHA INC", "ALPHA", "ALPHA HOLDINGS CORP", "ALPHABET INC", "BETA CORP", "ALP", "ZETA", "ALPHA"]
+    index = CikNameIndex.from_text("\n".join(f"{n}:{1000 + i}:" for i, n in enumerate(names)))
+    for q in ["ALPHA", "ALP", "A", "ALPHAB", "BETA", "ZZ", "alpha inc", "", "ZETA"]:
+        key = normalize_name(q)
+        want = [(k, c, n) for k, c, n in index._entries if key and k.startswith(key)]
+        exact, prefix = index.split_search(q)
+        assert exact == [NameHit(c, n) for k, c, n in want if k == key]
+        assert prefix == [NameHit(c, n) for k, c, n in want if k != key]

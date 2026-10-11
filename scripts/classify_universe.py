@@ -3,9 +3,11 @@
 Reads:  an observations CSV (ticker, as_of[, name, cusip, cik, sec_id]), and
         data/review_decisions.csv (accepted review flags; default path, so a
         missing file there means no decisions)
-Writes: output/securities.csv, ticker_history.csv, cusip_history.csv,
-        delistings.csv, payouts.csv, review.csv, review_summary.csv,
-        observation_map.csv
+Writes: output/securities.csv, cusip_history.csv,
+        delistings.csv, review.csv, review_summary.csv,
+        observation_map.csv, uncertain.csv, contract/{security_history,delistings,seeds,
+        price_requests,id_changes,payout_legs}.csv, then scorecard.json (data/scorecard.json: the training window,
+        the floor and the truth files)
 """
 from __future__ import annotations
 
@@ -16,15 +18,20 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-from delist_detection.edgar import EdgarSetupError, require_user_agent
-from delist_detection.sec_limiter import use_machine_wide_limit
-from delist_detection.fatal import FATAL
-from delist_detection.observations import ObservationError, ObservationIndex, load_observations
-from delist_detection.openfigi import OpenFigiUnavailable
-from delist_detection.payout_gate import DEFAULT_TOL
+from delist_detection.sources.edgar import EdgarSetupError, require_user_agent
+from delist_detection.sources.sec_limiter import use_machine_wide_limit
+from delist_detection.sources.fatal import FATAL
+from delist_detection.identity.observations import ObservationError, ObservationIndex, load_observations
+from delist_detection.sources.openfigi import OpenFigiUnavailable
+from delist_detection.terms.payout_gate import DEFAULT_TOL
 from delist_detection.pipeline import Overrides, default_clients, run
-from delist_detection.reconstruction import OverrideFileError, load_float_overrides, load_merger_terms_overrides
-from delist_detection.review_triage import Decision, ReviewDecisionError, load_decisions
+from delist_detection.outputs.price_requests import load_answers
+from delist_detection.outputs.reconstruction import OverrideFileError, load_float_overrides, load_merger_terms_overrides
+from delist_detection.outputs.review_triage import Decision, ReviewDecisionError, load_decisions
+from delist_detection.measurement.scorecard import ScorecardConfig, ScorecardConfigError, load_config
+from delist_detection.outputs.contract import baseline_of_history
+from delist_detection.outputs.store import read_table, table_path
+from delist_detection.measurement.truth import TruthFileError
 
 KNOWN_RENAMES = {
     # Tiingo ticker -> SEC-current ticker (only when SEC has a different one)
@@ -93,8 +100,12 @@ MANUAL_OVERRIDES: dict[str, int] = {
 }
 
 DEFAULT_SEC_WORKERS = 4     # threads prefetching SEC data; each stage itself stays sequential
-MAX_SEC_WORKERS = 8         # one process's ceiling: all threads share one 8 requests/s limit
+MAX_SEC_WORKERS = 8         # the ceiling on SEC prefetch threads: all threads share one 8 requests/s limit (the LLM
+                            # threads can hold up to MAX_LLM_WORKERS more requests in flight, inside the same limit)
+DEFAULT_LLM_WORKERS = 8     # threads making LLM calls ahead of the merger stage (a call waits on the model, not SEC)
+MAX_LLM_WORKERS = 16
 DEFAULT_REVIEW_DECISIONS = str(ROOT / "data" / "review_decisions.csv")
+DEFAULT_SCORECARD = str(ROOT / "data" / "scorecard.json")
 
 
 EXIT_CODES_EPILOG = """\
@@ -105,7 +116,8 @@ Exit codes:
      OpenFigiBlocked); or a bad input file, named with its line on one stderr line (an
      --observations, --last-trade-closes, --merger-terms or --recoveries file that is
      missing or malformed, override rows that match no delisting of the run, a
-     --review-decisions file that is missing when given explicitly or that fails to load);
+     --review-decisions or --scorecard file that is missing when given explicitly or that
+     fails to load, or a truth file the scorecard names that fails to load);
      or a start-up check failed (no EDGAR_USER_AGENT, an unusable SEC rate-lock file, a
      bad argument such as --sec-workers or --as-of)
   3  completed, but review.csv has one or more `error` rows, or `resolution_degraded`
@@ -121,7 +133,7 @@ EXIT_OPENFIGI_DOWN = 4    # OpenFIGI unavailable after its retries
 
 # The exceptions that name a bad input file (exit 2): each message is one line
 # naming the file and line.
-BAD_INPUT = (ObservationError, OverrideFileError, ReviewDecisionError)
+BAD_INPUT = (ObservationError, OverrideFileError, ReviewDecisionError, ScorecardConfigError, TruthFileError)
 
 
 def run_date(text: str) -> date:
@@ -146,11 +158,20 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--last-trade-closes", help="CSV sec_id,last_trade_close[,delist_date]")
     p.add_argument("--merger-terms", help="CSV sec_id,cash_per_share,stock_ratio,acquirer_price,acquirer_ticker[,delist_date]")
     p.add_argument("--recoveries", help="CSV sec_id,recovery_ratio[,delist_date]")
+    p.add_argument("--price-answers",
+                   help="contract/price_requests.csv answered: its columns plus price (raw as-traded closes)")
+    p.add_argument("--id-baseline", default=None,
+                   help="securities.csv or a previous run's contract/security_history.csv to list "
+                        "placeholder->FIGI changes against in contract/id_changes.csv (default: "
+                        "OUTPUT_DIR/securities.csv, else OUTPUT_DIR/contract/security_history.csv, when it exists)")
     p.add_argument("--review-decisions", default=None,
                    help="CSV of accepted review flags: sec_id,delist_date,ticker,flag,decision,note "
                         f"(default {DEFAULT_REVIEW_DECISIONS}; missing at the default path means no decisions, "
                         "missing at an explicitly given path -- even one that happens to spell out the default "
                         "-- is an error)")
+    p.add_argument("--scorecard", default=None,
+                   help="scorecard config: training window, floor and truth files "
+                        "(default data/scorecard.json; missing there means no window, no floor, no truth cases)")
     p.add_argument("--extract-merger-terms-llm", action="store_true",
                    help="Use the LLM extractor to read cash+stock merger terms from EDGAR filings; "
                         "acquirer_price is joined from the SEC fails-to-deliver panel and a sanity gate "
@@ -162,10 +183,18 @@ def build_parser() -> argparse.ArgumentParser:
                         "reconcile tightly.")
     p.add_argument("--sec-workers", type=int, default=DEFAULT_SEC_WORKERS,
                    help=f"Threads that fetch SEC data ahead of each stage (default %(default)s, at most "
-                        f"{MAX_SEC_WORKERS}; 1 = one request at a time). Every SEC request from this process, and "
+                        f"{MAX_SEC_WORKERS}; 1 = one request at a time, with --extract-merger-terms-llm "
+                        "only together with --llm-workers 1). Every SEC request from this process, and "
                         "from every other SEC client on this machine through the lock file "
                         "$DELIST_DETECTION_SEC_RATE_LOCK (default ~/.cache/delist_detection/sec_rate.lock), "
                         "shares one 8 requests/s limit, so more threads only fill that limit sooner.")
+    p.add_argument("--llm-workers", type=int, default=DEFAULT_LLM_WORKERS,
+                   help=f"Threads that make the --extract-merger-terms-llm calls ahead of the merger stage (default "
+                        f"%(default)s, at most {MAX_LLM_WORKERS}; 1 = one call at a time). Independent of "
+                        "--sec-workers: a call waits on the model, and the tables are the same for any count. These "
+                        "threads also read a candidate filing's text from EDGAR when it is not cached, so up to this "
+                        "many SEC requests can be in flight (the 8 requests/s limit still holds); for one SEC "
+                        "request at a time give --sec-workers 1 --llm-workers 1.")
     p.add_argument("--as-of", type=run_date, default=None, metavar="YYYY-MM-DD",
                    help="The run date every freshness rule reads (default: today). Pin it to an earlier run's "
                         "date (run_manifest.json's as_of) to reproduce that run's tables from the same caches.")
@@ -178,14 +207,23 @@ def bad_input(problem: object) -> int:
     return EXIT_BAD_INPUT
 
 
-def read_inputs(args: argparse.Namespace) -> tuple[Overrides, list[Decision], ObservationIndex]:
+def read_scorecard(path: str | None) -> ScorecardConfig:
+    """The scorecard config: `path` when given (missing is an error), else
+    data/scorecard.json when it exists, else no window, floor or truth cases."""
+    if path is not None:
+        return load_config(path)
+    return load_config(DEFAULT_SCORECARD) if Path(DEFAULT_SCORECARD).exists() else ScorecardConfig()
+
+
+def read_inputs(args: argparse.Namespace) -> tuple[Overrides, list[Decision], ObservationIndex, ScorecardConfig]:
     """Every input file, read before any client is built: the override files, the
-    review decisions and the observations. A malformed file raises one of
+    review decisions, the observations and the scorecard config. A malformed file raises one of
     BAD_INPUT; a missing one, OSError."""
     overrides = Overrides(
         last_trade_closes=load_float_overrides(args.last_trade_closes, "last_trade_close") if args.last_trade_closes else {},
         merger_terms=load_merger_terms_overrides(args.merger_terms) if args.merger_terms else {},
         recoveries=load_float_overrides(args.recoveries, "recovery_ratio") if args.recoveries else {},
+        price_answers=load_answers(args.price_answers) if args.price_answers else {},
     )
     # None (the argparse default) means the caller didn't pass --review-decisions
     # at all: a missing file at the default path is fine. Once the flag is given
@@ -198,7 +236,49 @@ def read_inputs(args: argparse.Namespace) -> tuple[Overrides, list[Decision], Ob
             review_decisions = load_decisions(DEFAULT_REVIEW_DECISIONS)
         except FileNotFoundError:
             review_decisions = []          # no decisions file at the default path: nothing accepted yet
-    return overrides, review_decisions, ObservationIndex(load_observations(args.observations))
+    return (overrides, review_decisions, ObservationIndex(load_observations(args.observations)),
+            read_scorecard(args.scorecard))
+
+
+def read_id_baseline(args: argparse.Namespace) -> list[dict[str, str]]:
+    """The baseline rows contract/id_changes.csv compares with: --id-baseline, a securities.csv or a previous run's
+    contract/security_history.csv (FB-010, `contract.baseline_of_history`), else the output folder's own
+    securities.csv, else its contract/security_history.csv, when one exists (read before the run replaces it), else
+    none. A file that is neither raises OverrideFileError."""
+    if args.id_baseline:
+        path = Path(args.id_baseline)
+    else:
+        path = next((p for p in (table_path(args.output_dir, "securities"),
+                                 table_path(args.output_dir, "security_history")) if p.exists()), None)
+        if path is None:
+            return []
+    try:
+        return read_table("securities", path)
+    except ValueError as exc:
+        try:
+            return baseline_of_history(read_table("security_history", path))
+        except ValueError:
+            raise OverrideFileError(f"{exc} (nor table 'security_history')") from None
+
+
+def read_id_baseline_history(args: argparse.Namespace) -> list[dict[str, str]]:
+    """The baseline run's contract/security_history.csv rows, which contract/id_changes.csv's split rows compare this
+    run's ranges with (FB-005): --id-baseline's own file when it is a security_history.csv, the contract/ folder
+    beside it when it is a securities.csv, else the output folder's own; none when no such file exists (no split
+    rows). A file that does not read as security_history.csv is no baseline history (read_id_baseline has already
+    refused a baseline that is neither table)."""
+    if args.id_baseline:
+        path = Path(args.id_baseline)
+        candidates = [path, path.parent / "contract" / table_path(".", "security_history").name]
+    else:
+        candidates = [table_path(args.output_dir, "security_history")]
+    for c in candidates:
+        if c.exists():
+            try:
+                return read_table("security_history", c)
+            except ValueError:
+                continue
+    return []
 
 
 def main() -> int:
@@ -206,6 +286,8 @@ def main() -> int:
     args = p.parse_args()
     if not 1 <= args.sec_workers <= MAX_SEC_WORKERS:
         p.error(f"--sec-workers must be between 1 and {MAX_SEC_WORKERS}")
+    if not 1 <= args.llm_workers <= MAX_LLM_WORKERS:
+        p.error(f"--llm-workers must be between 1 and {MAX_LLM_WORKERS}")
     try:
         require_user_agent()           # SEC 403s the fallback: stop before the first request
         use_machine_wide_limit()       # every SEC client on this machine shares the 8 requests/s
@@ -213,7 +295,9 @@ def main() -> int:
         p.error(str(exc))
 
     try:
-        overrides, review_decisions, index = read_inputs(args)
+        overrides, review_decisions, index, scorecard = read_inputs(args)
+        id_baseline = read_id_baseline(args)
+        id_baseline_history = read_id_baseline_history(args)
     except BAD_INPUT as exc:
         return bad_input(exc)
     except OSError as exc:                 # a missing or unreadable input file
@@ -226,8 +310,10 @@ def main() -> int:
     )
     log = (lambda *a: None) if args.quiet else None
     summary = run(index, clients, overrides, out_dir=Path(args.output_dir), tol=args.merger_terms_sanity_tol,
-                  limit=args.limit, sec_workers=args.sec_workers, review_decisions=review_decisions,
-                  **({"log": log} if log else {}))
+                  limit=args.limit, sec_workers=args.sec_workers, llm_workers=args.llm_workers,
+                  review_decisions=review_decisions,
+                  scorecard=scorecard, id_baseline=id_baseline,
+                  id_baseline_history=id_baseline_history, **({"log": log} if log else {}))
     print("Rows written:", summary.counts)
     print("Delistings by bucket:", summary.buckets)
     print("FIGI sources:", summary.figi_sources)
@@ -236,6 +322,13 @@ def main() -> int:
     print(f"Review: {rc.get('fix', 0)} fix, {rc.get('check', 0)} check "
           f"({rc.get('info_hidden', 0)} info-only rows hidden, {rc.get('accepted', 0)} accepted, "
           f"{rc.get('unmatched_decisions', 0)} unmatched decisions)")
+    u = summary.uncertain
+    print(f"Uncertain (uncertain.csv): {u.get('security', 0)} securities, {u.get('ending', 0)} endings, "
+          f"{u.get('seed', 0)} seeds")
+    c = summary.counts
+    print(f"Contract (contract/): {c.get('security_history', 0)} security intervals, "
+          f"{c.get('contract_delistings', 0)} endings, {c.get('price_requests', 0)} price requests, "
+          f"{c.get('id_changes', 0)} id changes")
     error_count = summary.review_flags.get("error", 0)
     degraded_count = summary.review_flags.get("resolution_degraded", 0)
     if error_count:
@@ -246,6 +339,12 @@ def main() -> int:
               "a failed SEC or Nasdaq halt-feed request or a stale copy; outputs were still written, run again "
               "once they answer.",
               file=sys.stderr)
+    if summary.scorecard_drops:
+        print(f"WARNING: {len(summary.scorecard_drops)} scorecard number(s) got worse than the floor in "
+              f"data/scorecard.json: {'; '.join(summary.scorecard_drops)}", file=sys.stderr)
+    if summary.golden_failures:
+        print(f"WARNING: {len(summary.golden_failures)} golden case(s) now fail: "
+              f"{'; '.join(summary.golden_failures)}", file=sys.stderr)
     return 3 if error_count or degraded_count else 0
 
 

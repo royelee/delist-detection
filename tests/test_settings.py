@@ -3,7 +3,7 @@ import os
 
 import pytest
 
-from delist_detection.settings import env_setting
+from delist_detection.sources.settings import env_setting
 
 
 @pytest.fixture

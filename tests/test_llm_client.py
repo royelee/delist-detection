@@ -7,12 +7,11 @@ No real HTTP calls are made; ``default_llm_client`` is not exercised here.
 from __future__ import annotations
 
 import json
-import types
 from typing import Any
 
 import pytest
 
-from delist_detection.llm_client import OpenAIJsonClient
+from delist_detection.sources.llm_client import OpenAIJsonClient
 
 
 # ---------------------------------------------------------------------------

@@ -8,7 +8,7 @@ import os
 
 import pytest
 
-from delist_detection.edgar import EdgarClient, resolve_user_agent
+from delist_detection.sources.edgar import EdgarClient, resolve_user_agent
 
 
 @pytest.fixture
@@ -75,7 +75,7 @@ class _RecordingSession:
 
 
 def test_client_sends_configured_user_agent(monkeypatch, tmp_path):
-    # Set after delist_detection.edgar was imported: the client must pick it up
+    # Set after delist_detection.sources.edgar was imported: the client must pick it up
     # at construction, not freeze whatever the environment held at import.
     monkeypatch.setenv("EDGAR_USER_AGENT", "EnvCo Research env@example.com")
     session = _RecordingSession()

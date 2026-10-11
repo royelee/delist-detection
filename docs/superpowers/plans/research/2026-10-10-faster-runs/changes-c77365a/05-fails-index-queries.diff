@@ -1,0 +1,136 @@
+diff --git a/src/delist_detection/identity/history.py b/src/delist_detection/identity/history.py
+index b2dc82c..7605762 100644
+--- a/src/delist_detection/identity/history.py
++++ b/src/delist_detection/identity/history.py
+@@ -284,7 +284,7 @@ def is_backfilled(as_of: str, ticker: str, cusips: Sequence[str], ftd: FtdIndex)
+     day = date.fromisoformat(as_of)
+     lo = (day - timedelta(days=BACKFILL_WINDOW_DAYS)).isoformat()
+     hi = (day + timedelta(days=BACKFILL_WINDOW_DAYS)).isoformat()
+-    rows = [r for r in ftd.trading_rows(cusips) if lo <= r.date <= hi]
++    rows = ftd.trading_rows(cusips, lo, hi)
+     if not rows:
+         return False
+     bare = bare_ticker(ticker)
+diff --git a/src/delist_detection/sources/cik_lookup.py b/src/delist_detection/sources/cik_lookup.py
+index c8af9b2..9d0d5d7 100644
+--- a/src/delist_detection/sources/cik_lookup.py
++++ b/src/delist_detection/sources/cik_lookup.py
+@@ -79,7 +79,9 @@ class CikNameIndex:
+             return [], []
+         exact: list[NameHit] = []
+         prefix: list[NameHit] = []
+-        for key, cik, name in self._entries[bisect_left(self._keys, q):]:
++        entries = self._entries
++        for i in range(bisect_left(self._keys, q), len(entries)):       # starts at the first match, copies nothing
++            key, cik, name = entries[i]
+             if not key.startswith(q):
+                 break
+             (exact if key == q else prefix).append(NameHit(cik, name))
+diff --git a/src/delist_detection/sources/ftd.py b/src/delist_detection/sources/ftd.py
+index 308c751..a699b02 100644
+--- a/src/delist_detection/sources/ftd.py
++++ b/src/delist_detection/sources/ftd.py
+@@ -28,6 +28,7 @@ from collections import Counter, defaultdict
+ from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
+ from dataclasses import dataclass, replace
+ from datetime import date, timedelta
++from operator import attrgetter
+ from pathlib import Path
+ from typing import Any, Protocol
+ 
+@@ -49,6 +50,9 @@ _QTR = re.compile(r"cnsp_sec_fails_(\d{4})q([1-4])\.zip$", re.I)
+ FTD_START = date(2004, 1, 1)      # the first day SEC's fails-to-deliver files cover
+ 
+ 
++_date_of = attrgetter("date")
++
++
+ @dataclass(frozen=True)
+ class FtdRow:
+     date: str
+@@ -477,9 +481,8 @@ class FtdIndex:
+ 
+     @staticmethod
+     def _slice(rows: list[FtdRow], lo: str | None, hi: str | None) -> list[FtdRow]:
+-        dates = [r.date for r in rows]
+-        i = bisect_left(dates, lo) if lo else 0
+-        j = bisect_right(dates, hi) if hi else len(rows)
++        i = bisect_left(rows, lo, key=_date_of) if lo else 0
++        j = bisect_right(rows, hi, key=_date_of) if hi else len(rows)
+         return rows[i:j]
+ 
+     def by_symbol(self, symbol: str, lo: str | None = None, hi: str | None = None) -> list[FtdRow]:
+@@ -539,12 +542,13 @@ class FtdIndex:
+         """Every description the fails rows of `cusip` carry."""
+         return {r.description for r in self.by_cusip(cusip)}
+ 
+-    def trading_rows(self, cusips: Iterable[str]) -> list[FtdRow]:
++    def trading_rows(self, cusips: Iterable[str], lo: str | None = None, hi: str | None = None) -> list[FtdRow]:
+         """The rows of `cusips` (each CUSIP's by date, in the order given) that
+         show the security trading: not those under a deleted symbol
+         (`is_deleted_symbol`), which record a fail still settling after the
+-        delisting."""
+-        return [r for c in cusips for r in self.by_cusip(c) if not is_deleted_symbol(r.symbol)]
++        delisting. Only those dated in the ISO span [`lo`, `hi`] when either is
++        given (a bound left out is open)."""
++        return [r for c in cusips for r in self.by_cusip(c, lo, hi) if not is_deleted_symbol(r.symbol)]
+ 
+     def symbol_deleted(self, cusips: Iterable[str]) -> bool:
+         """Whether `cusips` last failed under a deleted symbol only: after the
+diff --git a/tests/test_cik_lookup.py b/tests/test_cik_lookup.py
+index 488fae4..ddf5292 100644
+--- a/tests/test_cik_lookup.py
++++ b/tests/test_cik_lookup.py
+@@ -6,7 +6,8 @@ from pathlib import Path
+ import pytest
+ import requests
+ 
+-from delist_detection.sources.cik_lookup import CIK_LOOKUP_URL, CikLookupClient, CikNameIndex, normalize_name
++from delist_detection.sources.cik_lookup import (
++    CIK_LOOKUP_URL, CikLookupClient, CikNameIndex, NameHit, normalize_name)
+ from delist_detection.sources.edgar import EdgarBlocked
+ from delist_detection.sources.sec_stats import SEC_STATS
+ 
+@@ -136,3 +137,15 @@ def test_a_refusal_raises(tmp_path, _no_throttle):
+     with pytest.raises(EdgarBlocked):
+         CikLookupClient(tmp_path, session=_Session(_Resp(429)), user_agent="ua").index()
+     assert not (tmp_path / "cik-lookup-data.txt").exists()
++
++
++def test_split_search_gives_the_exact_then_prefix_entries_a_plain_scan_gives():
++    """The search walks the sorted entries from the first key that can match, without copying the rest of them."""
++    names = ["ALPHA INC", "ALPHA", "ALPHA HOLDINGS CORP", "ALPHABET INC", "BETA CORP", "ALP", "ZETA", "ALPHA"]
++    index = CikNameIndex.from_text("\n".join(f"{n}:{1000 + i}:" for i, n in enumerate(names)))
++    for q in ["ALPHA", "ALP", "A", "ALPHAB", "BETA", "ZZ", "alpha inc", "", "ZETA"]:
++        key = normalize_name(q)
++        want = [(k, c, n) for k, c, n in index._entries if key and k.startswith(key)]
++        exact, prefix = index.split_search(q)
++        assert exact == [NameHit(c, n) for k, c, n in want if k == key]
++        assert prefix == [NameHit(c, n) for k, c, n in want if k != key]
+diff --git a/tests/test_ftd.py b/tests/test_ftd.py
+index 6801cfe..515cde4 100644
+--- a/tests/test_ftd.py
++++ b/tests/test_ftd.py
+@@ -322,6 +322,22 @@ def test_trading_rows_skip_a_deleted_symbol_and_keep_the_cusip_order():
+     assert idx.descriptions("a00000001") == {"A CO"}
+ 
+ 
++def test_trading_rows_in_a_span_are_the_spans_rows_of_trading_rows():
++    """`trading_rows(cusips, lo, hi)` is `trading_rows(cusips)` cut to the inclusive ISO span, either bound open."""
++    days = ["2020-01-02", "2020-01-02", "2020-01-03", "2020-02-03", "2020-02-03", "2020-03-04"]
++    idx = FtdIndex(_rows(*[(d, c, "AAA" if i != 3 else "AAAXXXX", "A CO", 1.0 + i)
++                           for c in ("A00000001", "B00000001") for i, d in enumerate(days)]))
++    every = idx.trading_rows(["B00000001", "A00000001"])
++    for lo, hi in [(None, None), ("2020-01-03", None), (None, "2020-02-03"), ("2020-01-03", "2020-02-03"),
++                   ("2020-01-04", "2020-02-02"), ("2019-01-01", "2019-12-31"), ("2020-03-04", "2020-03-04"),
++                   ("2020-02-03", "2020-01-03")]:
++        want = [r for r in every if (lo is None or r.date >= lo) and (hi is None or r.date <= hi)]
++        assert idx.trading_rows(["B00000001", "A00000001"], lo, hi) == want, (lo, hi)
++        for c in ("A00000001", "B00000001"):
++            assert idx.by_cusip(c, lo, hi) == [r for r in idx.by_cusip(c)
++                                               if (lo is None or r.date >= lo) and (hi is None or r.date <= hi)]
++
++
+ def test_symbol_deleted_needs_the_last_rows_under_a_deleted_symbol_only():
+     rows = _rows(("2015-10-01", "428236103", "HPQ", "HP INC", 1.0),
+                  ("2015-11-02", "428236103", "HPQXXXX", "HP INC", 1.0))

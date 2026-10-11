@@ -1,6 +1,6 @@
-from delist_detection.classifier import DelistClassifier
-from delist_detection.edgar import EdgarSubmission
-from delist_detection.ticker_resolver import TickerResolver
+from delist_detection.endings.classifier import DelistClassifier
+from delist_detection.sources.edgar import EdgarSubmission
+from delist_detection.identity.ticker_resolver import TickerResolver
 
 # Read at import, before the autouse fixture in conftest.py replaces it.
 _REAL_EFTS_LOOKUP = TickerResolver._efts_lookup
@@ -158,11 +158,13 @@ def test_a_member_company_with_its_own_form25_replaces_the_efts_fallback(monkeyp
     assert (res.cik, res.source) == (765880, "name_search")
 
 
-def test_a_member_name_without_usable_words_is_no_expected_name():
+def test_a_member_name_without_a_three_letter_word_is_an_expected_name_that_agrees_with_its_own_letters():
+    """FB-004 part c: AT&T INC. has no `name_tokens` word, but `names_agree` reads it by its letters (FB-006), so the
+    name tier and the checks use it (2U INC, TWOU); the ticker map still answers first and agrees."""
     att = (732717, ("AT&T INC.", [], [_f("T0", "10-K", "2020-02-19"), _f("T1", "10-Q", "2023-11-01")]))
     e = _Edgar(dict([att]), {}, tickers={"T": {"cik_str": 732717, "ticker": "T", "title": "AT&T INC."}})
     r = TickerResolver(e, observed_names=lambda t, d=None: "AT&T INC.")
-    assert r._expected_name("T", "2024-01-02") is None
+    assert r.expected_name("T", "2024-01-02") == "AT&T INC."
     res = r.resolve("T", "2024-01-02")
     assert (res.cik, res.source) == (732717, "company_tickers")
     rec = DelistClassifier(e, r).classify_ticker("T", "2024-01-02")
@@ -220,14 +222,39 @@ def test_a_pinned_ticker_whose_names_agree_gets_neither_flag(monkeypatch):
 
 def test_a_recycled_tickers_historical_era_keeps_its_dated_filer_not_todays_holder(monkeypatch):
     """A ticker's historical era whose snapshot name is abbreviated ("DUN BRADST
-    HLDG INC") disagrees with both its real issuer's EDGAR name and today's
-    holder of the ticker, an unrelated company that already existed on the
-    date. The dated EFTS filer (the company that filed a Form 25 near the date)
-    is kept, flagged as a name mismatch; the ticker map's holder never is."""
+    HLDG INC") agrees with its real issuer's EDGAR name (FB-006: BRADST is
+    written short) and not with today's holder of the ticker, an unrelated
+    company that already existed on the date. The dated EFTS filer (the company
+    that filed a Form 25 near the date) is kept; the ticker map's holder never is."""
     old = (1115222, ("Dun & Bradstreet Corp", [], [_f("D0", "10-K", "2018-03-01"), _f("D1", "25-NSE", "2019-02-08")]))
     today = (2000002, ("NEWCO BANK", [], [_f("N0", "10-K", "2010-03-01"), _f("N1", "10-Q", "2026-08-01")]))
     _real_efts(monkeypatch, [_hit(("1115222", "Dun & Bradstreet Corp  (CIK 0001115222)"))])
     e = _Edgar(dict([old, today]), {}, tickers={"DNB": {"cik_str": 2000002, "ticker": "DNB", "title": "NEWCO BANK"}})
     r = TickerResolver(e, observed_names=lambda t, d=None: "DUN BRADST HLDG INC")
     res = r.resolve("DNB", "2019-02-08")
-    assert (res.cik, res.source) == (1115222, "efts_name_mismatch")
+    assert (res.cik, res.source) == (1115222, "efts")
+
+
+def test_a_vendors_abbreviated_name_resolves_to_its_issuer_through_a_tier_that_checks_names():
+    """FB-006: AMAT and EXPD (a CUSIP-confirmed FIGI, no issuer CIK): the snapshot writes APPLIED MATERIAL INC and
+    EXPEDITORS INTERNATIONAL OF WASHIN, EDGAR the full names. The ticker map's holder is accepted when its EDGAR
+    name agrees with the observed name, which plural S and truncation no longer defeat."""
+    amat = (6951, ("APPLIED MATERIALS INC /DE", [], [_f("A0", "10-K", "2007-12-20"), _f("A1", "10-Q", "2026-08-01")]))
+    expd = (746515, ("EXPEDITORS INTERNATIONAL OF WASHINGTON INC", [],
+                     [_f("E0", "10-K", "2007-03-01"), _f("E1", "10-Q", "2026-08-01")]))
+    tickers = {"AMAT": {"cik_str": 6951, "ticker": "AMAT", "title": "APPLIED MATERIALS INC"},
+               "EXPD": {"cik_str": 746515, "ticker": "EXPD", "title": "EXPEDITORS INTERNATIONAL OF WASHINGTON INC"}}
+    e = _Edgar(dict([amat, expd]), {}, tickers=tickers)
+    names = {"AMAT": "APPLIED MATERIAL INC", "EXPD": "EXPEDITORS INTERNATIONAL OF WASHIN"}
+    r = TickerResolver(e, observed_names=lambda t, d=None: names[t])
+    for ticker, cik in (("AMAT", 6951), ("EXPD", 746515)):
+        res = r.resolve(ticker, "2026-06-30", name=names[ticker])
+        assert (res.cik, res.source) == (cik, "company_tickers"), ticker
+
+
+def test_spaced_initials_are_searched_run_together_as_edgars_index_spells_them():
+    """FB-006, LCC: the snapshot's U S AIRWAYS GROUP INC is US AIRWAYS GROUP INC in SEC's name index (CIK 701345),
+    which matches by character prefix, so the spaced spelling found nothing."""
+    variants = TickerResolver._name_variants("U S AIRWAYS GROUP INC")
+    assert "US AIRWAYS GROUP INC" in variants and "US AIRWAYS GROUP" in variants
+    assert TickerResolver._name_variants("HALYARD HEALTH INC") == ["HALYARD HEALTH INC", "HALYARD HEALTH", "HALYARD"]

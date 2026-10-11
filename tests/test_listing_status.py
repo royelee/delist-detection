@@ -4,9 +4,10 @@ from pathlib import Path
 
 import pytest
 
-from delist_detection.edgar import EdgarSubmission
-from delist_detection.listing_status import (
-    cover_exchanges, exchanges_around, listed_today, listing_answers, withdrawal_kind,
+from delist_detection.sources.edgar import EdgarSubmission
+from delist_detection.filings.listing_status import (
+    cover_exchanges, exchanges_around, listed_today, listing_answers, quoted_over_the_counter, unlisted_cover,
+    withdrawal_kind,
 )
 
 COVER_2019 = ("UNITED STATES SECURITIES AND EXCHANGE COMMISSION FORM 10-K ... Securities registered pursuant "
@@ -49,6 +50,26 @@ def test_exchanges_around():
                                      date(2020, 6, 8))
     assert before == {"NYSE", "CHICAGO"} and after == {"NASDAQ"}
     assert exchanges_around(_Edgar({}), 1, [], date(2020, 6, 8)) == (None, None)
+
+
+COVER_NONE = ("FORM 10-K ... Securities registered pursuant to Section 12(b) of the Act: Title of each class Name of "
+              "each exchange on which registered None Securities registered pursuant to Section 12(g): Common Stock")
+
+
+def test_unlisted_cover_is_the_first_annual_report_after_the_day_whose_cover_names_no_exchange():
+    """Freddie Mac, Fannie Mae 2010: the next 10-K's "Name of each exchange on which registered" column holds none.
+    An unread report, one with an exchange, one without the column, and a report outside the window are no cover
+    that names none."""
+    filings = [EdgarSubmission("k10", "10-K", "2010-02-24", "", "", "a.htm"),
+               EdgarSubmission("k11", "10-K", "2011-02-24", "", "", "b.htm"),
+               EdgarSubmission("k12", "10-K", "2012-02-24", "", "", "c.htm")]
+    day = date(2010, 6, 28)
+    assert unlisted_cover(_Edgar({"k11": COVER_NONE}), 1, filings, day) == "2011-02-24"
+    assert unlisted_cover(_Edgar({}), 1, filings, day) is None                          # not in the cache
+    assert unlisted_cover(_Edgar({"k11": COVER_2021}), 1, filings, day) is None         # an exchange
+    assert unlisted_cover(_Edgar({"k11": "FORM 10-K ... no such column ..."}), 1, filings, day) is None
+    assert unlisted_cover(_Edgar({"k12": COVER_NONE}), 1, filings[:1] + filings[2:], day) is None   # past the window
+    assert unlisted_cover(_Edgar({"k11": COVER_NONE}), 1, [], day) is None
 
 
 class _Figi:
@@ -125,13 +146,57 @@ def test_the_openfigi_ticker_also_counts_and_no_cik_keeps_the_openfigi_rule():
     assert listed_today(_Figi({}), "CIK5-COMMON", edgar=sub, cik=5, tickers=["NEWT"]) is True
 
 
+def test_a_security_trading_at_the_data_edge_and_delisted_after_the_run_date_was_listed_on_it():
+    """An --as-of run reads today's OpenFIGI and EDGAR listing, which a later delisting has already changed (WBD,
+    LESL and QRVO in a run as of 2026-09-25 read on 2026-10-10). A Form 25 the issuer filed after the run date (the
+    EDGAR client's copy names the forms it left out, `FILED_AFTER_RUN_DATE`) shows that a security still trading at
+    the fails data's end was listed on the run date; the issuer's lines that ended long before (DISCA, DISCK 2022)
+    stay as today's answer says."""
+    from delist_detection.filings.listing_status import listed_on_run_date
+    from delist_detection.sources.edgar import FILED_AFTER_RUN_DATE
+    later = {"tickers": ["WBD"], "exchanges": [""], FILED_AFTER_RUN_DATE: ["25-NSE", "8-K"]}
+    edge, end = date(2026, 9, 14), date(2026, 9, 14)
+    assert listed_on_run_date(False, later, edge, end) is True
+    assert listed_on_run_date(None, later, date(2026, 8, 20), end) is True
+    assert listed_on_run_date(False, later, date(2022, 4, 8), end) is False          # DISCA's line
+    assert listed_on_run_date(False, {**later, FILED_AFTER_RUN_DATE: ["8-K"]}, edge, end) is False
+    assert listed_on_run_date(False, {"tickers": ["WBD"]}, edge, end) is False        # nothing filed after
+    assert listed_on_run_date(True, {}, None, None) is True
+    gone = _Figi({"warning": "No identifier found."})
+    assert listed_today(gone, "BBG011386VF4", edgar=_FixEdgar(later), cik=1437107, tickers=["WBD"]) is False
+
+
+def test_behind_the_clock_edgar_listing_stands_for_a_security_trading_at_the_data_edge():
+    """QRVO and LESL in a run as of 2026-09-25 read on 2026-10-10: OpenFIGI answers "No identifier found" and
+    LESLQ on OTC, EDGAR still lists QRVO and LESL on Nasdaq, no Form 25 yet. A run behind the clock takes EDGAR's
+    listing for a security that traded to the fails data's end; a run on today's date keeps today's answer."""
+    from delist_detection.filings.listing_status import listed_on_run_date
+    from delist_detection.sources.edgar import FILED_AFTER_RUN_DATE
+    qrvo = {"tickers": ["QRVO"], "exchanges": ["Nasdaq"]}
+    end = date(2026, 9, 14)
+    assert listed_on_run_date(False, qrvo, date(2026, 8, 18), end, tickers=["QRVO"], behind_clock=True) is True
+    assert listed_on_run_date(False, qrvo, date(2026, 8, 18), end, tickers=["QRVO"]) is False
+    assert listed_on_run_date(False, qrvo, date(2026, 6, 1), end, tickers=["QRVO"], behind_clock=True) is False
+    otc = {"tickers": ["FMCC"], "exchanges": ["OTC"]}
+    assert listed_on_run_date(False, otc, end, end, tickers=["FMCC"], behind_clock=True) is False
+    assert listed_on_run_date(False, qrvo, end, end, tickers=["XXX"], behind_clock=True) is False
+    # OKE 2026: its Form 25, filed before the run date, schedules the transfer after it: the finder reads it
+    oke = {"tickers": ["OKE"], "exchanges": ["NYSE"],
+           "filings": {"recent": {"form": ["8-K", "25"], "filingDate": ["2026-09-24", "2026-09-17"]}}}
+    assert listed_on_run_date(False, oke, end, end, tickers=["OKE"], behind_clock=True) is False
+    # TWO 2026: its own Form 25 by the run date (the merger) wins over a later Form 25 of its preferred
+    two = {"tickers": ["TWO-PA", "TWOD"], "exchanges": ["NYSE", "NYSE"], FILED_AFTER_RUN_DATE: ["25", "4"],
+           "filings": {"recent": {"form": ["25", "8-K"], "filingDate": ["2026-09-24", "2026-09-10"]}}}
+    assert listed_on_run_date(False, two, end, end, tickers=["TWO"], behind_clock=True) is False
+
+
 def test_a_security_edgar_lists_on_cboe_is_listed_today():
     figi = _Figi({"data": [{"exchCode": "UF", "ticker": "CBOE"}]})
     sub = _FixEdgar({"tickers": ["CBOE"], "exchanges": ["CBOE"]})
     assert listed_today(figi, "BBG000QH56C1", edgar=sub, cik=1374310, tickers=["CBOE"]) is True
 
 
-from delist_detection.openfigi import OpenFigiBlocked
+from delist_detection.sources.openfigi import OpenFigiBlocked
 
 
 class _BatchFigi:
@@ -171,3 +236,16 @@ def test_no_figi_client_or_only_placeholders_asks_nothing():
     figi = _BatchFigi({})
     assert listing_answers(figi, ["CIK1-COMMON"]) == {} and figi.calls == []
     assert listing_answers(None, ["BBG1"]) == {}
+
+
+def test_quoted_over_the_counter_is_an_otc_listing_of_the_securitys_tickers_and_no_major_exchange():
+    """Light & Wonder 2025: EDGAR lists LNWO and LAWIL on the OTC market and nothing on an exchange."""
+    otc = {"tickers": ["LAWIL", "LNWO"], "exchanges": ["OTC", "OTC"]}
+    assert quoted_over_the_counter(otc, ["LNWO"]) is True
+    assert quoted_over_the_counter(otc, None) is True
+    assert quoted_over_the_counter(otc, ["OTHER"]) is False                      # not one of the security's tickers
+    assert quoted_over_the_counter({"tickers": ["LNWO", "LNW"], "exchanges": ["OTC", "Nasdaq"]},
+                                   ["LNWO", "LNW"]) is False
+    assert quoted_over_the_counter({"tickers": ["LNWO"], "exchanges": [None]}, ["LNWO"]) is False
+    assert quoted_over_the_counter({"tickers": [], "exchanges": []}, ["LNWO"]) is False     # Retail Value: no listing
+    assert quoted_over_the_counter(None, ["LNWO"]) is False

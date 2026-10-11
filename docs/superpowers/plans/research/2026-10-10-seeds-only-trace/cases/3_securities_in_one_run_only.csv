@@ -1,0 +1,52 @@
+side,ticker_,ending_kind,ending_last_trade_date,sec_id,issuer_cik,share_class,name,security_type,observed,figi_source
+full_only,,,,BBG000K9SSS5,1666175,COMMON,FORTIS INC,Common Stock,false,cusip
+full_only,,,,BBG013THLHZ4,1866175,CLASS A,CRESCENT ENERGY INC-A,Common Stock,false,cusip
+full_only,ABBI,,,CIK1409012-COMMON,1409012,COMMON,ABRAXIS BIOSCIENCE INC,,true,placeholder
+full_only,ABI,merger,2008-11-21,BBG000FJJW82,77551,COMMON,APPLERA CORP APPLIED,Tracking Stk,true,cusip
+full_only,AGN,merger,2020-05-08,BBG000FH8PX5,1578845,COMMON,ALLERGAN,Common Stock,true,cusip
+full_only,ANN,merger,2015-08-21,BBG000C9N6Q9,874214,COMMON,ANNTAYLOR STORES CORP,Common Stock,true,ticker
+full_only,ARRS,merger,2019-04-03,BBG00928YVY7,1645494,COMMON,ARRIS INTERNATIONAL PLC,Common Stock,true,cusip
+full_only,BG,,,BBG01JZ8VL91,1996862,COMMON,BUNGE GLOBAL SA,Common Stock,true,cusip
+full_only,BSC,,,CIK777001-COMMON,777001,COMMON,BEAR STEARNS COS INC,,true,placeholder
+full_only,CBG,exchange/continuation,,CIK1138118-COMMON,1138118,COMMON,CB RICHARD ELLIS GROUP,,true,placeholder
+full_only,CCE,merger,2016-05-27,BBG000BF5RY1,1491675,COMMON,COCA-COLA ENTERPRISES INC,Common Stock,true,cusip
+full_only,CCE,merger,2010-10-01,CIK804055-COMMON,804055,COMMON,COCA COLA ENTERPRISE,,true,placeholder
+full_only,CCU,,,CIK739708-COMMON,739708,COMMON,CLEAR CHANNEL COMM INC,,true,placeholder
+full_only,CIT,merger,2022-01-03,BBG000Q0BPZ4,1171825,COMMON,CIT GROUP INC,Common Stock,true,cusip
+full_only,CR,,,BBG016G0L0Q5,1944013,COMMON,CRANE,Common Stock,true,cusip
+full_only,DTV,merger,2015-07-24,BBG000FL1TC8,1465112,COMMON,DIRECTV,Common Stock,true,cusip
+full_only,ENDP,dropped,2022-08-25,BBG000C0HQ54,1593034,COMMON,ENDO INTERNATIONAL PLC,Common Stock,true,cusip
+full_only,EVHC,merger,2018-10-10,BBG00D3CHRC0,1678531,COMMON,ENVISION HEALTHCARE CORP,Common Stock,true,cusip
+full_only,FWONA,,,BBG01HLMB809,1560385,CLASS A,LIBERTY MEDIA FORMULA ONE SERIES A,Common Stock,true,cusip
+full_only,FWONK,,,BBG01HLMBCG3,1560385,CLASS C,LIBERTY MEDIA FORMULA ONE SERIES C,Common Stock,true,cusip
+full_only,GCI,merger,2019-11-19,BBG006XVD9G0,1635718,COMMON,GANNETT INC,Common Stock,true,cusip
+full_only,GEN,merger,2012-12-14,BBG000BDB3H1,1126294,COMMON,RELIANT ENERGY INC,Common Stock,true,handoff
+full_only,GGP,exchange/continuation,,CIK895648-COMMON,895648,COMMON,GENERAL GROWTH PPTYS INC,,true,placeholder
+full_only,HTZ,dropped,2020-10-29,BBG00D1WHZD9,1657853,COMMON,HERTZ GLOBAL HOLDINGS INC,Common Stock,true,cusip
+full_only,IGT,,,BBG0081VHTP3,1619762,COMMON,INTERNATIONAL GAME TECHNOLOGY PLC,Common Stock,true,cusip
+full_only,ITT,exchange/continuation,,BBG000BMB7R1,216228,COMMON,ITT CORP,Common Stock,true,cusip
+full_only,LMCA,exchange/continuation,,BBG003P9ZSL3,1560385,SERIES A,LIBERTY MEDIA CORP SERIES A,Common Stock,true,cusip
+full_only,LSXMA,merger,2024-09-09,BBG01HLM8W28,1560385,CLASS A,LIBERTY MEDIA LIBERTY SIRIUSXM COR,Tracking Stk,true,cusip
+full_only,LSXMK,,,BBG01HLMB6H5,1560385,COMMON,LIBERTY MEDIA LIBERTY SIRIUSXM COR,Tracking Stk,true,cusip
+full_only,MDR,dropped,2020-01-17,BBG000BNW1S8,708819,COMMON,MCDERMOTT INTERNATIONAL INC,Common Stock,true,handoff
+full_only,STE,,,BBG00MRHG523,1757898,COMMON,STERIS,Common Stock,true,cusip
+full_only,TCF,merger,2021-06-08,BBG000BFK8Y6,19612,COMMON,TCF FINANCIAL CORP,Common Stock,true,cusip
+full_only,TMA,dropped,2008-12-04,BBG000BBG3P1,892535,COMMON,THORNBURG MORTGAGE INC,Common Stock,true,cusip
+full_only,WCRX,exchange/continuation,,CIK1323854-COMMON,1323854,COMMON,WARNER CHILCOTT LIMITED,,true,placeholder
+full_only,WEN,,,BBG000D52545,30697,COMMON,WENDYS,Common Stock,true,cusip
+full_only,WLL,exchange/continuation,,BBG00WYYC600,1255474,COMMON,WHITING PETROLEUM CORP,Common Stock,true,ticker
+full_only,Z,exchange/continuation,,CIK1334814-CLASS-A,1334814,CLASS A,ZILLOW INC CLASS A,,true,placeholder
+seeds_only,,,,BBG00J5SXTH3,1563190,CLASS A,COMPASS INC - CLASS A,Common Stock,false,cusip
+seeds_only,,,,BBG0178D5YY9,,COMMON,REVELYST INC,Common Stock,false,cusip
+seeds_only,ABBI,merger,,CIK1141399-COMMON,1141399,COMMON,ABRAXIS BIOSCIENCE INC,,true,placeholder
+seeds_only,ACT,exchange,,CIK1578845-COMMON,1578845,COMMON,ACTAVIS PLC,,true,placeholder
+seeds_only,ANN,merger,2015-08-21,CIK811211-COMMON,811211,COMMON,ANNTAYLOR STORES CORP,,true,placeholder
+seeds_only,CBS,,,CIK813828-COMMON,813828,COMMON,CBS CORPORATION,,true,placeholder
+seeds_only,DDR,exchange/continuation,,CIK894315-COMMON,894315,COMMON,DDR REIT CORP,,true,placeholder
+seeds_only,DISH,exchange,,CIK1350031-COMMON,1350031,COMMON,ECHOSTAR COMMUNICATIONS,,true,placeholder
+seeds_only,GGP,exchange/continuation,,CIK811696-COMMON,811696,COMMON,GENERAL GROWTH PPTYS INC,,true,placeholder
+seeds_only,HTA,exchange/continuation,2022-07-20,CIK1360604-COMMON,1360604,COMMON,HEALTHCARE TRUST OF AMERICA INC,,true,placeholder
+seeds_only,IVGN,merger,2008-11-21,CIK77551-COMMON,77551,COMMON,INVITROGEN CORP,,true,placeholder
+seeds_only,RRI,exchange,,CIK1126294-COMMON,1126294,COMMON,RELIANT ENERGY INC,,true,placeholder
+seeds_only,TMA,dropped,2008-12-04,CIK892535-COMMON,892535,COMMON,THORNBURG MORTGAGE INC,,true,placeholder
+seeds_only,UAG,,,CIK1019849-COMMON,1019849,COMMON,UNITED AUTO GROUP INC,,true,placeholder

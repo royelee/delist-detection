@@ -1,6 +1,7 @@
 import pytest
 
-from delist_detection.names import description_matches, description_names, name_tokens, names_agree, names_an_issuer
+from delist_detection.vocabulary.names import (description_matches, description_names, name_tokens, names_agree,
+                                               names_an_issuer)
 
 
 def test_tokens_keep_three_letter_words_and_drop_legal_suffixes():
@@ -10,6 +11,33 @@ def test_tokens_keep_three_letter_words_and_drop_legal_suffixes():
     assert name_tokens("BABCOCK AND WILCOX") == {"BABCOCK", "WILCOX"}
     assert name_tokens("LEAP WIRELESS INTL INC") == {"LEAP", "WIRELESS"}
     assert name_tokens("ANHEUSER BUSCH COMPANIES INC") == name_tokens("ANHEUSER BUSCH COS INC")   # COS is COMPANIES
+
+
+def test_letters_and_digits_run_together_are_one_word():
+    """SKY440 is a word of its own, not SKY (FB-009: SKY440 Inc's fails rows under the recycled ticker SKYF named
+    Sky Financial Group by its one word SKY). A run of digits alone, and a word under three characters, still count
+    for nothing (3M, F5, 1-800-FLOWERS's 800 is no word either way)."""
+    assert name_tokens("SKY440 Inc Common Stock") == {"SKY440"}
+    assert name_tokens("3COM CORP") == {"3COM"}
+    assert name_tokens("1-800-FLOWERS.COM INC") == name_tokens("1 800 FLOWERS COM INC") == {"FLOWERS", "COM"}
+    assert name_tokens("3M CO") == set() and name_tokens("F5 NETWORKS INC") == {"NETWORKS"}
+    assert not description_names("SKY440 Inc Common Stock", "SKY FINANCIAL GROUP INC")
+    assert not description_matches("SKY440 Inc Common Stock", ["SKY FINANCIAL GROUP INC"], empty=False)
+    assert description_names("SKY440 Inc Common Stock", "SKY440 INC")
+    assert names_agree("21ST CENTURY FOX", "TWENTY-FIRST CENTURY FOX, INC.")
+    assert names_agree("HARRIS CORP", "L3HARRIS TECHNOLOGIES CORP")   # a run of four letters or more spells it too
+
+
+def test_a_class_and_a_state_tag_are_no_part_of_a_name_with_no_word_to_compare():
+    """US BANCORP, XP, C3.ai, Nu Holdings and On Holding AG have no word of three letters once legal suffixes are out,
+    so their letters and digits are compared: the snapshot's CLASS A and EDGAR's state tag (US BANCORP \\DE\\) are
+    not part of the name. Without this the ticker map's holder of each of these tickers was refused on its name and
+    the five securities had no issuer unless an old resolver memo held one."""
+    assert names_agree("US BANCORP", "US BANCORP \\DE\\") and names_agree("XP CLASS A INC", "XP Inc.")
+    assert names_agree("C3 AI INC CLASS A", "C3.ai, Inc.") and names_agree("NU HOLDINGS CLASS A", "Nu Holdings Ltd.")
+    assert names_agree("ON HOLDING AG CLASS A", "On Holding AG")
+    assert not names_agree("XP CLASS A INC", "XPO Inc.") and not names_agree("US BANCORP", "US BANCORP PA")
+    assert names_agree("HP INC", "HP Inc.") and not names_agree("HP INC", "HPE Inc.")
 
 
 def test_agreement_needs_two_shared_words_unless_a_name_has_one():
@@ -152,6 +180,19 @@ def test_with_nothing_to_compare_the_answer_is_the_callers():
     ("CLEAR CHANNEL COMMUNICTNS INC", "CITIZENS COMMUNICATIONS CO", False),
     ("INTEGRYS ENERGY GROUP INC COM", "WISCONSIN ENERGY CORP", False),
     ("2U INC COM STK", "SilverSun Technologies, Inc.", False),         # nothing to compare
+    # FB-004: a holding company that keeps the name adds only a holding word (ExxonMobil Holdings, July 2026)
+    ("EXXONMOBIL HLDGS CORPORATION", "EXXON MOBIL CORP", True),
+    ("EXXONMOBIL HOLDINGS CORP", "EXXON MOBIL CORPORATION", True),
+    ("WALT DISNEY HLDGS", "WALT DISNEY CO", True),
+    ("ACME HOLDINGS", "BETA HOLDINGS", False),                         # a holding word is no word shared
+    ("ACME HOLDINGS", "ACME ROCKETS", True),
+    ("HOLDINGS", "HOLDINGS CORP", False),                              # nothing left to compare
+    # FB-003: neither side has a word to compare (WW is two letters, INTERNATIONAL a filler): their letters and
+    # digits, security words out, are the same, as `names_agree` reads such a name (WW International's new CUSIP)
+    ("WW INTL INC COM", "WW INTERNATIONAL INC", True),
+    ("WW INTL INC COM", "WW INTERNATIONAL, INC.", True),
+    ("2U INC COM STK", "2U, Inc.", True),
+    ("WW INTL INC COM", "VV INTERNATIONAL INC", False),
 ])
 def test_a_description_names_a_company_word_by_word(description, name, names):
     assert description_names(description, name) is names
@@ -162,3 +203,99 @@ def test_a_description_names_a_company_word_by_word(description, name, names):
     ("F5 NETWORKS INC", True), ("HCP INC COM STK (MD)", True)])
 def test_a_description_names_an_issuer_when_a_word_is_left(description, named):
     assert names_an_issuer(description) is named
+
+
+# FB-006: the caller's vendor names abbreviate and truncate; issuer agreement reads them the way the fails
+# descriptions are read (plural S, in-order abbreviation and truncation, run-together words).
+@pytest.mark.parametrize("observed, edgar", [
+    ("APPLIED MATERIAL INC", "APPLIED MATERIALS INC /DE"),                           # AMAT, plural
+    ("E I DU PONT DE NEMOURS", "DUPONT E I DE NEMOURS & CO"),                        # DD, run together
+    ("EXPEDITORS INTERNATIONAL OF WASHIN", "EXPEDITORS INTERNATIONAL OF WASHINGTON INC"),    # EXPD, truncation
+    ("FEDERAL NATL MTG ASSOC", "FEDERAL NATIONAL MORTGAGE ASSOCIATION"),             # FNM
+    ("NATIONWIDE FINL SVCS", "NATIONWIDE FINANCIAL SERVICES"),                       # NFS
+    ("OVERSEAS SHIPHOLDNG GRP", "OVERSEAS SHIPHOLDING GROUP INC"),                   # OSG
+    ("VALMONT INDS INC", "VALMONT INDUSTRIES INC"),                                  # VMI
+    ("2U INC", "2U, Inc."),                                                          # TWOU, no word of 3 letters
+    ("RESTAURANTS BRANDS INTERNATIONAL I", "Restaurant Brands International Inc."),  # QSR
+    ("VICI PPTYS INC", "VICI PROPERTIES INC."),                                      # VCCP, vendor abbreviation
+    ("U S AIRWAYS GROUP INC", "US AIRWAYS GROUP INC"),                               # LCC, agreed already
+])
+def test_vendor_names_agree_with_the_edgar_names(observed, edgar):
+    assert names_agree(observed, edgar)
+    assert names_agree(edgar, observed)
+
+
+@pytest.mark.parametrize("a, b", [
+    ("FOREST OIL CORP", "Forest City Enterprises Inc"),
+    ("LEAP WIRELESS INTL INC", "Ribbit LEAP, Ltd."),
+    ("APPLIED MATERIAL INC", "APPLIED BIOSYSTEMS INC"),
+    ("VALMONT INDS INC", "VALLEY NATIONAL INDUSTRIES INC"),
+    ("VICI PPTYS INC", "HEALTHPEAK PROPERTIES INC"),
+    ("FEDERAL NATL MTG ASSOC", "FEDERAL HOME LOAN MORTGAGE CORP"),
+    ("DUPONT FABROS TECHNOLOGY", "E I DU PONT DE NEMOURS"),
+    ("2U INC", "2X INC"),
+    ("2U", "2X"),
+])
+def test_looser_word_equivalence_keeps_different_issuers_apart(a, b):
+    assert not names_agree(a, b)
+
+
+def test_a_name_without_a_word_of_three_letters_compares_as_one_string():
+    assert names_agree("2U INC", "2U, Inc.")
+    assert names_agree("2U", "2U Inc")
+    assert names_agree("3M CO", "3M CO")
+    assert not names_agree("2U INC", "Applied Materials Inc")      # a name with words does not agree with one without
+    assert not names_agree("2U INC", "")
+    assert not names_agree("", "")
+
+
+def test_a_name_can_agree_with_another_when_it_has_a_word_or_letters_left_after_the_fillers():
+    """`has_name` (FB-004 part c): 2U INC, 3M CO, HP INC and AT&T INC. have no word of three letters and still agree
+    with themselves; a name of legal suffixes and fillers only, or an empty one, agrees with nothing."""
+    from delist_detection.vocabulary.names import has_name
+    assert all(has_name(n) for n in ("2U INC", "3M CO", "HP INC", "AT&T INC.", "APPLE INC"))
+    assert not any(has_name(n) for n in ("", "INC", "THE COMPANY", None))
+
+
+def test_the_same_letters_in_any_order_are_one_name_once_the_fillers_are_out():
+    """`same_letters` (FB-004 part c): E I DU PONT DE NEMOURS is EDGAR's DUPONT E I DE NEMOURS & CO with its words run
+    together and moved; a name with a letter more or less, or with no letters, is not."""
+    from delist_detection.vocabulary.names import same_letters
+    assert same_letters("E I DU PONT DE NEMOURS", "DUPONT E I DE NEMOURS & CO")
+    assert same_letters("2U INC", "2U, Inc.") and same_letters("BB&T CORP", "BB AND T CORP")
+    assert not same_letters("DUPONT DE NEMOURS", "E I DU PONT DE NEMOURS")      # the E I
+    assert not same_letters("", "") and not same_letters("INC", "CORP")
+
+
+def test_one_shared_word_still_agrees_only_where_a_side_has_one_word():
+    """Unchanged by the word equivalence: JetBlue Airways and US Airways share one word and US Airways has one."""
+    assert names_agree("JETBLUE AIRWAYS CORP", "U S AIRWAYS GROUP INC")
+    assert not names_agree("JETBLUE AIRWAYS CORP", "DELTA AIR LINES INC")
+    assert not names_agree("AMERICAN AIRWAYS HOLDINGS", "ALASKA AIRWAYS HOLDINGS")   # one shared word of two and two
+
+
+def test_description_name_is_the_issuers_name_without_the_securitys_tail():
+    from delist_detection.vocabulary.names import description_name
+    assert description_name("CYTTA CORP NEW COM STK (NV)") == "CYTTA CORP NEW COM STK"
+    assert description_name("  wendy's/arby's group inc cl a ") == "WENDY'S/ARBY'S GROUP INC CL A"
+    assert description_name("APPLE INC;COM NPV") == "APPLE INC" and description_name("") == ""
+
+
+@pytest.mark.parametrize("description,name,expected", [
+    ("AMERICAN NATL GROUP INC", "AMERICAN NATIONAL INSURANCE CO", True),      # ANAT 2020
+    ("CIGNA CORP NEW COM STK", "CIGNA CORP", True),                            # CI 2018
+    ("MYLAN N V SHS EURO", "MYLAN INC.", True),                                # MYL 2015
+    ("ENDO INTL PLC ORD SHS", "ENDO PHARMACEUTICALS", True),                   # ENDP 2014
+    ("ARRIS INTL LTD ORD SHS", "ARRIS INTERNATIONAL INC", True),               # ARRS 2016
+    ("BUNGE GLOBAL SA SHS", "BUNGE LIMITED", True),                            # BG 2023
+    ("STERIS PLC ORD SHS", "STERIS", True),                                    # STE 2019
+    ("DIRECTV CL A COM STK", "DIRECTV GROUP INC", True),                       # DTV 2009
+    ("FERGUSON ENTERPRISES INC COM", "FERGUSON PLC", True),                    # FERG 2024
+    ("SEA LTD ADR (CYM)", "SPECTRA ENERGY CORP", False),                       # SE 2017: SEA is SPECTRA with letters left out
+    ("LIBERTY GLOBAL PLC SHS CL A", "TELEWEST GLOBAL INC", False),             # VMED 2013: one word, GLOBAL
+    ("BRISTOL MYERS SQUIBB CO CONTIN", "CELGENE CORP", False),                 # CELG 2019
+    ("WW INTL INC COM", "WEIGHT WATCHERS INTL INC", False),                    # no issuer word left: names nothing
+])
+def test_a_description_names_the_issuer_by_a_word_as_spelled(description, name, expected):
+    from delist_detection.vocabulary.names import description_names_issuer
+    assert description_names_issuer(description, name) is expected

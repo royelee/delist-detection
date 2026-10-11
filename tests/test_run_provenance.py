@@ -8,17 +8,17 @@ import pytest
 import requests
 
 import delist_detection.pipeline as pipeline
-from delist_detection import edgar, manifest
-from delist_detection.classifier import DelistRecord
-from delist_detection.crsp_codes import CrspBucket
-from delist_detection.delistings import Delisting
-from delist_detection.edgar import EdgarBlocked
-from delist_detection.sec_stats import SEC_STATS
-from delist_detection.last_trade import LastTrade
-from delist_detection.observations import Observation
-from delist_detection.payout_extractor import PayoutResult
+from delist_detection.outputs import manifest
+from delist_detection.outputs.reconstruction import DelistRecord
+from delist_detection.vocabulary.crsp_codes import CrspBucket
+from delist_detection.endings.delistings import Delisting
+from delist_detection.sources.edgar import EdgarBlocked
+from delist_detection.sources.sec_stats import SEC_STATS
+from delist_detection.endings.last_trade import LastTrade
+from delist_detection.identity.observations import Observation
+from delist_detection.terms.payout_extractor import PayoutResult
 from delist_detection.pipeline import Overrides, run
-from delist_detection.store import read_table, table_path
+from delist_detection.outputs.store import read_table, table_path
 from tests.test_pipeline import LIVE_FIGI, _clients, _index_clients, _same_ticker_acquirer_run
 
 
@@ -102,7 +102,7 @@ class _HaltSession:
 
 
 def _with_halt_feed(fake_edgar, tmp_path, session):
-    from delist_detection.nasdaq_halts import NasdaqHaltClient
+    from delist_detection.sources.nasdaq_halts import NasdaqHaltClient
 
     index, clients = _clients(fake_edgar)
     clients.halts = NasdaqHaltClient(tmp_path / "halts", session=session, min_interval=0, sleep=lambda _: None)
@@ -220,16 +220,35 @@ def test_the_manifest_records_what_the_run_rested_on(fake_edgar, tmp_path):
     # warm_failed is added beyond the brief: SEC_STATS also counts warm_failed:<stage>
     # (Task 9), and the manifest reports every counter group the brief's own
     # _by_prefix helper would otherwise silently drop.
-    assert set(m) == {"as_of", "code_version", "sec_workers", "sec_requests", "cache_answers",
+    assert set(m) == {"as_of", "code_version", "schema_version", "sec_workers", "sec_requests", "cache_answers",
                       "degraded_answers", "warm_degraded", "rejected_queries", "not_covered", "warm_failed",
-                      "latency_ms", "stages", "resolution_degraded", "review", "handoffs"}
+                      "latency_ms", "stages", "resolution_degraded", "review", "handoffs", "continuation_filings",
+                      "disputes", "merger_terms"}
+    assert m["merger_terms"] is None                 # no LLM reader in this run
     assert set(m["stages"]) == {"issuer resolution", "delisting search", "payouts", "successor search",
-                                "handoff search"}
+                                "handoff search", "ticker evidence", "issuers in force",
+                                "dead before first sighting", "handoff notice dates", "line follow",
+                                "other issuers in force", "R1 continuations", "successor endings",
+                                "distress notices", "continuation readings", "unexplained endings"}
     assert m["handoffs"] == {"handoffs": 0, "continuations_by_filing": 0, "continuations_by_timing": 0,
                              "takeovers": 0, "conflicts": 0, "rows_added": 0}
     assert m["resolution_degraded"] == 0
     assert m["review"] == {"fix": 0, "check": 2, "info_hidden": 0, "accepted": 0, "cleared": 0,
                            "unmatched_decisions": 0}     # review_triage.triage()'s own tally
+
+
+def test_the_manifest_names_the_merger_terms_model_and_where_its_answers_came_from(tmp_path):
+    """FB-004: a value change is read against a model change, so the manifest carries the LLM reader's model and its
+    answers' sources (`LLMMergerTermsExtractor.usage`)."""
+    from delist_detection.outputs import manifest
+    from delist_detection.terms.llm_merger_extractor import LLMMergerTermsExtractor
+    reader = LLMMergerTermsExtractor(None, None, model="claude-sonnet-5-5", cache_dir=tmp_path)
+    usage = pipeline._merger_terms_usage(reader)
+    assert usage == {"model": "claude-sonnet-5-5", "answers": 0, "from_cache": 0, "asked": 0, "failed": 0}
+    m = manifest.build(as_of=date(2026, 9, 25), sec_workers=1, counts={}, timings={}, stages={}, review_flags={},
+                       review={}, merger_terms=usage)
+    assert m["merger_terms"]["model"] == "claude-sonnet-5-5"
+    assert pipeline._merger_terms_usage(object()) is None      # a double keeps no account
 
 
 def test_a_refused_run_leaves_the_previous_manifest_in_place(fake_edgar, tmp_path):

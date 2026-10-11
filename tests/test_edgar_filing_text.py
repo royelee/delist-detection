@@ -1,5 +1,5 @@
-from delist_detection.edgar import EdgarClient
-from delist_detection.html_text import strip_html
+from delist_detection.sources.edgar import EdgarClient
+from delist_detection.sources.html_text import strip_html
 
 
 def test_strip_html_removes_tags_and_scripts():

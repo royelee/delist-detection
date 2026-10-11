@@ -4,18 +4,22 @@ from datetime import date
 
 import pytest
 
-from delist_detection.classifier import DelistRecord
-from delist_detection.crsp_codes import CrspBucket
-from delist_detection.delistings import SUCCESSOR_UNKNOWN, Delisting
-from delist_detection.ftd import FtdIndex, FtdRow
-from delist_detection.handoffs import (
-    CONTINUATION_DAYS, OVERLAP_DAYS, TAKEOVER_DAYS, HandoffDecision, HandoffPair, apply_handoffs, continuation_filing,
-    cusip_switch, decide_handoff, drop_resolved_shared, find_handoffs, issuer_carries_on, predecessor_names,
+from delist_detection.outputs.reconstruction import DelistRecord
+from delist_detection.vocabulary.crsp_codes import CrspBucket
+from delist_detection.sources.edgar import EdgarSubmission
+from delist_detection.endings.delistings import Delisting
+from delist_detection.sources.ftd import FtdIndex, FtdRow
+from delist_detection.endings.handoffs import (
+    CARRIED_PRICE, CONTINUATION_DAYS, OVERLAP_DAYS, TAKEOVER_DAYS, HandoffDecision, HandoffPair, apply_handoffs, continuation_filing,
+    cusip_switch, switch_price_ratio, own_continuation_filing, decide_handoff, drop_resolved_shared, find_handoffs, issuer_carries_on, predecessor_names,
 )
-from delist_detection.history import Sighting
-from delist_detection.last_trade import LastTrade
-from delist_detection.review_triage import ReviewItem
-from delist_detection.security_master import Security
+from delist_detection.identity.history import Sighting
+from delist_detection.endings.last_trade import LastTrade
+from delist_detection.terms.llm_merger_extractor import MergerTerms
+from delist_detection.terms.merger_value import MergerValue, MergerValues, TableTerms
+from delist_detection.outputs.review_triage import FilingRef, ReviewItem
+from delist_detection.endings.rewrites import SUCCESSOR_UNKNOWN, Rule, rewrite_by
+from delist_detection.identity.security_master import Security
 
 
 def _sig(*items):
@@ -231,6 +235,60 @@ def test_a_cusip_switch_under_the_ticker_near_the_handoff():
     assert not cusip_switch(far, late, ["450911201"], ["45073V108"])     # A's CUSIP stopped months before
 
 
+def test_the_price_across_a_cusip_switch_is_bs_first_over_as_last():
+    """Seadrill 2018: G7945E105 last fails under SDRL at 0.10, G7998G106 first at 18.50."""
+    ftd = FtdIndex([FtdRow("2018-06-20", "G7945E105", "SDRL", "SEADRILL LTD", 0.21),
+                    FtdRow("2018-07-03", "G7945E105", "SDRL", "SEADRILL LTD", 0.10),
+                    FtdRow("2018-07-05", "G7998G106", "SDRL", "SEADRILL LTD NEW SHS", 18.50),
+                    FtdRow("2018-07-09", "G7998G106", "SDRL", "SEADRILL LTD NEW SHS", 19.00)])
+    p = _pair("2018-07-03", "2018-07-05", ticker="SDRL")
+    assert switch_price_ratio(ftd, p, ["G7945E105"], ["G7998G106"]) == pytest.approx(185.0)
+    assert switch_price_ratio(ftd, p, ["G7945E105"], ["G7945E105"]) is None       # no switch: no ratio
+    assert switch_price_ratio(ftd, p, ["G7945E105"], ["99999Z999"]) is None
+    for a_price, b_price in ((None, 18.50), (0.10, None), (0.0, 18.50), (0.10, 0.0)):
+        gap = FtdIndex([FtdRow("2018-07-03", "G7945E105", "SDRL", "SEADRILL LTD", a_price),
+                        FtdRow("2018-07-05", "G7998G106", "SDRL", "SEADRILL LTD NEW SHS", b_price)])
+        assert cusip_switch(gap, p, ["G7945E105"], ["G7998G106"])                 # the switch itself still holds
+        assert switch_price_ratio(gap, p, ["G7945E105"], ["G7998G106"]) is None   # a price missing or not above zero
+    far = FtdIndex([FtdRow("2018-01-04", "G7945E105", "SDRL", "SEADRILL LTD", 0.30),
+                    FtdRow("2018-07-05", "G7998G106", "SDRL", "SEADRILL LTD NEW SHS", 18.50)])
+    assert switch_price_ratio(far, p, ["G7945E105"], ["G7998G106"]) is None       # where `cusip_switch` does not hold
+
+
+@pytest.mark.parametrize("ratio,kind", [
+    (185.0, None),            # Seadrill 2018: a bankruptcy plan's new shares
+    (0.29, None),             # The Aaron's Company 2020: a spin-off that took the ticker
+    (0.46, None),             # NWS-A 2013
+    (0.66, None), (1.51, None),
+    (0.67, "continuation"), (1.5, "continuation"),
+    (0.89, "continuation"),   # GGP 2010
+    (None, "continuation"),   # no price on one side (WEN 2009): as before
+])
+def test_a_cusip_switch_between_two_issuers_is_a_continuation_only_when_the_price_carried_over(ratio, kind):
+    d = decide_handoff(_pair("2015-06-12", "2015-06-15"), filing=None, same_issuer=False, cusip_switch=True,
+                       price_ratio=ratio)
+    assert (d.kind if d else None) == kind
+    if d is not None:
+        assert d.evidence == "timing:cusip"
+
+
+def test_the_price_is_not_read_for_one_issuer_or_against_a_filing():
+    """LMCA 2016: one share became three of the same issuer's; the price fell to 0.487 and the line is the same."""
+    p = _pair("2016-04-15", "2016-04-18")
+    d = decide_handoff(p, filing=None, same_issuer=True, cusip_switch=True, price_ratio=0.487)
+    assert (d.kind, d.evidence) == ("continuation", "timing:cik")
+    d = decide_handoff(p, filing=FILING, same_issuer=False, cusip_switch=True, price_ratio=185.0)
+    assert d.kind == "continuation" and d.by_filing
+
+
+def test_a_switch_whose_price_did_not_carry_over_can_still_be_a_takeover():
+    """An older issuer taking the ticker at another price: rule 3 still answers."""
+    p = _pair("2015-06-12", "2015-06-15")
+    d = decide_handoff(p, filing=None, same_issuer=False, cusip_switch=True, price_ratio=185.0,
+                       b_issuer_since="2010-01-04")
+    assert (d.kind, d.evidence) == ("takeover", "timing:issuer")
+
+
 # --- acting on a pair (Task 5) -----------------------------------------------------------
 
 
@@ -246,9 +304,10 @@ def _delisting(sid, dd, bucket, last_trade, code=231, cik=315293, ticker="AON", 
 
 
 AON = HandoffPair("AON", "OLD", "NEW", "2020-03-31", "2020-04-01", "2020-04-01")
+AON_F25 = FilingRef("25-NSE", "0000876661-20-000266", "2020-03-31")
 AON_UNMATCHED = ReviewItem("OLD", "AON", 315293, "form25_unmatched",
                            "25-NSE 0000876661-20-000266 ('Class A Ordinary Shares'): ambiguous class",
-                           delist_date="2020-04-10")
+                           delist_date="2020-04-10", filing=AON_F25)
 
 
 def test_a_continuation_with_no_delisting_gets_an_exchange_transfer_row():
@@ -262,7 +321,7 @@ def test_a_continuation_with_no_delisting_gets_an_exchange_transfer_row():
               AON_UNMATCHED,
               ReviewItem("NEW", "AON", 315293, "form25_unmatched",
                          "25-NSE 0000876661-20-000266 ('Class A Ordinary Shares'): ambiguous class",
-                         delist_date="2020-04-10"),
+                         delist_date="2020-04-10", filing=AON_F25),
               ReviewItem("OTHER", "ZZ", 1, "ended_without_delisting", "not listed today ...")]
     out = apply_handoffs([HandoffDecision(AON, "continuation", "8-K12B 0001104659-20-041234", True)], [],
                          {"OLD": _sec("OLD"), "NEW": _sec("NEW")}, review)
@@ -278,6 +337,9 @@ def test_a_continuation_with_no_delisting_gets_an_exchange_transfer_row():
     assert [(r.sec_id, r.flag) for r in out.review] == [("OTHER", "ended_without_delisting")]
     assert out.counts == {"handoffs": 1, "continuations_by_filing": 1, "continuations_by_timing": 0,
                           "takeovers": 0, "conflicts": 0, "rows_added": 1}
+    handoff = rewrite_by(d, Rule.HANDOFF)          # the stage 9c cap, typed
+    assert (handoff.successor, handoff.evidence, handoff.successor_from) == (
+        "NEW", "8-K12B 0001104659-20-041234", "2020-04-01")
 
 
 def test_a_continuation_by_timing_with_no_form25_is_dated_the_day_after_and_is_medium():
@@ -301,8 +363,22 @@ def test_the_old_line_ends_before_the_new_one_begins():
     row.last_trade = LastTrade(None, "", ("no_last_trade_date",))
     p = HandoffPair("PNFP", "OLD", "NEW", "2026-01-12", "2026-01-05", "2026-01-05", "2026-01-12")
     apply_handoffs([HandoffDecision(p, "continuation", "8-K12B X", True)], [row],
-                   {"OLD": _sec("OLD"), "NEW": _sec("NEW")}, [])
+                   {"OLD": _sec("OLD"), "NEW": _sec("NEW")}, [], payouts=MergerValues())
     assert row.last_trade.day == date(2026, 1, 4) and "no_last_trade_date" not in row.flags
+
+
+def test_a_worked_out_closing_day_never_reaches_the_successors_first_day():
+    """5d rule 4: a kept row's closing day (the Form 25 day, 2013-11-13) on the day the successor was first sighted
+    under the ticker is cut to the old line's last day before it; one before it stands."""
+    p = HandoffPair("X", "OLD", "NEW", "2013-11-12", "2013-11-13", "2013-11-13")
+    late = _delisting("OLD", "2013-11-23", CrspBucket.EXCHANGE_TRANSFER, "2013-11-13", code=304)
+    late.last_trade = LastTrade(date(2013, 11, 13), "closing_day", ("last_trade_date_unconfirmed",))
+    early = _delisting("OLD", "2013-11-23", CrspBucket.EXCHANGE_TRANSFER, "2013-11-11", code=304)
+    early.last_trade = LastTrade(date(2013, 11, 11), "closing_day", ("last_trade_date_unconfirmed",))
+    for row, day, source in ((late, date(2013, 11, 12), "last_sighting"), (early, date(2013, 11, 11), "closing_day")):
+        apply_handoffs([HandoffDecision(p, "continuation", "8-K12B X", True)], [row],
+                       {"OLD": _sec("OLD"), "NEW": _sec("NEW")}, [])
+        assert (row.last_trade.day, row.last_trade.source) == (day, source)
 
 
 def test_an_existing_exchange_transfer_near_the_handoff_takes_the_successor():
@@ -324,13 +400,38 @@ def test_a_merger_row_is_rewritten_on_filing_evidence_and_the_old_bucket_is_revi
     row = _delisting("OLD", "2026-01-12", CrspBucket.MERGER, "2026-01-02")
     p = HandoffPair("PNFP", "OLD", "NEW", "2026-01-12", "2026-01-05", "2026-01-05")
     out = apply_handoffs([HandoffDecision(p, "continuation", "8-K12B 0000000000-26-000001", True)], [row],
-                         {"OLD": _sec("OLD"), "NEW": _sec("NEW")}, [], reconciled={row.key})
+                         {"OLD": _sec("OLD"), "NEW": _sec("NEW")}, [], reconciled={row.key},
+                         payouts=MergerValues())
     assert (row.record.bucket, row.record.crsp_code, row.record.confidence) == (CrspBucket.EXCHANGE_TRANSFER, 304,
                                                                                 "high")
     assert row.record.successor_sec_id == "NEW" and "handoff_continuation" in row.flags
     (item,) = out.review
     assert (item.sec_id, item.delist_date, item.flag) == ("OLD", "2026-01-12", "handoff_rebucketed")
     assert "merger" in item.reason and "231" in item.reason
+
+
+def test_a_rewritten_merger_drops_its_payout_reads_and_flags_and_a_rewritten_unknown_its_default():
+    """AZPN 2022: the merger row the handoff makes a continuation carried its gate's flags and value; ENDP 2014 its
+    lagged acquirer close; GOOGL 2015 (an `unknown` Form 25 at Alphabet's 8-K12B) the no-evidence default. A
+    continuation carries none of them (`rewrites.continuation`); the last close's own flags stay."""
+    azpn = _delisting("OLD", "2022-05-26", CrspBucket.MERGER, "2022-05-16", ticker="AZPN",
+                      flags=("last_trade_date_unconfirmed", "ftd_close_prior:1", "acquirer_close_lagged"))
+    values = MergerValues({azpn.key: MergerValue(azpn.key, llm=MergerTerms("cash", 87.69, None, None, None, "high",
+                                                                          "8-K:X", ""),
+                                                 flags=("payout_gate_failed:87.69", "terms_gate_failed:no_acq_ticker"))})
+    p = HandoffPair("AZPN", "OLD", "NEW", "2022-05-17", "2022-05-18", "2022-05-18")
+    apply_handoffs([HandoffDecision(p, "continuation", "8-K12B 0001140361-22-019477", True)], [azpn],
+                   {"OLD": _sec("OLD"), "NEW": _sec("NEW")}, [], payouts=values)
+    assert (azpn.record.bucket, azpn.record.crsp_code, azpn.record.successor_sec_id) == (
+        CrspBucket.EXCHANGE_TRANSFER, 304, "NEW")
+    assert azpn.flags == ["last_trade_date_unconfirmed", "ftd_close_prior:1", "handoff_continuation"]
+    assert values.get(azpn.key) is None and values.table_terms(azpn.key) == TableTerms()
+    googl = _delisting("OLD", "2015-10-12", CrspBucket.UNKNOWN, "2015-10-02", code=None, ticker="GOOGL",
+                       flags=("no_evidence_default",))
+    p = HandoffPair("GOOGL", "OLD", "NEW", "2015-10-05", "2015-10-06", "2015-10-06")
+    apply_handoffs([HandoffDecision(p, "continuation", "8-K12B 0001193125-15-336577", True)], [googl],
+                   {"OLD": _sec("OLD"), "NEW": _sec("NEW")}, [], payouts=MergerValues())
+    assert googl.record.crsp_code == 304 and googl.flags == ["handoff_continuation"]
 
 
 def test_a_merger_row_with_a_reconciled_payout_stands_against_timing_evidence():
@@ -360,7 +461,7 @@ def test_a_merger_row_stands_against_a_cusip_switch_between_two_issuers():
     same = _delisting("OLD", "2016-09-30", CrspBucket.MERGER, "2016-09-19", ticker="ASH")
     q = HandoffPair("ASH", "OLD", "NEW", "2016-09-19", "2016-09-20", "2016-09-20", "2016-09-19")
     out = apply_handoffs([HandoffDecision(q, "continuation", "timing:cik", False)], [same],
-                         {"OLD": _sec("OLD"), "NEW": _sec("NEW")}, [])
+                         {"OLD": _sec("OLD"), "NEW": _sec("NEW")}, [], payouts=MergerValues())
     assert same.record.bucket is CrspBucket.EXCHANGE_TRANSFER and same.record.successor_sec_id == "NEW"
     assert [i.flag for i in out.review] == ["handoff_rebucketed"]
 
@@ -408,8 +509,9 @@ def test_the_filing_is_searched_under_the_predecessors_names_around_the_handoff(
 
 
 def _unmatched(sec_id, accession, delist_date, class_text="Common Stock"):
+    filed = date.fromordinal(date.fromisoformat(delist_date).toordinal() - 10).isoformat()   # its effective date - 10
     return ReviewItem(sec_id, "TT", 1, "form25_unmatched", f"25-NSE {accession} ('{class_text}'): ambiguous class",
-                      delist_date=delist_date)
+                      delist_date=delist_date, filing=FilingRef("25-NSE", accession, filed))
 
 
 def test_the_continuation_row_takes_a_form25_effective_after_the_last_sighting_not_one_before():
@@ -439,3 +541,62 @@ def test_the_form25_window_runs_from_the_later_of_the_two_sightings():
                          {"OLD": _sec("OLD"), "NEW": _sec("NEW")}, [f25])
     (d,) = out.added
     assert d.delist_date == "2024-05-30" and out.review == []
+
+
+def _sub(form, day, acc="0000000001-19-000001"):
+    return EdgarSubmission(accession=acc, form=form, filing_date=day, report_date="", items="", primary_doc="")
+
+
+def test_own_continuation_filing_reads_the_successors_filing_list():
+    filings = [_sub("8-K", "2019-07-31", "a"), _sub("8-K12B", "2019-07-31", "b"), _sub("10-Q", "2019-08-02", "c")]
+    assert own_continuation_filing(filings, date(2019, 8, 1)) == ("8-K12B", "b", "2019-07-31")
+    assert own_continuation_filing([_sub("8-K12G3", "2019-09-20", "d")], date(2019, 8, 1)) == ("8-K12G3", "d", "2019-09-20")
+
+
+def test_own_continuation_filing_keeps_to_the_search_window():
+    assert own_continuation_filing([_sub("8-K12B", "2019-06-30")], date(2019, 8, 1)) is None    # 32 days before
+    assert own_continuation_filing([_sub("8-K12B", "2019-10-01")], date(2019, 8, 1)) is None    # 61 days after
+    assert own_continuation_filing([_sub("8-K", "2019-07-31")], date(2019, 8, 1)) is None
+
+
+def test_a_derived_line_after_wendys_international_is_a_timing_continuation_that_the_merger_row_survives():
+    """WEN 2008: Wendy's International's merger into Triarc. The derived line (CUSIP 950587105) has fails rows from
+    2008-09-29 only, so it is a new line right after the old one's last row, across two issuers and a CUSIP switch:
+    `decide_handoff` says continuation by timing, and the merger row stands against it (`handoff_conflict`)."""
+    old = _sig(("2008-03-24", "WEN"), ("2008-09-26", "WEN"))
+    new = _sig(("2008-09-29", "WEN"), ("2008-10-01", "WEN"), ("2011-07-08", "WEN"))
+    (p,) = find_handoffs({"OLD": old, "NEW": new})
+    assert (p.ticker, p.a_last, p.b_first, p.b_first_any) == ("WEN", "2008-09-26", "2008-09-29", "2008-09-29")
+    d = decide_handoff(p, filing=None, same_issuer=False, cusip_switch=True, b_issuer_since="1993-01-04")
+    assert (d.kind, d.evidence) == ("continuation", "timing:cusip")
+    row = _delisting("OLD", "2008-09-29", CrspBucket.MERGER, "2008-09-26", ticker="WEN", cik=105668)
+    out = apply_handoffs([d], [row], {"OLD": _sec("OLD", 105668), "NEW": _sec("NEW", 30697)}, [])
+    assert row.record.bucket is CrspBucket.MERGER and row.record.successor_sec_id is None
+    assert [i.flag for i in out.review] == ["handoff_conflict"]
+
+
+def test_a_derived_line_whose_issuer_traded_before_under_another_ticker_takes_the_ticker_over():
+    """The same pair when the new line's CUSIPs include Triarc's, which traded as TRY until 2008-09-26: B existed."""
+    old = _sig(("2008-03-24", "WEN"), ("2008-09-26", "WEN"))
+    new = _sig(("2007-12-31", "TRY"), ("2008-09-26", "TRY"), ("2008-09-29", "WEN"), ("2011-07-08", "WEN"))
+    (p,) = find_handoffs({"OLD": old, "NEW": new})
+    assert (p.b_first, p.b_first_any) == ("2008-09-29", "2007-12-31")
+    d = decide_handoff(p, filing=None, same_issuer=False, cusip_switch=True, b_issuer_since="1993-01-04")
+    assert (d.kind, d.evidence) == ("takeover", "timing")
+    row = _delisting("OLD", "2008-09-29", CrspBucket.MERGER, "2008-09-26", ticker="WEN", cik=105668)
+    apply_handoffs([d], [row], {"OLD": _sec("OLD", 105668), "NEW": _sec("NEW", 30697)}, [])
+    assert row.record.bucket is CrspBucket.MERGER and row.record.ticker_successor_sec_id == "NEW"
+
+
+def test_a_derived_line_twenty_days_after_the_old_one_of_an_older_issuer_is_a_takeover():
+    """TCF 2019: Chemical Financial (an issuer filing since 1991) took the ticker TCF twenty days after TCF Financial's
+    last fails row: no continuation by timing (past `CONTINUATION_DAYS`), a takeover by the older issuer."""
+    old = _sig(("2017-05-10", "TCF"), ("2019-07-12", "TCF"))
+    new = _sig(("2019-08-01", "TCF"), ("2021-06-11", "TCF"))
+    (p,) = find_handoffs({"OLD": old, "NEW": new})
+    assert (p.a_last, p.b_first, p.gap) == ("2019-07-12", "2019-08-01", 20)
+    d = decide_handoff(p, filing=None, same_issuer=False, cusip_switch=True, b_issuer_since="1991-01-01")
+    assert (d.kind, d.evidence) == ("takeover", "timing:issuer")
+    row = _delisting("OLD", "2019-08-01", CrspBucket.MERGER, "2019-07-31", ticker="TCF", cik=814184)
+    apply_handoffs([d], [row], {"OLD": _sec("OLD", 814184), "NEW": _sec("NEW", 19612)}, [])
+    assert row.record.bucket is CrspBucket.MERGER and row.record.ticker_successor_sec_id == "NEW"

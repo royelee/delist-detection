@@ -1,4 +1,4 @@
-from delist_detection.exchanges import Exchange, normalize_exchange
+from delist_detection.vocabulary.exchanges import Exchange, normalize_exchange
 
 
 def test_normalize_nyse_variants():

@@ -15,8 +15,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-from delist_detection.review_triage import CATALOG, ReviewDecisionError, accept_by_flag, append_decisions
-from delist_detection.store import read_table
+from delist_detection.outputs.review_triage import CATALOG, ReviewDecisionError, accept_by_flag, append_decisions
+from delist_detection.outputs.store import read_table
 
 DEFAULT_REVIEW = str(ROOT / "output" / "review.csv")
 DEFAULT_DECISIONS = str(ROOT / "data" / "review_decisions.csv")

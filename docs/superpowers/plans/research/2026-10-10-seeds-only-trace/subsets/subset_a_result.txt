@@ -1,0 +1,55 @@
+seed               issuer full/seeds/base/f1                    ending full | seeds | base | f1
+ABBI@2008-01-16    1409012/1141399/1141399/1141399              still none | merger  | merger  | merger 
+AL@2012-06-29      1487712/1517783/1517783/1487712              FIXED merger 2026-04-07 | none | none | merger 2026-04-07
+ANN@2008-01-16     874214/811211/811211/34151                   BROKE merger 2015-08-21 | merger 2015-08-21 | merger 2015-08-21 | merger 2011-03-18
+ATVI@2008-01-16    718877/718877/718877/718877                  still merger 2023-10-12 | merger  | merger  | merger 
+BKC@2008-01-16     1352801/4707/4707/1352801                    FIXED merger 2010-10-19 | none | none | merger 2010-10-19
+CCE@2008-01-16     804055/././804055                            FIXED merger 2010-10-01 | none | none | merger 2010-10-01
+CEG@2008-01-16     1004440/././.                                still merger 2012-03-12 | none | none | none
+CEG@2022-06-30     1868275/1868275/1868275/1868275              same  none | none | none | none
+CLWR@2008-01-16    1285551/1285551/1285551/1285551              still merger 2013-07-09 | merger  | merger  | merger 
+CST@2013-06-28     1562039/././1562039                          FIXED merger 2017-06-27 | none | none | merger 2017-06-27
+DISH@2008-01-16    1001082/1350031/1350031/1001082              FIXED merger 2023-12-29 | exchange  | exchange/cont  | merger 2023-12-29
+DISH@2012-06-29    1001082/1001082/1001082/1001082              same  merger 2023-12-29 | merger 2023-12-29 | merger 2023-12-29 | merger 2023-12-29
+DNB@2008-01-16     1115222/1115222/1115222/1115222              same  merger 2019-02-07 | merger 2019-02-07 | merger 2019-02-07 | merger 2019-02-07
+DNB@2020-12-31     1799208/././.                                still merger 2025-08-25 | none | none | none
+DOW@2008-01-16     29915/65100/65100/29915                      still exchange/cont 2017-08-31 | none | none | merger 2017-08-31
+DOW@2019-06-30     1751788/1751788/1751788/1751788              same  none | none | none | none
+FTI@2008-01-16     1135152/1106714/1106714/1135152              FIXED merger 2017-01-13 | exchange/cont  | exchange/cont  | merger 2017-01-13
+FTI@2023-06-30     1681459/1681459/1681459/1681459              same  none | none | none | none
+GGP@2008-01-16     895648/811696/811696/895648                  same  exchange/cont  | exchange/cont  | exchange/cont  | exchange/cont 
+GGP@2012-06-29     1496048/1496048/1496048/1496048              still none | none | merger 2018-08-27 | merger 2018-08-27
+GGP@2014-12-31     1496048/1496048/1496048/1496048              still none | none | merger 2018-08-27 | merger 2018-08-27
+GGP@2017-06-30     1496048/1496048/1496048/1496048              still none | none | merger 2018-08-27 | merger 2018-08-27
+HOT@2008-01-16     316206/././316206                            FIXED merger 2016-09-22 | none | none | merger 2016-09-22
+ITC@2012-06-29     1317630/1041954/1041954/1317630              FIXED merger 2016-10-13 | none | none | merger 2016-10-13
+IVGN@2008-01-16    1073431/77551/77551/77551                    still merger 2014-02-03 | merger 2008-11-21 | merger 2008-11-21 | merger 2008-11-21
+LPI@2012-06-29     1528129/1519352/1519352/1528129              FIXED merger 2025-12-12 | none | none | merger 2025-12-12
+MDR@2008-01-16     708819/././708819                            FIXED dropped 2020-01-17 | none | none | dropped 2020-01-17
+MEL@2008-01-16     64782/1403928/1403928/1403928                still merger 2007-06-29 | none | none | none
+MER@2008-01-16     65100/65100/65100/65100                      FIXED merger 2008-12-31 | none | none | merger 2008-12-31
+MTCH@2015-12-31    891103/1575189/1575189/891103                same  merger 2020-06-30 | merger 2020-06-30 | merger 2020-06-30 | merger 2020-06-30
+MYL@2008-01-16     69499/69499/69499/69499                      still exchange/cont  | merger 2015-02-27 | merger 2015-02-27 | merger 2015-02-27
+NSAM@2014-12-31    1597503/869304/869304/1597503                FIXED merger 2017-01-10 | none | none | merger 2017-01-10
+NWA@2008-01-16     1058033/././.                                still merger 2008-10-29 | none | none | none
+OMX@2008-01-16     12978/6176/6176/12978                        FIXED merger 2013-11-05 | exchange 2013-11-05 | exchange 2013-11-05 | merger 2013-11-05
+PAG@2014-06-30     1019849/1019849/1019849/1019849              same  none | none | none | none
+PARAA@2022-06-30   813828/813828/813828/813828                  still merger 2025-08-06 | none | none | none
+PBCT@2008-01-16    1378946/1406081/1406081/1378946              FIXED merger 2022-04-01 | dropped  | dropped  | merger 2022-04-01
+PPDI@2008-01-16    1003124/././1003124                          FIXED merger 2011-12-05 | none | none | merger 2011-12-05
+PRE@2008-01-16     911421/877355/877355/911421                  FIXED merger 2016-03-17 | dropped  | dropped  | merger 2016-03-17
+PS@2018-12-31      1725579/866368/866368/1725579                FIXED merger 2021-04-05 | exchange 2021-04-05 | exchange 2021-04-05 | merger 2021-04-05
+S@2008-01-16       101830/65100/65100/101830                    FIXED exchange/cont 2013-07-10 | merger 2013-07-10 | merger 2013-07-10 | exchange/cont 2013-07-10
+S@2014-06-30       101830/1268305/1268305/101830                FIXED merger 2020-03-31 | none | none | merger 2020-03-31
+S@2022-06-30       1583708/1583708/1583708/1583708              same  none | none | none | none
+SC@2014-06-30      1580608/706874/706874/1580608                FIXED merger 2022-01-28 | none | none | merger 2022-01-28
+SPB@2014-06-30     109177/1487730/1487730/109177                still exchange/cont 2018-07-13 | merger 2018-07-13 | merger 2018-07-13 | merger 2018-07-13
+SUNW@2008-01-16    709519/709519/709519/709519                  still merger  | none | none | none
+TRH@2008-01-16     862510/862510/862510/862510                  same  merger 2012-03-05 | merger 2012-03-05 | merger 2012-03-05 | merger 2012-03-05
+UAG@2008-01-16     1019849/1019849/1019849/1019849              same  none | none | none | none
+VAL@2008-01-16     102741/1398931/1398931/102741                FIXED merger 2017-05-31 | blank  | blank  | merger 2017-05-31
+VIACA@2019-12-31   813828/813828/813828/813828                  still merger 2025-08-06 | none | none | none
+VIACA@2021-12-31   813828/813828/813828/813828                  still merger 2025-08-06 | none | none | none
+WBA@2014-12-31     1618921/1294016/1294016/1618921              FIXED merger 2025-08-27 | none | none | merger 2025-08-27
+Y@2008-01-16       775368/93410/93410/775368                    same  merger 2022-10-18 | merger 2022-10-18 | merger 2022-10-18 | merger 2022-10-18
+{'issuer: f1 matches full': 46, 'issuer: base matches full': 20, 'ending: f1 matches full': 34, 'ending: base matches full': 13, 'ending fixed by f1': 22, 'ending broken by f1': 1, 'n': 53}

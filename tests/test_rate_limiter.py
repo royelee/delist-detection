@@ -9,9 +9,10 @@ from pathlib import Path
 import pytest
 import requests
 
-from delist_detection import sec_limiter
-from delist_detection import edgar
-from delist_detection.sec_limiter import SEC_RATE_LOCK_ENV, default_rate_lock_path, MachineGate, PrefetchCancelled, RateLimiter
+from delist_detection.sources import sec_limiter
+from delist_detection.sources import edgar
+from delist_detection.sources.sec_limiter import (SEC_RATE_LOCK_ENV, default_rate_lock_path, MachineGate,
+                                                  PrefetchCancelled, RateLimiter)
 
 # The module's own limiter, read at collection time, before conftest's autouse
 # fixture swaps in a per-test one.

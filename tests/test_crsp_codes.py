@@ -1,4 +1,4 @@
-from delist_detection.crsp_codes import CrspBucket, bucket_for_code
+from delist_detection.vocabulary.crsp_codes import CrspBucket, bucket_for_code
 
 
 def test_known_codes_map_correctly():

@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CACHE = ROOT / "cache" / "edgar"
 
 from delist_detection import EdgarClient, TickerResolver, DelistClassifier
-from delist_detection.crsp_codes import CrspBucket
+from delist_detection.vocabulary.crsp_codes import CrspBucket
 
 
 def main() -> int:

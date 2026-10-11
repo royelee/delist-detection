@@ -1,6 +1,6 @@
 from datetime import date
 
-from delist_detection.trading_calendar import (
+from delist_detection.vocabulary.trading_calendar import (
     add_trading_days, is_trading_day, next_trading_day, nyse_holidays, previous_trading_day,
 )
 

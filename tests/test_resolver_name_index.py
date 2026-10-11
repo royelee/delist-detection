@@ -1,11 +1,13 @@
 """The ticker resolver's name tier over SEC's cik-lookup-data.txt (cik-lookup plan, Task 3):
 candidates from the local index instead of the live company search."""
+import json
+
 import pytest
 import requests
 
-from delist_detection.cik_lookup import CikNameIndex
-from delist_detection.edgar import EdgarBlocked, EdgarSubmission
-from delist_detection.ticker_resolver import TickerResolver
+from delist_detection.sources.cik_lookup import CikNameIndex
+from delist_detection.sources.edgar import EdgarBlocked, EdgarSubmission
+from delist_detection.identity.ticker_resolver import TickerResolver
 
 
 def _f(acc, form, d):
@@ -295,3 +297,159 @@ def test_a_later_name_a_snapshot_carries_back_still_names_its_one_active_holder(
     idx = _index("DIVERSIFIED HEALTHCARE TRUST:0001075415:", "SENIOR HOUSING PROPERTIES TRUST:0001075415:")
     r = TickerResolver(_Edgar(dict([dhc])), name_index=idx)
     assert list(r._index_candidates(idx, "DIVERSIFIED HEALTHCARE TRUST", "2014-06-30")) == [1075415]
+
+
+# FB-004 part b: a remembered name-tier answer holds only while the name tier still names it
+def _realogy(tmp_path, memo_cik):
+    holdings = (1398987, ("Anywhere Real Estate Inc.",
+                          [{"name": "REALOGY HOLDINGS CORP.", "from": "2013-05-01T00:00:00.000Z",
+                            "to": "2022-05-27T00:00:00.000Z"}],
+                          [_f("H0", "10-K", "2012-11-29"), _f("H1", "10-K", "2019-02-26"), _f("H2", "10-K", "2020-02-25")]))
+    group = (1355001, ("Anywhere Real Estate Group LLC",
+                       [{"name": "REALOGY GROUP LLC", "from": "2012-10-16T00:00:00.000Z",
+                         "to": "2022-05-04T00:00:00.000Z"}],
+                       [_f("G0", "10-K", "2012-02-26"), _f("G1", "10-K", "2019-02-26"), _f("G2", "10-K", "2020-02-25")]))
+    idx = _index("REALOGY HOLDINGS CORP.:0001398987:", "REALOGY GROUP LLC:0001355001:",
+                 "ANYWHERE REAL ESTATE INC.:0001398987:", "ANYWHERE REAL ESTATE GROUP LLC:0001355001:")
+    cache = tmp_path / "res.json"
+    cache.write_text(json.dumps({"__version__": 4, "entries": {
+        "RLGY|2020-02-03|REALOGY HOLDINGS CORP": {"ticker": "RLGY", "cik": memo_cik, "name": "REALOGY HOLDINGS CORP",
+                                                   "source": "name_search", "member_name": "REALOGY HOLDINGS CORP"}}}))
+    return TickerResolver(_Edgar(dict([holdings, group])), cache_path=cache, name_index=idx), cache
+
+
+def test_a_remembered_name_search_answer_the_index_no_longer_names_is_resolved_again(tmp_path):
+    """RLGY/HOUS (Realogy Holdings, now Anywhere Real Estate Inc., CIK 1398987): an answer the retired live company
+    search remembered, the subsidiary Realogy Group LLC (CIK 1355001, whose name agrees once HOLDINGS and GROUP are
+    left out), outlived the rule that chose it and put the listed security's issuer on the LLC. The index names only
+    the holding company for this name and date, so the memo is no answer."""
+    r, cache = _realogy(tmp_path, 1355001)
+    got = r.resolve("RLGY", "2020-02-03", name="REALOGY HOLDINGS CORP", since="2012-12-31", pin=None)
+    assert (got.cik, got.source) == (1398987, "name_search")
+    saved = json.loads(cache.read_text())["entries"]["RLGY|2020-02-03|REALOGY HOLDINGS CORP"]
+    assert saved["cik"] == 1398987
+
+
+def test_a_remembered_name_search_answer_the_index_still_names_is_kept(tmp_path):
+    r, _ = _realogy(tmp_path, 1398987)
+    got = r.resolve("RLGY", "2020-02-03", name="REALOGY HOLDINGS CORP", since="2012-12-31", pin=None)
+    assert got.cik == 1398987 and r.edgar.searches == []
+
+
+def test_without_an_index_a_remembered_name_search_answer_stands(tmp_path):
+    r, cache = _realogy(tmp_path, 1355001)
+    r2 = TickerResolver(r.edgar, cache_path=cache)
+    assert r2.resolve("RLGY", "2020-02-03", name="REALOGY HOLDINGS CORP", since="2012-12-31", pin=None).cik == 1355001
+
+
+# FB-004 part c: a remembered answer for a name two companies carried, and a name with no word of three letters
+def _alberto(tmp_path, memo_cik):
+    old = (3327, ("New Alberto-Culver LLC", [{"name": "ALBERTO CULVER CO", "from": "1994-01-20T00:00:00.000Z",
+                                             "to": "2006-11-29T00:00:00.000Z"}],
+                  [_f("O1", "25-NSE", "2006-11-17"), _f("O2", "8-K", "2010-06-01")]))
+    new = (1368457, ("ALBERTO CULVER CO", [], [_f("N0", "10-K", "2007-11-20"), _f("N1", "10-K", "2009-11-20"),
+                                              _f("N2", "25-NSE", "2011-05-11")]))
+    idx = _index("ALBERTO CULVER CO:0000003327:", "NEW ALBERTO-CULVER LLC:0000003327:",
+                 "ALBERTO-CULVER CO:0001368457:")
+    cache = tmp_path / "res.json"
+    cache.write_text(json.dumps({"__version__": 4, "entries": {
+        "ACV|2010-07-09|ALBERTO CULVER CO": {"ticker": "ACV", "cik": memo_cik, "name": "New Alberto-Culver LLC",
+                                             "source": "name_search", "member_name": "ALBERTO CULVER CO"}}}))
+    return TickerResolver(_Edgar(dict([old, new])), cache_path=cache, name_index=idx)
+
+
+def test_of_two_active_holders_of_a_name_the_one_that_carried_it_on_the_date_is_the_company(tmp_path):
+    """ACV (Alberto-Culver, observed 2008-11): the old registrant, renamed New Alberto-Culver LLC in 2006, still filed
+    in 2010 and had carried the name within CARRIED_YEARS; the 2006 spin-off carried it on the date. A remembered
+    answer of the retired live search, the old registrant, no longer stands, and the 25-NSE of 2011 is the spin-off's."""
+    r = _alberto(tmp_path, 3327)
+    got = r.resolve("ACV", "2010-07-09", name="ALBERTO CULVER CO", since="2008-01-16", pin=None)
+    assert (got.cik, got.source) == (1368457, "name_search")
+
+
+def test_a_remembered_answer_of_the_holder_that_carried_the_name_on_the_date_is_kept(tmp_path):
+    r = _alberto(tmp_path, 1368457)
+    got = r.resolve("ACV", "2010-07-09", name="ALBERTO CULVER CO", since="2008-01-16", pin=None)
+    assert got.cik == 1368457 and r.edgar.searches == []
+
+
+def test_a_name_with_no_word_of_three_letters_is_looked_up_by_the_name_tier():
+    """TWOU (2U INC, observed to 2020, delisted 2024): `name_tokens` is empty, but 2U, Inc. and 2U INC are one name
+    (`names_agree`), so the name is an expected name, and the tier's observed-name acceptance applies to it: 2U, LLC
+    (formerly 2U, Inc.) filed a 10-K within the year of the date."""
+    twou = (1459417, ("2U, LLC", [{"name": "2U, Inc.", "from": "2008-03-14T00:00:00.000Z",
+                                   "to": "2024-09-30T00:00:00.000Z"}],
+                      [_f("K0", "S-1", "2014-03-01"), _f("K", "10-K", "2021-02-24"), _f("F", "25-NSE", "2024-09-06")]))
+    other = (1689537, ("2U LAUNDRY, INC.", [], [_f("L", "10-K", "2021-03-01")]))
+    idx = _index("2U, INC.:0001459417:", "2U, LLC:0001459417:", "2U LAUNDRY, INC.:0001689537:")
+    r = TickerResolver(_Edgar(dict([twou, other])), name_index=idx)
+    assert r.expected_name("TWOU", "2020-12-31", "2U INC") == "2U INC"
+    got = r.resolve("TWOU", "2020-12-31", name="2U INC", since="2014-05-15", pin=None)
+    assert (got.cik, got.source) == (1459417, "name_search")
+
+
+def _dupont(*extra):
+    eidp = (30554, ("EIDP, Inc.", [{"name": "DUPONT E I DE NEMOURS & CO", "from": "1994-01-01T00:00:00.000Z",
+                                   "to": "2019-05-31T00:00:00.000Z"}],
+                    [_f("D00", "10-K", "2005-02-10"), _f("D0", "10-K", "2016-02-10"), _f("D1", "25-NSE", "2017-09-01")]))
+    dead = (1137191, ("EI DU PONT DE NEMOURS & CO", [], [_f("X0", "10-K", "2001-03-01")]))
+    foundation = (1243868, ("NEMOURS FOUNDATION", [], [_f("N0", "10-K", "2016-03-01")]))
+    new = (1666700, ("DuPont de Nemours, Inc.", [], [_f("N1", "10-K", "2019-03-01")]))
+    idx = _index("DUPONT E I DE NEMOURS & CO:0000030554:", "EIDP, INC.:0000030554:",
+                 "EI DU PONT DE NEMOURS & CO:0001137191:", "NEMOURS FOUNDATION:0001243868:",
+                 "DUPONT DE NEMOURS, INC.:0001666700:", *extra)
+    return TickerResolver(_Edgar(dict([eidp, dead, foundation, new])), name_index=idx), idx
+
+
+def test_a_name_the_index_spells_with_words_run_together_is_reached_when_the_prefix_search_finds_no_company():
+    """DD (E I DU PONT DE NEMOURS, observed to 2017, 25-NSE 2017-09-01): EDGAR lists the company as DUPONT E I DE NEMOURS
+    & CO (CIK 30554), which the observed spelling is not a character prefix of (`names_agree` reads DU PONT as DUPONT).
+    The prefix search offers only a dead holder of EI DU PONT DE NEMOURS & CO, so the index's entries sharing the
+    name's longest word and agreeing with it are the last resort: the one that filed a Form 25 near the date, existed by
+    the era's first sighting and agrees on the date. A company founded after the era's first sighting (DuPont de
+    Nemours, Inc., 2019) and a foundation sharing one word are not."""
+    r, _ = _dupont()
+    got = r.resolve("DD", "2017-09-05", name="E I DU PONT DE NEMOURS", since="2007-12-18", pin=None)
+    assert (got.cik, got.source) == (30554, "name_search")
+
+
+def test_the_last_resort_by_agreeing_names_needs_exactly_one_company():
+    """Two agreeing companies that both filed a Form 25 near the date leave nothing to choose by: no answer."""
+    twin = (1555555, ("NEMOURS DUPONT E I DE CO", [], [_f("T00", "10-K", "2005-02-10"), _f("T1", "25-NSE", "2017-08-01")]))
+    r, idx = _dupont("NEMOURS DUPONT E I DE CO:0001555555:")
+    r.edgar.companies[1555555] = twin[1]
+    got = r.resolve("DD", "2017-09-05", name="E I DU PONT DE NEMOURS", since="2007-12-18", pin=None)
+    assert got.cik is None
+
+
+def test_the_last_resort_is_not_asked_when_the_prefix_search_already_has_an_answer():
+    """APTIV-like: an exact holder that filed near the date is the answer; an agreeing spelling elsewhere in the
+    index is never read."""
+    r, idx = _dupont("E I DU PONT DE NEMOURS & CO:0001999999:")
+    r.edgar.companies[1999999] = ("E I DU PONT DE NEMOURS & CO", [], [_f("Y0", "10-K", "2007-02-10"),
+                                                                      _f("Y1", "25-NSE", "2017-08-20")])
+    got = r.resolve("DD", "2017-09-05", name="E I DU PONT DE NEMOURS & CO", since="2007-12-18", pin=None)
+    assert got.cik == 1999999
+
+
+def test_a_word_the_snapshot_abbreviates_is_searched_by_its_stem_when_nothing_else_finds_a_company():
+    """NWA (2008-09): the snapshot spells NORTHWEST AIRLS CORP, EDGAR NORTHWEST AIRLINES CORP, and no character
+    prefix of the first reaches the second. With no candidate from any spelling, the last word is cut to its first
+    four letters and searched again; the Form 25 filer among the matches is the company."""
+    nwa = (1058033, ("NORTHWEST AIRLINES CORP", [], [_f("N1", "10-K", "2007-02-20"), _f("N2", "25-NSE", "2008-10-30")]))
+    old = (917678, ("NORTHWEST AIRLINES HOLDINGS CORP/PRED", [], [_f("O1", "10-K", "1998-02-20")]))
+    banks = {9000 + i: (f"NORTHWEST BANCORP {i}", [], []) for i in range(12)}      # the first word alone is too broad
+    idx = _index("NORTHWEST AIRLINES CORP:0001058033:", "NORTHWEST AIRLINES HOLDINGS CORP/PRED:0000917678:",
+                 *(f"{n[0]}:{c:010d}:" for c, n in banks.items()))
+    r = TickerResolver(_Edgar({**banks, **dict([nwa, old])}), name_index=idx)
+    assert r._index_candidates(idx, "NORTHWEST AIRLS CORP", "2009-06-08") == {
+        1058033: ("NORTHWEST AIRLINES CORP", 221)}
+    assert r.resolve("NWA", "2009-06-08", name="NORTHWEST AIRLS CORP", since="2008-01-16", pin=None).cik == 1058033
+
+
+def test_a_single_word_name_has_no_stem():
+    ok = (1, ("ACMEWIDGETS INC", [], [_f("A", "25-NSE", "2012-05-01")]))
+    others = {9000 + i: (f"ACMEWIDGETS FUND {i}", [], []) for i in range(12)}
+    idx = _index("ACMEWIDGETS INC:0000000001:", *(f"{n[0]}:{c:010d}:" for c, n in others.items()))
+    r = TickerResolver(_Edgar({**others, **dict([ok])}), name_index=idx)
+    assert r._index_candidates(idx, "ACMEWIDGS", "2012-06-29") == {}

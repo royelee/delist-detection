@@ -9,8 +9,8 @@ from datetime import date, timedelta
 import pytest
 import requests
 
-from delist_detection.edgar import EFTS_KEY, EFTS_SCHEMA, FETCHED_KEY, EdgarBlocked, EdgarClient, efts_ttl_days
-from delist_detection.sec_stats import SEC_STATS, fill_only
+from delist_detection.sources.edgar import EFTS_KEY, EFTS_SCHEMA, FETCHED_KEY, EdgarBlocked, EdgarClient, efts_ttl_days
+from delist_detection.sources.sec_stats import SEC_STATS, fill_only
 
 AS_OF = date(2026, 9, 23)
 UA = "Test Co test@example.com"
@@ -132,7 +132,7 @@ def test_an_undated_search_is_kept_for_the_run_only(tmp_path):
 def test_a_rejected_query_is_a_non_answer_logged_and_never_written(tmp_path, caplog, status):
     c, s = _client(tmp_path, _Resp(status))
     mark = SEC_STATS.snapshot()
-    with caplog.at_level(logging.WARNING, logger="delist_detection.edgar"):
+    with caplog.at_level(logging.WARNING, logger="delist_detection.sources.edgar"):
         assert c.efts_search(URL, window_end=END) == []
     assert c.efts_search(URL, window_end=END) == []                  # asked once per run
     assert len(s.calls) == 1 and not c._cache_path(URL).exists()
@@ -252,3 +252,19 @@ def test_the_run_memo_returns_copies_not_shared_dicts(tmp_path):
     first[0]["_id"] = "mutated"                    # a caller changing its own copy
     second = c.efts_search(URL, window_end=None)    # must not see that change
     assert second == [HIT]
+
+
+def test_a_run_date_hides_the_hits_filed_after_it(tmp_path):
+    """An --as-of run sees no full-text-search hit filed after its run date, from the network or the cache; the
+    cached answer keeps every hit for a later run date."""
+    late = {"_id": "0000000001-26-000009:y.htm",
+            "_source": {"ciks": ["0000000001"], "display_names": ["X CO  (X)  (CIK 0000000001)"],
+                        "file_date": "2026-09-24"}}
+    url = ("https://efts.sec.gov/LATEST/search-index?q=%22X%22&forms=8-K"
+           "&dateRange=custom&startdt=2026-08-01&enddt=2026-10-31")
+    early = {**HIT, "_source": {**HIT["_source"], "file_date": "2026-09-01"}}
+    client, _ = _client(tmp_path, _answer(early, late), today=date(2026, 9, 23))
+    assert client.efts_search(url, window_end=date(2026, 10, 31)) == [early]
+    assert client.efts_search(url, window_end=date(2026, 10, 31)) == [early]        # the cached answer, filtered
+    later, _ = _client(tmp_path, today=date(2026, 9, 28))           # still within the answer's 7-day hold
+    assert later.efts_search(url, window_end=date(2026, 10, 31)) == [early, late]
