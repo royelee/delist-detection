@@ -5,6 +5,7 @@ from datetime import date, timedelta
 import pytest
 
 from delist_detection.identity import line_follow as lf
+from delist_detection.filings.form25 import Form25
 from delist_detection.sources.edgar import EdgarSubmission
 from delist_detection.identity.figi_resolution import us_candidates
 from delist_detection.sources.ftd import FtdIndex, FtdRow
@@ -266,6 +267,55 @@ def test_a_new_symbol_near_a_suspension_or_form_25_is_an_otc_move():
     for filing in (_f("8-K", "2012-09-20", "3.01"), _f("25-NSE", "2012-09-15"), _f("15-12B", "2012-10-05")):
         assert _corr(step, filings=[filing, LATER_10Q]) == ("", "otc_move")
     assert _corr(step, filings=[LATER_10Q]) == ("same CUSIP", "")
+
+
+# QRTEA 2018 (batch 3 gate): Liberty Interactive's 25-NSE and 8-K 3.01 of March 2018 are about Liberty Ventures
+# (LVNTA), another tracking class of the issuer, not about the QVC Group line (LINTA, QVCA, QRTEA).
+LIBERTY = {"name": "Qurate Retail, Inc.", "formerNames": [{"name": "LIBERTY INTERACTIVE CORP", "from": "2006-01-01T00:00:00.000Z",
+                                                           "to": "2018-04-09T00:00:00.000Z"}]}
+QVC_STEP = lf.LineStep("BBGQVC", lf.NEW_SYMBOL, "53071M104", "53071M104", "QRTEA", "2018-03-12", "2018-03-13")
+QVC_NAME = "LIBERTY INTERACTIVE QVC GROUP CORP"
+VENTURES_8K = ("Item 3.01. Notice of Delisting. the Redemption would occur on March 9, 2018, resulting in the Liberty "
+               "Ventures Common Stock being delisted from Nasdaq. Item 7.01. Regulation FD Disclosure. other")
+OWN_8K = "Item 3.01. Notice of Delisting. the Company's common stock will be delisted from Nasdaq. Item 7.01. Other"
+
+
+def _f25(class_text, accession="F25"):
+    return Form25(accession, "25-NSE", "2018-03-09", "NASDAQ", class_text, "12d2-2(a)(3)", "")
+
+
+def _qvc(filings, texts=None, f25s=None, share_class="COMMON", name=QVC_NAME):
+    return lf.corroborate(QVC_STEP, filings=filings + [_f("10-Q", "2018-05-08", report="2018-03-31")], sub=LIBERTY, share_class=share_class,
+                          text_of=lambda f: (texts or {}).get(f.accession, ""), listed_now=lambda: False,
+                          as_of=date(2026, 9, 25), form25_of=lambda f: (f25s or {}).get(f.accession), line_name=name)
+
+
+def test_a_form_25_of_another_tracking_group_is_no_otc_move_of_the_line():
+    f25 = _f("25-NSE", "2018-03-09", acc="F25")
+    other = _f25("Series A Liberty Ventures Common Stock & Series B Liberty Ventures Common Stock")
+    assert _qvc([f25], f25s={"F25": other}) == ("same CUSIP", "")
+    own = _f25("Series A QVC Group Common Stock")
+    assert _qvc([f25], f25s={"F25": own}) == ("", "otc_move")
+
+
+def test_a_form_25_of_another_class_letter_or_of_a_preferred_is_no_otc_move_of_the_line():
+    f25 = _f("25-NSE", "2018-03-09", acc="F25")
+    assert _qvc([f25], f25s={"F25": _f25("Class B Common Stock")}, share_class="CLASS A",
+                name="ACME CORP") == ("same CUSIP", "")
+    assert _qvc([f25], f25s={"F25": _f25("Class A Common Stock")}, share_class="CLASS A",
+                name="ACME CORP") == ("", "otc_move")
+    assert _qvc([f25], f25s={"F25": _f25("6.5% Series C Cumulative Preferred Stock")}) == ("same CUSIP", "")
+
+
+def test_a_form_25_that_cannot_be_read_still_counts():
+    assert _qvc([_f("25-NSE", "2018-03-09", acc="F25")]) == ("", "otc_move")
+
+
+def test_an_8k_3_01_that_names_only_another_class_is_no_otc_move_of_the_line():
+    k = _f("8-K", "2018-03-15", "1.01,3.01", acc="K1")
+    assert _qvc([k], texts={"K1": VENTURES_8K}) == ("same CUSIP", "")
+    assert _qvc([k], texts={"K1": OWN_8K}) == ("", "otc_move")
+    assert _qvc([k], texts={}) == ("", "otc_move")                         # no text to read: it counts
 
 
 def test_name_on_is_the_edgar_name_on_the_day_without_its_state_tag():

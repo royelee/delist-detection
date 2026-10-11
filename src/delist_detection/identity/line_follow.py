@@ -46,7 +46,8 @@ import requests
 from ..sources.capabilities import FullTextSearch
 from ..outputs.degraded import DegradedWatch, degraded_item
 from ..sources.edgar import EdgarSubmission
-from ..filings.evidence import name_at, names_between
+from ..filings.evidence import edgar_names, item_sections, name_at, names_between
+from ..filings.form25 import Form25, SecurityRef, about_class, names_only_other_group, parse_form25
 from ..sources.fatal import FATAL
 from .figi_resolution import FigiCandidate, us_candidates
 from ..filings.filing_search import successor_query
@@ -355,7 +356,9 @@ def eightks_near(filings: Sequence[EdgarSubmission], day: date,
 
 def corroborate(step: LineStep, *, filings: Sequence[EdgarSubmission], sub: Mapping | None, share_class: str,
                 text_of: Callable[[EdgarSubmission], str], listed_now: Callable[[], bool], as_of: date,
-                other_registrant: Callable[[], int | None] = lambda: None) -> tuple[str, str]:
+                other_registrant: Callable[[], int | None] = lambda: None,
+                form25_of: Callable[[EdgarSubmission], Form25 | None] = lambda f: None,
+                line_name: str = "") -> tuple[str, str]:
     """(evidence, refusal) for `step` of a line (exactly one is non-empty), from its issuer's filings (`filings`),
     its EDGAR submissions JSON (`sub`), the 8-K texts `text_of` reads (only when no filing code states the change),
     whether its ticker is listed today (`listed_now`, asked only for a recent step), the run date and another CIK
@@ -363,7 +366,11 @@ def corroborate(step: LineStep, *, filings: Sequence[EdgarSubmission], sub: Mapp
     refused; see `other_registrant()`). Refusals, in order:
 
     - "bankruptcy": an 8-K item 1.03 in [first - 180, first + 30] days (UAL's 2006 emergence: old shares cancelled);
-    - "otc_move" (a new symbol only): an 8-K item 3.01, a Form 25 or a Form 15 within `FILING_DAYS`;
+    - "otc_move" (a new symbol only): an 8-K item 3.01, a Form 25 or a Form 15 within `FILING_DAYS`. A Form 25
+      (`form25_of` reads it, None when it cannot be read: it counts) counts only when it is about the line's own
+      class (`form25.about_class`, `line_name` the line's security name), and an 8-K 3.01 only when its section does not
+      name only another tracking group's common stock (`form25.names_only_other_group`): Liberty Interactive's
+      March 2018 Form 25 and 3.01 are the Liberty Ventures group's, not the QVC Group line's (QRTEA);
     - "name" (a switch only): no new row's description names (`names.description_names`) a name the issuer
       carried from the first new row on (`evidence.names_between`, `NAME_DAYS`): a ticker passed to another issuer
       (new LMCA 2013, new MSG 2015) carries the old name only as a former one;
@@ -384,9 +391,23 @@ def corroborate(step: LineStep, *, filings: Sequence[EdgarSubmission], sub: Mapp
     if _near(filings, first, BANKRUPTCY_BEFORE_DAYS, BANKRUPTCY_AFTER_DAYS,
              lambda f: f.form.startswith("8-K") and "1.03" in f.item_set):
         return "", "bankruptcy"
-    if step.kind == NEW_SYMBOL and _near(filings, first, FILING_DAYS, FILING_DAYS, lambda f: (
-            (f.form.startswith("8-K") and "3.01" in f.item_set) or f.form.startswith("25") or f.form.startswith("15"))):
-        return "", "otc_move"
+    if step.kind == NEW_SYMBOL:
+        issuer_names = edgar_names(sub) if isinstance(sub, Mapping) else ()
+        ref = SecurityRef(step.sec_id, share_class, "common", line_name)
+
+        def ends_listing(f: EdgarSubmission) -> bool:
+            if f.form.startswith("25"):
+                f25 = form25_of(f)
+                return f25 is None or about_class(f25, ref, issuer_names)
+            if f.form.startswith("8-K") and "3.01" in f.item_set:
+                text = text_of(f) or ""
+                return not names_only_other_group(" ".join(item_sections(text, "3.01")), line_name, issuer_names)
+            return f.form.startswith("15")
+
+        if any(ends_listing(f) for f in _near(filings, first, FILING_DAYS, FILING_DAYS, lambda f: (
+                (f.form.startswith("8-K") and "3.01" in f.item_set) or f.form.startswith("25")
+                or f.form.startswith("15")))):
+            return "", "otc_move"
     if step.kind == SWITCH:
         lo = first
         names = names_between(sub, lo, lo + timedelta(days=NAME_DAYS)) if isinstance(sub, Mapping) else []
@@ -628,9 +649,21 @@ class _Reads:
         return corroborate(
             step, filings=self.issuers.filings(cik), sub=self.issuers.profile(cik), share_class=s.share_class,
             text_of=lambda f: self.issuers.text(cik, f), as_of=as_of,
+            form25_of=lambda f: self._form25(cik, f), line_name=s.name,
             listed_now=lambda: lists_on_major_exchange(self.issuers.profile(cik), sorted(tickers | {step.symbol})),
             other_registrant=lambda: self._other_registrant(cik, name_on(self.issuers.profile(cik), first, s.name),
                                                             first, tickers))
+
+    def _form25(self, cik: int, f: EdgarSubmission) -> Form25 | None:
+        """A Form 25 of the issuer parsed from its complete text; None when it cannot be read (a failed read is
+        never cached, `fetch_filing_raw`; the step then counts it)."""
+        try:
+            raw = self._edgar.fetch_filing_raw(cik, f.accession)
+        except FATAL:
+            raise
+        except requests.RequestException:
+            return None
+        return parse_form25(raw, accession=f.accession, form=f.form, filing_date=f.filing_date) if raw else None
 
     def _other_registrant(self, cik: int, name: str, day: date, tickers: set[str]) -> int | None:
         other = other_registrant(self._search, self._edgar, name=name, day=day, cik=cik, own_tickers=tickers)

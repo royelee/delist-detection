@@ -439,6 +439,39 @@ def other_class(f25: Form25, ref: SecurityRef, issuer_names: Iterable[str] = ())
     return ""
 
 
+_OTHER_KINDS = frozenset({"preferred", "warrant", "right", "unit", "fund", "debt"})
+
+
+def about_class(f25: Form25, ref: SecurityRef, issuer_names: Iterable[str] = ()) -> bool:
+    """Whether a Form 25 is about the security's own class (the line follow's `otc_move` reading, QRTEA 2018): not
+    of a preferred, warrant, right, unit, fund or debt class, not another tracking group's (`other_class`), and,
+    when both name a class letter, naming the security's own. A text that tells none of this is about it."""
+    if class_kind(f25.class_text) in _OTHER_KINDS or other_class(f25, ref, issuer_names):
+        return False
+    own, letters = class_letter(ref.share_class), class_letters(f25.class_text)
+    return not (own and letters and own not in letters)
+
+
+# A tracking group's common stock as an 8-K spells it: "Liberty Ventures Common Stock", "Series A Liberty Ventures
+# Common Stock" (at most four capitalized words before COMMON STOCK).
+_GROUP_PHRASE = re.compile(r"((?:[A-Z][A-Za-z&.'’-]*\s+){1,4})Common\s+(?:Stock|Shares)\b")
+_PHRASE_STOP = frozenset({"SERIES", "CLASS", "THE", "ITS", "OUR", "ANY", "ALL", "EACH", "OF", "AND", "NEW", "OLD"})
+
+
+def names_only_other_group(text: str, name: str, issuer_names: Iterable[str] = ()) -> bool:
+    """Whether `text` (an 8-K's item 3.01 section) names a tracking group's common stock and every one it names is
+    another group than the security's (`name`): "the Liberty Ventures Common Stock" in Liberty Interactive's 8-K of
+    March 2018, for the QVC Group line. A text that also names the issuer's own common stock ("the Company's common
+    stock", "Liberty Interactive Common Stock") or no group at all is not."""
+    issuer_words = {w for n in issuer_names for w in name_tokens(n)}
+    mine = name_tokens(name)
+    groups = []
+    for m in _GROUP_PHRASE.finditer(re.sub(r"\s+", " ", text or "")):
+        words = {w for w in name_tokens(m.group(1)) if w.upper() not in _PHRASE_STOP} - issuer_words - _GROUP_STOP
+        groups.append(words)
+    return bool(groups) and all(g and not any(_meets(w, mine) for w in g) for g in groups)
+
+
 def _day(s: str) -> date:
     return datetime.strptime(re.sub(r"\s+", " ", s), "%B %d, %Y").date()
 

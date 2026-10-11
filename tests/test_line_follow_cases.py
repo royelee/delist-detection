@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 from delist_detection.identity import line_follow as lf
+from delist_detection.filings.form25 import parse_form25
 from delist_detection.sources.edgar import EdgarSubmission
 from delist_detection.sources.ftd import FtdIndex, FtdRow
 from delist_detection.identity.identity import Identity
@@ -64,6 +65,9 @@ class _Edgar:
     def fetch_filing_text(self, cik, accession, primary_doc):
         return EDGAR["texts"].get(accession, "")
 
+    def fetch_filing_raw(self, cik, accession):
+        return EDGAR.get("form25s", {}).get(accession, "")
+
     def full_text_search(self, q, forms, lo, hi):
         asked = [q, forms, lo.isoformat(), hi.isoformat()]
         return next((saved["hits"] for saved in SEARCHES.values() if saved["query"] == asked), [])
@@ -103,6 +107,11 @@ def _holders(sec_id, ftd):
     return lf.holders_for(RUN[sec_id], RUN, _held(sec_id), DATA["holders"], ftd)
 
 
+def _form25(cik, f):
+    raw = EDGAR_FIX.fetch_filing_raw(cik, f.accession)
+    return parse_form25(raw, accession=f.accession, form=f.form, filing_date=f.filing_date) if raw else None
+
+
 def follow(sec_id, ftd, *, cusips=None, tickers=None):
     """(step, evidence, refusal, decision) for the case's next step, as stage 4b reaches them; None, no step."""
     case = DATA["cases"][sec_id]
@@ -117,6 +126,7 @@ def follow(sec_id, ftd, *, cusips=None, tickers=None):
     evidence, refused = lf.corroborate(
         step, filings=EDGAR_FIX.filings(cik), sub=EDGAR_FIX.submissions(cik), share_class=case["share_class"],
         text_of=lambda f: EDGAR["texts"].get(f.accession, ""), as_of=AS_OF,
+        form25_of=lambda f: _form25(cik, f), line_name=case["name"],
         listed_now=lambda: edgar_lists(EDGAR_FIX, cik, [*tickers, step.symbol]),
         other_registrant=lambda: lf.other_registrant(
             _search(sec_id), EDGAR_FIX, name=lf.name_on(EDGAR_FIX.submissions(cik), first, case["name"]), day=first,
@@ -158,7 +168,22 @@ EXPECTED = {
     # longer refused for its name. The cached copy of CIK 34088's filings ends on 2026-05-22, before the step, so no
     # filing states it here: a run with a refreshed copy reads the July 8-Ks (and the holding company's 8-K12B).
     "BBG000GZQ728": (lf.SWITCH, "30233Q108", "XOM", "2026-07-02", "no_filing", None, None),
+    # FB-003 (batch 3 gate): Liberty Interactive's 25-NSE and 8-K 3.01 of March 2018 are the Liberty Ventures group's,
+    # not the QVC Group line's, so the rename to Qurate (QRTEA) on the same CUSIP is no OTC move.
+    "CIK1355096-COMMON-53071M104": (lf.NEW_SYMBOL, "53071M104", "QRTEA", "2018-03-13", "", lf.ATTACH, ""),
 }
+
+
+def test_qrteas_rename_is_followed_on_to_the_figi_line_of_its_new_cusip(ftd):
+    """With the QRTEA step taken, the next one (53071M104 to 74915M100 on 2018-04-10, the CUSIP Qurate Retail's FIGI
+    line holds) folds the placeholder into BBG000PCQQL6: no timing continuation row is left for the handoffs."""
+    case = DATA["cases"]["CIK1355096-COMMON-53071M104"]
+    step, evidence, refused, decision = follow("CIK1355096-COMMON-53071M104", ftd,
+                                               tickers={*case["tickers"], "QRTEA"})
+    assert (step.kind, step.new_cusip, step.first, refused) == (lf.SWITCH, "74915M100", "2018-04-10", "")
+    assert (decision.kind, decision.composite) == (lf.FOLD, "BBG000PCQQL6")
+
+
 NO_STEP = ("BBG00WYYC600", "CIK1507934-CLASS-A", "CIK1469372-CLASS-A")
 
 
@@ -296,7 +321,12 @@ def _first_item(lines, sec_id):
     return next((r for r in lines.review if r.sec_id == holder and r.flag.startswith("line_follow")), None)
 
 
-@pytest.mark.parametrize("sec_id", sorted(EXPECTED), ids=lambda s: DATA["cases"][s]["note"].split(":")[0])
+# A case whose later step folds it into a FIGI line that has items of its own: its first item is found by its text
+FOLDED_LATER = ("CIK1355096-COMMON-53071M104",)
+
+
+@pytest.mark.parametrize("sec_id", sorted(set(EXPECTED) - set(FOLDED_LATER)),
+                         ids=lambda s: DATA["cases"][s]["note"].split(":")[0])
 def test_a_real_lines_first_step_through_the_stage(sec_id, staged):
     """The stage takes each case's first step as the rules do: the same step, refusal and decision. A new CUSIP whose
     OpenFIGI answer the fixture lacks (DHC) is an error answer there, so the stage refuses it `unsettled`."""
@@ -313,6 +343,17 @@ def test_a_real_lines_first_step_through_the_stage(sec_id, staged):
         assert new_cusip in staged.cusips[composite]
     else:
         assert item.reason.endswith(f": continued by {composite}") and staged.successors[sec_id].composite == composite
+
+
+def test_qrteas_placeholder_takes_the_rename_and_folds_into_the_figi_line_in_the_stage(staged):
+    """FB-003 (batch 3 gate): the rename step is taken (the Liberty Ventures Form 25 and 3.01 are not its OTC move),
+    and the next step folds the placeholder into BBG000PCQQL6 (contract/id_changes.csv names it)."""
+    sec_id = "CIK1355096-COMMON-53071M104"
+    assert staged.renames[sec_id] == "BBG000PCQQL6"
+    reasons = [r.reason for r in staged.review if r.sec_id == "BBG000PCQQL6" and r.flag == lf.LINE_FOLLOWED]
+    assert any("53071M104 -> 53071M104 under QRTEA from 2018-03-13" in r for r in reasons)
+    assert any("-> 74915M100 under" in r and r.endswith(": folded into BBG000PCQQL6") for r in reasons)
+    assert not any(r.flag == f"{lf.LINE_REFUSED}:otc_move" and r.sec_id == "BBG000PCQQL6" for r in staged.review)
 
 
 @pytest.mark.parametrize("sec_id", NO_STEP, ids=lambda s: DATA["cases"][s]["note"].split(":")[0])

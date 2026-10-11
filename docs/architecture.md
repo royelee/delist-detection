@@ -352,6 +352,10 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   their own fails descriptions name another letter (`letter_hint`) or there are more of them than classes;
   `tie_candidates` (the siblings a Form 25 its text cannot place may be about: the tied ones, else, for a text with
   no class letter, every security of its kind) is the finder's to break by trading.
+  `about_class` (a Form 25 is about the security's own class: not of a preferred, warrant, right, unit, fund or
+  debt class, not another tracking group's (`other_class`), and not naming only other class letters) and
+  `names_only_other_group` (an 8-K section that names tracking groups' common stock and none is the
+  security's): the line follow's `otc_move` reading.
 - `filings/listing_status.py` — `unlisted_cover()` (FB-004: the first annual report after a day whose "Name of each
   exchange on which registered" column is there to read and holds no exchange; an unread report is none),
   `quoted_over_the_counter()` (FB-004 part b: EDGAR's submissions JSON lists one of the security's tickers on the OTC
@@ -797,7 +801,10 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `SWITCH_TAIL_DAYS` of `FtdIndex.data_end()`, the fails data's last day, passed as `data_end`: a live line has no stop to see; CHTR's new
   preferred; elsewhere the window is the whole of it, HYH 2018); the own-ticker pick is made before held CUSIPs are
   dropped, and a pick another security holds is no step (LMCA 2016)); `corroborate` (R1: refused for an 8-K 1.03 in
-  [first − 180, first + 30] d, an OTC move, a description that names no name in force (a holding word does not
+  [first − 180, first + 30] d, an OTC move (a new symbol with an 8-K 3.01, a Form 25 or a Form 15 within
+  `FILING_DAYS`; a Form 25 counts only when `form25.about_class` says it is about the line's own class, an 8-K 3.01
+  unless its section `form25.names_only_other_group`: Liberty Interactive's March 2018 Form 25 and 3.01 are the
+  Liberty Ventures group's, so QRTEA's rename on the same CUSIP is followed; an unread Form 25 counts), a description that names no name in force (a holding word does not
   count, `names.description_names`: ExxonMobil Holdings, XOM 2026, keeps the name), a class conflict, a
   registrant that merged out or that another CIK's 8-K12B/12G3 replaces (`other_registrant`, the CIK of
   `successor_filer`, which also gives the day it filed: stage 5's successor registrants), no filing stating

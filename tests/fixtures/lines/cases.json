@@ -319,6 +319,26 @@
     "OEH"
    ]
   },
+  "CIK1355096-COMMON-53071M104": {
+   "cusips": [
+    "53071M104"
+   ],
+   "extra_cusips": [],
+   "extra_symbols": [
+    "QVCAQ",
+    "QVCGQ",
+    "QVCPQ"
+   ],
+   "figi_source": "placeholder",
+   "issuer_cik": 1355096,
+   "name": "LIBERTY INTERACTIVE QVC GROUP CORP",
+   "note": "QRTEA 2018: Liberty Interactive renamed Qurate on the same CUSIP; the Form 25 and 3.01 are Liberty Ventures'",
+   "share_class": "COMMON",
+   "tickers": [
+    "LINTA",
+    "QVCA"
+   ]
+  },
   "CIK1469372-CLASS-A": {
    "cusips": [
     "55826P100"
@@ -447,6 +467,9 @@
   ],
   "530322106": [
    "CIK1507934-CLASS-A"
+  ],
+  "53071M104": [
+   "CIK1355096-COMMON-53071M104"
   ],
   "531229102": [
    "BBG003P9ZSL3"
@@ -658,6 +681,12 @@
    "figi_source": "placeholder",
    "issuer_cik": 1115836,
    "name": "ORIENT-EXPRESS HOTELS",
+   "share_class": "COMMON"
+  },
+  "CIK1355096-COMMON-53071M104": {
+   "figi_source": "placeholder",
+   "issuer_cik": 1355096,
+   "name": "LIBERTY INTERACTIVE QVC GROUP CORP",
    "share_class": "COMMON"
   },
   "CIK1469372-CLASS-A": {

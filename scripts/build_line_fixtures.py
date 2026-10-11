@@ -50,7 +50,8 @@ from delist_detection.identity.figi_resolution import US_EXCH  # noqa: E402
 from delist_detection.sources.ftd import FtdIndex, FtdRow, parse_ftd_lines, period_of  # noqa: E402
 from delist_detection.vocabulary.identifiers import is_placeholder, normalize_ticker  # noqa: E402
 from delist_detection.identity.line_follow import (  # noqa: E402
-    SUCCESSOR_FORMS, SWITCH, candidate_steps, eightks_near, is_line_symbol, line_end, name_on, renamed_cusips,
+    FILING_DAYS, NEW_SYMBOL, SUCCESSOR_FORMS, SWITCH, _near, candidate_steps, eightks_near, is_line_symbol, line_end,
+    name_on, renamed_cusips,
     text_cusips, text_symbols,
 )
 from delist_detection.identity.security_master import cusip_job  # noqa: E402
@@ -86,6 +87,7 @@ CASES = {
     "BBG000PCQQL6": "QRTEA 2025: Qurate's series A, the same CUSIP under QVCGA, then a new CUSIP",
     "CIK891103-COMMON": "IACI 2020: IAC's CUSIPs after the 2020 Match separation",
     "BBG000GZQ728": "XOM 2026: a holding company, ExxonMobil Holdings, keeps the name; the new CUSIP has its own composite",
+    "CIK1355096-COMMON-53071M104": "QRTEA 2018: Liberty Interactive renamed Qurate on the same CUSIP; the Form 25 and 3.01 are Liberty Ventures'",
 }
 EXTRA_RUN = ("BBG000C3FGH9", "BBG000BKQG80", "BBG01GJ3NY88", "BBG000BKZ5F6", "BBG000PX3XC0", "BBG003P9ZSL3", "BBG007FG0C23")
 
@@ -145,7 +147,8 @@ def _merged(out: Path, built: dict[str, dict]) -> dict[str, dict]:
         issuers[cik]["filings"] = sorted([*issuers[cik]["filings"], *(f for f in d["filings"] if f[0] not in have)],
                                          key=lambda f: (f[2], f[0]))
     texts = {**built["edgar.json"]["texts"], **old["edgar.json"]["texts"]}
-    return {"cases.json": cases, "edgar.json": {"issuers": issuers, "texts": texts},
+    form25s = {**built["edgar.json"].get("form25s", {}), **old["edgar.json"].get("form25s", {})}
+    return {"cases.json": cases, "edgar.json": {"issuers": issuers, "texts": texts, "form25s": form25s},
             "openfigi.json": {**built["openfigi.json"], **old["openfigi.json"]},
             "searches.json": {**searches, **old["searches.json"]}}
 
@@ -252,7 +255,7 @@ def main(argv: list[str] | None = None) -> int:
     for r in sorted(rows, key=lambda r: (r.date, r.cusip, r.symbol, r.description, r.price or 0)):
         w.writerow([r.date, r.cusip, r.symbol, r.description, "" if r.price is None else r.price])
     write_atomic(out / "ftd_rows.csv", buf.getvalue())
-    issuers, texts_out, figi_out, searches = {}, dict(source_texts), {}, {}
+    issuers, texts_out, figi_out, searches, form25s = {}, dict(source_texts), {}, {}, {}
     for sid in build:
         cik = int(secs[sid]["issuer_cik"])
         sub = subs[sid] or {}
@@ -272,6 +275,14 @@ def main(argv: list[str] | None = None) -> int:
                 for f in near:
                     text = _cached(edgar.fetch_filing_text, cik, f.accession, f.primary_doc, default="")
                     if text:
+                        texts_out[f.accession] = text
+            if st.kind == NEW_SYMBOL:      # an otc_move reads each Form 25's class and each 3.01 section it counts
+                for f in _near(kept, date.fromisoformat(st.first), FILING_DAYS, FILING_DAYS,
+                               lambda f: f.form.startswith("25") or (f.form.startswith("8-K") and "3.01" in f.item_set)):
+                    if f.form.startswith("25"):
+                        if raw := _cached(edgar.fetch_filing_raw, cik, f.accession, default=""):
+                            form25s[f.accession] = raw
+                    elif text := _cached(edgar.fetch_filing_text, cik, f.accession, f.primary_doc, default=""):
                         texts_out[f.accession] = text
             if st.kind == SWITCH and (ans := _figi(repo / "cache/openfigi", st.new_cusip)) is not None:
                 # only the rows on a US venue, the ones `figi_resolution.us_candidates` reads
@@ -296,7 +307,7 @@ def main(argv: list[str] | None = None) -> int:
         run = {k: v for k, v in run.items() if k in build or k in ("BBG000C3FGH9", "BBG000BKQG80")}
     json_out = {"as_of": AS_OF.isoformat(), "cases": cases, "run": run,
                 "holders": {c: sorted(holders[c]) for c in sorted(near_cusips) if holders.get(c)}}
-    edgar_out = {"issuers": issuers, "texts": texts_out}
+    edgar_out = {"issuers": issuers, "texts": texts_out, "form25s": form25s}
     files = {"cases.json": json_out, "edgar.json": edgar_out, "openfigi.json": figi_out, "searches.json": searches}
     if args.merge:
         files = _merged(out, files)

@@ -1737,6 +1737,94 @@
    }
   ]
  },
+ "74915M100": {
+  "data": [
+   {
+    "compositeFIGI": "BBG000PCQQL6",
+    "exchCode": "UI",
+    "figi": "BBG000PCQS96",
+    "marketSector": "Equity",
+    "name": "QVC GROUP INC",
+    "securityDescription": "QVCAQ",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001SR0LR1",
+    "ticker": "QVCAQ"
+   },
+   {
+    "compositeFIGI": "BBG000PCQQL6",
+    "exchCode": "UQ",
+    "figi": "BBG000PCQSZ7",
+    "marketSector": "Equity",
+    "name": "QVC GROUP INC",
+    "securityDescription": "QVCAQ",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001SR0LR1",
+    "ticker": "QVCAQ"
+   },
+   {
+    "compositeFIGI": "BBG000PCQQL6",
+    "exchCode": "UT",
+    "figi": "BBG000PCQV08",
+    "marketSector": "Equity",
+    "name": "QVC GROUP INC",
+    "securityDescription": "QVCAQ",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001SR0LR1",
+    "ticker": "QVCAQ"
+   },
+   {
+    "compositeFIGI": "BBG000PCQQL6",
+    "exchCode": "UU",
+    "figi": "BBG000PCRYN6",
+    "marketSector": "Equity",
+    "name": "QVC GROUP INC",
+    "securityDescription": "QVCAQ",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001SR0LR1",
+    "ticker": "QVCAQ"
+   },
+   {
+    "compositeFIGI": "BBG000PCQQL6",
+    "exchCode": "UO",
+    "figi": "BBG000PCS068",
+    "marketSector": "Equity",
+    "name": "QVC GROUP INC",
+    "securityDescription": "QVCAQ",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001SR0LR1",
+    "ticker": "QVCAQ"
+   },
+   {
+    "compositeFIGI": "BBG000PCQQL6",
+    "exchCode": "UL",
+    "figi": "BBG000PCS175",
+    "marketSector": "Equity",
+    "name": "QVC GROUP INC",
+    "securityDescription": "QVCAQ",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001SR0LR1",
+    "ticker": "QVCAQ"
+   },
+   {
+    "compositeFIGI": "BBG000PCQQL6",
+    "exchCode": "UW",
+    "figi": "BBG000PCS3J8",
+    "marketSector": "Equity",
+    "name": "QVC GROUP INC",
+    "securityDescription": "QVCAQ",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001SR0LR1",
+    "ticker": "QVCAQ"
+   }
+  ]
+ },
  "767754872": {
   "data": [
    {
