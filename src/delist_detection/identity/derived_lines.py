@@ -13,11 +13,13 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from datetime import date, timedelta
-from typing import Callable
+from typing import Any, Callable
 
 from ..filings.evidence import names_until
 from ..vocabulary.names import description_names_issuer
-from .line_follow import SWITCH, RefusedStep
+from .identity import Identity, identify
+from .line_follow import SWITCH, Lines, RefusedStep, follow_lines
+from .observations import ObservationIndex
 from .security_master import Security
 
 MAX_DERIVE_ROUNDS = 3        # rounds that add derived lines: a derived line whose own next step is refused too is a round
@@ -47,3 +49,27 @@ def derivable(refused: Sequence[RefusedStep], securities: Mapping[str, Security]
         if any(description_names_issuer(d, n) for d in r.step.descriptions for n in names):
             out |= {(t, r.step.new_cusip) for t in {e.ticker for e in s.eras}}
     return out
+
+
+def identify_with_lines(index: ObservationIndex, clients: Any, *, as_of: date, limit: int | None = None,
+                        log: Callable[[str], None] = lambda *_: None, workers: int = 1,
+                        meter: Any = None) -> tuple[Identity, Lines]:
+    """Stages 1 to 4b with the derived lines: `identify` and `follow_lines`, again with the lines the last round
+    refused that `derivable` gives, over the same fails index (`Identity.ftd`, opened once), until a round adds no
+    line or `MAX_DERIVE_ROUNDS` rounds have added one. Returns the last round's identity and lines."""
+    derive: set[tuple[str, str]] = set()
+    ftd = None
+    for round_no in range(MAX_DERIVE_ROUNDS + 1):
+        identity = identify(index, clients, as_of=as_of, limit=limit, log=log, workers=workers, meter=meter,
+                            derive=frozenset(derive), ftd=ftd)
+        lines = follow_lines(identity, clients, as_of=as_of, log=log, meter=meter)
+        ftd = identity.ftd
+        new = derivable(lines.refused, lines.securities, clients.issuers.profile) - derive
+        if not new:
+            break
+        if round_no == MAX_DERIVE_ROUNDS:
+            log(f"derived lines: {len(new)} more steps refused after {MAX_DERIVE_ROUNDS} rounds, not derived")
+            break
+        derive |= new
+        log(f"derived lines: round {round_no + 1} derives {len(new)} (ticker, CUSIP) pairs")
+    return identity, lines

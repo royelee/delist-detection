@@ -50,8 +50,11 @@ and the handling: `ticker, cik, observed_delist_date, crsp_code, bucket, confide
 ## The run: pipeline.py
 
 `pipeline.py`'s `run()` is the orchestration that turns a list of observations into the seven output tables: a short
-`_run` calls one function per numbered stage (`identity.identify` for stages 1 to 4: the eras, each era's issuer
-and FIGI, the securities and their CUSIPs, one `identity.Identity` whose facts the later stages read;
+`_run` calls one function per numbered stage (stages 1 to 4b are one call, `derived_lines.identify_with_lines`: the
+rounds of `identity.identify` (stages 1 to 4: the eras, each era's issuer and FIGI, the securities and their CUSIPs, one
+`identity.Identity` whose facts the later stages read) and `line_follow.follow_lines` described next, repeated with the
+derived lines up to `MAX_DERIVE_ROUNDS` times over the one fails index; a run that refuses no derivable step makes one
+round; each stage is metered once per round and the meter adds them up;
 `line_follow.follow_lines` (stage 4b, one call over the `Identity`: each security's line followed past its
 observations across a CUSIP or ticker change; the same security takes the new CUSIP and ticker,
 a placeholder folds into the FIGI line its new CUSIP names, a FIGI line with another composite records a line
@@ -860,7 +863,13 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   EDGAR name its issuer carried until the day before the step). `description_names_issuer` is `description_names`
   with at least one word as spelled: SEA LTD is not SPECTRA ENERGY (SE 2017), one word of GLOBAL is not LIBERTY
   GLOBAL naming TELEWEST GLOBAL. On the seeds input it accepts 42 `merged_out` steps, 3 `other_registrant` and 10
-  `name`; on the full input 13, 0 and 0. The rounds that use the pairs come with `identify_with_lines`.
+  `name`; on the full input 13, 0 and 0. `identify_with_lines(index, clients, *, as_of, limit, log, workers, meter)
+  -> (Identity, Lines)` is the loop `_run` calls: `identify` and `follow_lines`, then again with the pairs `derivable`
+  gives (`derive=`) over the fails index the first round opened (`ftd=Identity.ftd`), until a round earns no pair it
+  has not already used or `MAX_DERIVE_ROUNDS` (3) rounds have added one (it logs `not derived` for the steps left). It
+  returns the last round's identity and lines, so a derived line is a security of the run like any other: the FIGI
+  stage resolves it by its own CUSIP, the handoff stage pairs it with the line before it, the finder searches its
+  Form 25. The step stage 4b refused is held by the derived security in the next round, so it is not refused again.
 - `identity/ticker_evidence.py` — decision 1: what ties a placeholder's ticker to its
   CIK. A resolver tier that names the ticker (`TICKER_TIERS`), else one
   EDGAR full-text search of the CIK's own filings (`full_text_search(...,

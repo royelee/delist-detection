@@ -378,6 +378,11 @@
   or none is one security; a placeholder folds into the FIGI line its new CUSIP names (contract/id_changes.csv
   names it); another composite is a line successor, linked by stage 9 as a continuation (an `unknown` row at the
   switch is rewritten, `line_continuation`: it drops `no_evidence_default` and gets medium confidence); so is a merger row at the switch when stage 4b followed the step (the old registrant carries on: TEAM, LSXMA, FWONA), unless its payout reconciled with the last close.
+  A step stage 4b refuses because another registrant took over (`merged_out`, `other_registrant`), or whose new rows do
+  not name the issuer's name after the step (`name`) but name the old line's, is a line of the run when it follows an
+  era of the same ticker and its CUSIP is not the ticker's next era's: the identity stage keeps those fails rows as an
+  era with one derived observation (`Observation.derived`), named by its fails description, looked up under it and its
+  CUSIP, `observed=false`, in no echo table. A chain is followed up to `MAX_DERIVE_ROUNDS` rounds.
 
 ## `ticker_history` is clipped only at the delisting that actually ends the security
 

@@ -15,7 +15,7 @@ from delist_detection.sources.edgar import EdgarBlocked, EdgarSubmission
 from delist_detection.sources.ftd import FtdRow
 from delist_detection.endings.last_trade import LastTrade
 from delist_detection.terms.llm_merger_extractor import MergerTerms
-from delist_detection.identity.observations import Observation, ObservationIndex
+from delist_detection.identity.observations import Observation, ObservationIndex, TickerEra
 from delist_detection.terms.acquirers import acquirer_cik
 from delist_detection.pipeline import Clients, Overrides, run
 from delist_detection.outputs.review_triage import merge_review_rows
@@ -1969,7 +1969,7 @@ def _same_ticker_acquirer_run(fake_edgar, tmp_path, holder=None, old_tail=()):
                               + "x" * 300)
     if holder:
         fake_edgar.company_map["WCN"] = {"cik_str": holder, "ticker": "WCN", "title": "Waste Connections, Inc."}
-        fake_edgar.submissions_by_cik[holder] = []
+        fake_edgar.submissions_by_cik[holder] = [EdgarSubmission("h1", "10-K", "2010-03-01", "2009-12-31", "", "k.htm")]
         fake_edgar.listings[holder] = [("WCN", "NYSE")]
     obs = [Observation("WCN", d, "WASTE CONNECTIONS INC.", cik=1057058) for d in ("2015-06-30", "2015-12-31")]
     rows = (_ftd("WCN", "941053100", "WASTE CONNECTIONS INC",
@@ -2074,9 +2074,8 @@ def test_a_same_ticker_acquirer_is_never_the_target_itself(fake_edgar, tmp_path)
     itself. The acquirer is the new line on that ticker."""
     secs = _same_ticker_acquirer_run(fake_edgar, tmp_path, holder=1318220, old_tail=[
         "2016-05-23", "2016-05-24", "2016-05-25", "2016-05-26", "2016-06-02", "2016-06-03", "2016-06-06"])
-    (d,) = read_table("delistings", table_path(tmp_path, "delistings"))
-    assert d["sec_id"] == "BBGWCNOLD01"
-    assert d["acquirer_sec_id"] == "BBGWCNNEW01"
+    d = next(r for r in read_table("delistings", table_path(tmp_path, "delistings")) if r["sec_id"] == "BBGWCNOLD01")
+    assert d["acquirer_sec_id"] == "BBGWCNNEW01" and d["bucket"] == "merger"      # a merger across two issuers stands
     assert secs["BBGWCNNEW01"]["issuer_cik"] == "1318220"
 
 
@@ -2817,10 +2816,36 @@ def test_a_bankruptcy_before_the_switch_keeps_the_line_where_it_was(fake_edgar, 
 def test_a_registrant_that_merged_out_at_the_switch_is_not_followed(fake_edgar, tmp_path):
     """Must not change (UNIT 2025, R1 before R2): no periodic report for a period after the switch."""
     t = _line_run(fake_edgar, tmp_path, filings=[SPLIT_8K, MERGER_8K, MERGER_F25],
-                  figi={("ID_CUSIP", RS_NEW): _figi_answer("BBGRS01", "RS", "REVERSE SPLIT CO")},
+                  figi={("ID_CUSIP", RS_NEW): _figi_answer("BBGRSNEW1", "RS", "REVERSE SPLIT CO")},
                   new_rows=_rs_new_rows())
-    assert [r["cusip"] for r in t["cusip_history"]] == [RS_OLD]
-    assert _flag_count(t, "line_follow_refused") == "1"
+    # the old security keeps its one CUSIP; the line after the switch is a security of its own, derived from the fails rows
+    assert {r["sec_id"]: r["cusip"] for r in t["cusip_history"]} == {"BBGRS01": RS_OLD, "BBGRSNEW1": RS_NEW}
+    assert {r["sec_id"]: r["observed"] for r in t["securities"]} == {"BBGRS01": "true", "BBGRSNEW1": "false"}
+    assert _flag_count(t, "line_follow_refused") == "0"     # the derived line holds the new CUSIP: no step to refuse
+
+
+def test_the_line_after_a_registrant_that_merged_out_is_a_derived_security(fake_edgar, tmp_path):
+    """S2 (seeds-only parity): RS's observations stop in 2009 and its registrant merged out at the 2012 switch (no 10-Q
+    after it), so stage 4b refuses the step; the new CUSIP's rows, named for RS, are a line of the run. It is an
+    ordinary security to every later stage -- the old line hands over to it, its own merger is found -- and the
+    caller's tables hold the caller's rows only."""
+    t = _line_run(fake_edgar, tmp_path, filings=[SPLIT_8K, MERGER_8K, MERGER_F25],
+                  figi={("ID_CUSIP", RS_NEW): _figi_answer("BBGRSNEW1", "RS", "REVERSE SPLIT CO")},
+                  new_rows=_rs_new_rows())
+    secs = {r["sec_id"]: r for r in t["securities"]}
+    assert {k: (v["observed"], v["issuer_cik"]) for k, v in secs.items()} == {
+        "BBGRS01": ("true", "4242"), "BBGRSNEW1": ("false", "4242")}
+    assert secs["BBGRSNEW1"]["name"] == "REVERSE SPLIT CO NEW"            # named by its own fails description
+    assert {r["sec_id"]: r["cusip"] for r in t["cusip_history"]} == {"BBGRS01": RS_OLD, "BBGRSNEW1": RS_NEW}
+    assert ("BBGRSNEW1", "2012-10-01", "ftd") in {(r["sec_id"], r["valid_from"], r["source"])
+                                                  for r in t["ticker_history"]}     # no observation range: a fails row
+    caller = [("RS", d, "BBGRS01") for d in ("2008-01-16", "2008-06-30", "2009-06-08")]
+    om = read_table("observation_map", table_path(tmp_path, "observation_map"))
+    assert sorted((r["ticker"], r["as_of"], r["sec_id"]) for r in om) == caller
+    seeds = read_table("seeds", table_path(tmp_path, "seeds"))
+    assert sorted((r["ticker"], r["as_of"], r["sec_id"]) for r in seeds) == caller
+    assert {(r["sec_id"], r["bucket"], r["successor_sec_id"]) for r in t["delistings"]} == {
+        ("BBGRS01", "exchange_transfer", "BBGRSNEW1"), ("BBGRSNEW1", "merger", "")}
 
 
 def test_a_new_cusip_another_issuers_security_holds_is_never_followed(fake_edgar, tmp_path):
@@ -3107,6 +3132,41 @@ def test_the_one_other_cik_in_force_on_every_sighting_is_read_too():
     s, era, resolutions, issuers = _security_with_era("BBG000P4BQM9", 109177, "SPB", obs)
     ctx = _in_force_run({109177: HRG, 1487730: OLD_SPB}, {"SPECTRUM BRANDS HOLDINGS INC": [109177, 1487730]})
     assert pipeline._other_issuers(ctx, [era], resolutions, issuers, {s.sec_id: s}) == {"BBG000P4BQM9": 1487730}
+
+
+def test_a_derived_observation_on_a_callers_ticker_and_day_is_no_conflict_for_the_other_issuer_read():
+    """A derived line's one observation (dated at its first fails row, named by the fails description) can share a
+    ticker and day with the caller's, under another name; only the caller's observations make a conflict, so the
+    caller's sighting still counts (here the only one): Spectrum Brands' other CIK is found."""
+    obs = [Observation("SPB", "2014-06-30", "SPECTRUM BRANDS HOLDINGS INC")]
+    s, era, resolutions, issuers = _security_with_era("BBG000P4BQM9", 109177, "SPB", obs)
+    derived = TickerEra("SPB", "2014-06-30", "2014-06-30",
+                        [Observation("SPB", "2014-06-30", "SPECTRUM BRANDS NEW", derived=True)])
+    ctx = _in_force_run({109177: HRG, 1487730: OLD_SPB}, {"SPECTRUM BRANDS HOLDINGS INC": [109177, 1487730]})
+    assert pipeline._other_issuers(ctx, [era, derived], resolutions, issuers, {s.sec_id: s}) == {
+        "BBG000P4BQM9": 1487730}
+
+
+def test_a_derived_observation_on_a_callers_ticker_and_day_leaves_the_callers_row_mapped():
+    """The observation map's conflicts come from the caller's observations only: a derived one of the same ticker
+    and day under another name does not turn the caller's row into a `conflict`."""
+    from types import SimpleNamespace
+    from delist_detection.identity.history import Histories, Sighting
+    from delist_detection.identity.security_master import Security as Sec
+    from delist_detection.outputs import manifest as run_manifest
+    from delist_detection.sources.ftd import FtdIndex
+    caller = TickerEra("X", "2020-01-02", "2020-01-02", [Observation("X", "2020-01-02", "X CORP")])
+    derived = TickerEra("X", "2020-01-02", "2020-01-02",
+                        [Observation("X", "2020-01-02", "X CORP NEW", derived=True)])
+    secs = {"BBGX": Sec("BBGX", 1, "COMMON", "X", "Common Stock", True, "cusip")}
+    history = Histories(secs, {"BBGX": [Sighting("2020-01-02", "X", "observation")]}, {}, FtdIndex(), [],
+                        listed={"BBGX": True})
+    ctx = pipeline._RunContext(None, date(2026, 9, 25), lambda *_: None, 1, run_manifest.StageMeter(lambda *_: None))
+    resolutions = {caller.key: SimpleNamespace(sec_id="BBGX"), derived.key: SimpleNamespace(sec_id="BBGX")}
+    issuers = {caller.key: SimpleNamespace(cik=1), derived.key: SimpleNamespace(cik=1)}
+    index = SimpleNamespace(eras=lambda: [caller])
+    rows = pipeline._observation_map(ctx, index, [caller, derived], resolutions, issuers, history)
+    assert [(r["ticker"], r["as_of"], r["name"], r["status"]) for r in rows] == [("X", "2020-01-02", "X CORP", "mapped")]
 
 
 def test_an_issuer_that_changed_within_the_span_or_never_changed_gives_no_other_cik():

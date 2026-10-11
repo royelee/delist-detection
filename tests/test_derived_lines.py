@@ -68,3 +68,41 @@ def test_a_profile_decides_which_issuer_names_count_through_derivable():
     got = lambda desc: derivable([RefusedStep("BBGOLD", _step([desc]), "merged_out")], s, lambda cik: profile)
     assert got("QUARTZ TOOLS INC COM") == set()
     assert got("ZENITH PAINT INC COM") == {("CI", "NEWCUSIP1")}
+
+
+def _loop(monkeypatch, answers):
+    """`identify_with_lines` over scripted stages: round n's `derivable` answer is answers[n]."""
+    calls, logs = [], []
+    ftd = object()
+
+    def identify(index, clients, **kw):
+        calls.append((kw["derive"], kw["ftd"]))
+        return SimpleNamespace(ftd=ftd, round=len(calls))
+
+    monkeypatch.setattr(derived_lines, "identify", identify)
+    monkeypatch.setattr(derived_lines, "follow_lines",
+                        lambda identity, clients, **kw: SimpleNamespace(refused=[], securities={}))
+    monkeypatch.setattr(derived_lines, "derivable",
+                        lambda refused, securities, profile: answers[min(len(calls), len(answers)) - 1])
+    clients = SimpleNamespace(issuers=SimpleNamespace(profile=lambda cik: None))
+    identity, lines = derived_lines.identify_with_lines(None, clients, as_of=date(2026, 9, 25), log=logs.append)
+    return calls, logs, identity, ftd
+
+
+def test_the_loop_asks_again_until_a_round_derives_nothing_new_over_one_fails_index(monkeypatch):
+    both = {("X", "AAA"), ("X", "BBB")}
+    calls, logs, identity, ftd = _loop(monkeypatch, [{("X", "AAA")}, both, both])
+    assert [c[0] for c in calls] == [frozenset(), frozenset({("X", "AAA")}), frozenset(both)]
+    assert calls[0][1] is None and calls[1][1] is ftd and calls[2][1] is ftd      # the index is opened once
+    assert identity.round == 3 and not any("not derived" in line for line in logs)
+
+
+def test_the_loop_stops_at_the_bound_and_says_so(monkeypatch):
+    calls, logs, identity, ftd = _loop(monkeypatch, [{("X", f"C{i}")} for i in range(10)])
+    assert len(calls) == derived_lines.MAX_DERIVE_ROUNDS + 1
+    assert any("not derived" in line for line in logs)
+
+
+def test_a_run_with_no_derivable_step_asks_once(monkeypatch):
+    calls, logs, identity, ftd = _loop(monkeypatch, [set()])
+    assert len(calls) == 1

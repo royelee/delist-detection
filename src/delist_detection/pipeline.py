@@ -48,9 +48,9 @@ from .identity.history import (
     Histories, Sighting, backfill_cusips, cusip_sightings, filtered_ticker_sightings, observation_map_rows,
     ranges_from_sightings, ticker_range_review, ticker_sightings, value_on,
 )
-from .identity.line_follow import LineSuccessor, composites, follow_lines, is_line_symbol, text_cusips
+from .identity.line_follow import LineSuccessor, composites, is_line_symbol, text_cusips
 from .vocabulary.identifiers import is_placeholder, normalize_ticker, share_class_from_name
-from .identity.identity import identify
+from .identity.derived_lines import identify_with_lines
 from .filings.listing_status import issuer_exchange, listed_on_run_date, listed_today, listing_answers
 from .identity.observations import ObservationIndex, TickerEra, observation_conflicts
 from .endings.exchange_terms import one_share_no_cash
@@ -1619,10 +1619,9 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
         log(f"capability absent: {capability.name}: {capability.without}")
     clients.issuers.forget()                  # one issuer record per run: each issuer is read afresh, once
     run_mark = SEC_STATS.snapshot()           # the manifest reports the traffic since here
-    identity = identify(index, clients, as_of=ctx.as_of, limit=limit, log=log, workers=sec_workers,
-                        meter=ctx.meter)                                                            # 1-4
+    identity, lines = identify_with_lines(index, clients, as_of=ctx.as_of, limit=limit, log=log,
+                                          workers=sec_workers, meter=ctx.meter)                      # 1-4b
     eras, ftd, ftd_lo = identity.eras, identity.ftd, identity.ftd_lo
-    lines = follow_lines(identity, clients, as_of=ctx.as_of, log=log, meter=ctx.meter)              # 4b
     securities, resolutions, sec_cusips = lines.securities, lines.resolutions, lines.cusips
     review = list(lines.review)       # stages 1 to 4b's, a folded placeholder's on its FIGI line
     other_ciks = _other_issuers(ctx, eras, resolutions, identity.issuers, securities, review,
