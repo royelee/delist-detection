@@ -1197,16 +1197,16 @@ The controller runs it, as Task 3. The reference for the full run is Task 3's "b
 code before Task 2, no resolver memo): the offline replay of the rule gave the same issuer for
 every era but WFT@2009-03-20.
 
-- [ ] **Step 1:** make sure no other SEC client is running (Task 3, Step 1).
-- [ ] **Step 2:** the full input at Task 4's commit on a copy of the cache the earlier full run
+- [x] **Step 1:** make sure no other SEC client is running (Task 3, Step 1).
+- [x] **Step 2:** the full input at Task 4's commit on a copy of the cache the earlier full run
   left, then the seeds on a copy of the cache that run leaves (Task 3, Step 3's commands).
-- [ ] **Step 3:** judge the full run against the "before" run: every era's issuer (expected: only
+- [x] **Step 3:** judge the full run against the "before" run: every era's issuer (expected: only
   WFT@2009-03-20, to 1453090), the parity script's lists between the two, and the scorecard lines
   that differ. Anything else that moved is reviewed against EDGAR and the truth sets before the
   task goes on (Task 3, Step 4's rule).
-- [ ] **Step 4:** the parity numbers, full against seeds, and the check of the 22 tickers
+- [x] **Step 4:** the parity numbers, full against seeds, and the check of the 22 tickers
   (Task 3, Step 5). Then `--write-floor`.
-- [ ] **Step 5:** record the numbers under "Checkpoints" and commit `data/seeds_parity.json`
+- [x] **Step 5:** record the numbers under "Checkpoints" and commit `data/seeds_parity.json`
   with the plan, message "Seeds-only parity after S1: the floor".
 
 ---
@@ -1475,3 +1475,75 @@ ONON, PCG, TWOU, USB, USG, XP). Task 5's real runs settle them.
 
 **Decision B** is taken as recommended: the memo is rebuilt once, in its own commit, at S5. The
 five securities above are its known cost today.
+
+### Checkpoint 2: S1 reworked, the floor (Task 5, 2026-10-10)
+
+Commit `26eefdb` (Task 4; the two commits after it change tests and docs only). Same flags as
+checkpoint 1. Suite at the branch head: 3,921 passed, 44 xfailed.
+
+| Run | Input | Cache | Time | SEC requests | LLM asked |
+| --- | --- | --- | --- | --- | --- |
+| full | full | copy of checkpoint 1's "full" | 262 s | 31 | 0 |
+| seeds | 2,589 seeds | copy of this "full"'s | 376 s | 437 | 8 |
+
+Both exit 0 with no degraded answer.
+
+**The full run holds.** Against checkpoint 1's "before" run, one era has another issuer:
+WFT@2009-03-20, from 1170565 (Bermuda, which had filed its Form 25 before the era began) to
+1453090 (the Swiss parent). No ending is lost, gained or of another kind; the Bermuda line's
+continuation gains its date (2009-02-25); the Swiss line is one new security
+(`CIK1453090-COMMON`); no truth case fails that passed. Scorecard lines that differ: securities
+2,190 to 2,191, placeholders 50 to 51, endings 891 to 892, `A.census.assumed_par.errors` 4 to 3.
+No `D` line and no `G` line differs.
+
+**Parity, full against seeds: the floor (`data/seeds_parity.json`).**
+
+| Number | Before S1 (old memo in both runs) | S1 as first built | Reworked (the floor) |
+| --- | --- | --- | --- |
+| `endings_lost` | 26 | 2 | 2 |
+| `endings_gained` | | 12 | 13 |
+| `kind_changed` | 29 | 32 | 35 |
+| `value_or_date_changed` | | 17 | 17 |
+| `securities_lost` | 37 | 26 | 27 |
+| `securities_gained` | | 9 | 8 |
+| `seeds_placed_differently` | 25 | 20 | 19 |
+| `truth_cases_failing_only_in_seeds` | 39 | 24 | 25 |
+
+Coverage of tickers 0.976115 full, 0.971158 seeds; of securities 0.979918 and 0.972923;
+`left_view` 4 and 8; `closed_no_event` 0 and 0.
+
+The reworked numbers are not lower than S1's as first built, because that run hid differences:
+both runs were wrong the same way where S1 broke the full run. What entered the lists is the
+full run being right again (ANN, CEG 2008) or the seeds run finding more (WRK's merger of
+2024-07-05, IAC's of 2020-06-30). What left them: PLD, PDX, IVGN. The seeds run itself is closer
+to the truth sets than at checkpoint 1: `D.cases_matching` 253 to 256, `D.mismatches` 221 to 208,
+`G.pass` 37 to 39, `R1.2.figi_without_cik` 14 to 5, `V.uncertain_securities` 35 to 21. The full
+run stands at `D.cases_matching` 275, `D.mismatches` 149, `G.pass` 45.
+
+Each seed row's issuer, seeds against full: 2,560 of 2,583 the same, 8 with none in both, 15
+different (26 at checkpoint 1). MRK, MTCH, SPB: the old company (S2). ANN, GHC, MEL, AI: wrong.
+CEG, DHC: none. WW, CTL, WRK, TFC: an issuer where the full run has none or another, to be
+checked against EDGAR. TT, XP: a wrong weak answer at the seed's capped date where the full run
+has none.
+
+**The 22 tickers S1 fixed in the subset test.** None is under `endings_lost` or `kind_changed`.
+CCE's second line is under `securities_lost` (C2). DNB 2020 is in no list. Still listed: ANN
+(the seeds run takes a weak answer, University Bancorp, where the full run has Ann Inc), CEG
+2008 (no issuer in the seeds run), VIACA, MEL, MYL, SPB (`kind_changed`).
+
+**What the lists hold now.** 24 of the 35 `kind_changed` rows are a continuation in the full run
+and a merger or an exchange in the seeds run, and most of `securities_lost` is the line after a
+CUSIP change (C2: S2). `endings_lost`: ANAT's and AZPN's second lines (C2).
+
+**Found at this checkpoint: weak answers are almost always wrong.** The resolver memo of the two
+runs holds 16 `efts_frequency_name_mismatch` answers, all wrong (US Bancorp to Prologis, Burger
+King to America Capital Corp, XP to a blank-check company), and 43 `efts_name_mismatch` answers,
+about 37 of them wrong (Alcoa to Pliant Corp, Sprint to Merrill Lynch) and about 6 right (AZPN,
+CMCSK, FNFV, MDC). Task 4 keeps a weak answer only when no pass infers an issuer; it still
+stands unchecked then (full run: AI, AZPN, USB; seeds run: XP, TT, AI, ANN, MEL). A wrong issuer
+makes the delisting search read another company's filings: XP gains an "expiration" ending in
+the seeds run, and US Bancorp and C3 AI gained their blank endings when the memo was rebuilt
+(checkpoint 1). The rule to add: a weak answer stands only when the era's own fails rows fit
+that company (guard G's row test, `EraIssuers._fits_rows`), and never for an era with too few
+rows to test. It goes first in S2's plan, because a followed line is looked up under a fails
+description, where name mismatches are likely.

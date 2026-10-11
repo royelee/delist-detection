@@ -1,0 +1,10 @@
+{
+  "endings_gained": 13,
+  "endings_lost": 2,
+  "kind_changed": 35,
+  "securities_gained": 8,
+  "securities_lost": 27,
+  "seeds_placed_differently": 19,
+  "truth_cases_failing_only_in_seeds": 25,
+  "value_or_date_changed": 17
+}
