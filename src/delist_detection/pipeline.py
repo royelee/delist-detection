@@ -31,7 +31,7 @@ from .endings.distress import (
     BANKRUPTCY_WORDS, OTC_SYMBOL_DAYS, otc_symbol_from_fails, otc_symbol_from_text, plan_ratio,
     new_cusips as plan_new_cusips, price_only, substitutes_new_shares,
 )
-from .outputs.dlret import DistressTerms, ValueInputs
+from .outputs.dlret import DistressTerms, StatementTerms, ValueInputs
 from .filings.evidence import item_sections
 from .vocabulary.exit_kind import (ContinuationReading, continuation_reason, end_day, flag_name, flag_tokens,
                                    is_wind_down, last_endings, successor_note)
@@ -49,7 +49,7 @@ from .identity.history import (
     ranges_from_sightings, ticker_range_review, ticker_sightings, value_on,
 )
 from .identity.line_follow import LineSuccessor, composites, follow_lines, is_line_symbol, text_cusips
-from .vocabulary.identifiers import is_placeholder, share_class_from_name
+from .vocabulary.identifiers import is_placeholder, normalize_ticker, share_class_from_name
 from .identity.identity import identify
 from .filings.listing_status import issuer_exchange, listed_on_run_date, listed_today, listing_answers
 from .identity.observations import ObservationIndex, TickerEra, observation_conflicts
@@ -592,10 +592,12 @@ def _reader(clients: Clients) -> Reader:
 @dataclass
 class _R1:
     """Stage 8b's answer: the merger rows it rewrote as continuations (by delisting: the successor and how it was
-    found), the successors it adds as securities of their own, and its review items."""
+    found), the successors it adds as securities of their own, its review items, and the merger rows whose terms it
+    restated from the registrant's own statement (`MergerValues.restate`: FNFV)."""
     links: dict[DelistingKey, tuple[str, str]] = field(default_factory=dict)
     added: dict[str, AddedSecurity] = field(default_factory=dict)
     review: list[ReviewItem] = field(default_factory=list)
+    restated: list[DelistingKey] = field(default_factory=list)
 
 
 def _r1_successor(ctx: _RunContext, e: Delisting, sec: Security, own: OwnShares, day: date,
@@ -632,7 +634,8 @@ def _r1_successor(ctx: _RunContext, e: Delisting, sec: Security, own: OwnShares,
 
 
 def _r1_continuations(ctx: _RunContext, delistings: list[Delisting], securities: dict[str, Security],
-                      sightings: dict[str, list[Sighting]], values: MergerValues) -> _R1:
+                      sightings: dict[str, list[Sighting]], values: MergerValues,
+                      answers: PriceAnswers | None = None) -> _R1:
     """8b. A merger that ruling R1 makes a continuation (sub-plan 5c): its published terms are one share and no
     cash (a special dividend is no cash: operator ruling 2026-10-04, `OwnShares.consideration`), no --merger-terms
     row decides it, the registrant's own filings say the same of its own shares (the ending's own-share reading,
@@ -643,9 +646,13 @@ def _r1_continuations(ctx: _RunContext, delistings: list[Delisting], securities:
     `rewrites.continuation`, `Rule.R1`, with the run's merger values; an `r1_rebucketed` review item keeps its old
     bucket. An existing acquirer is never a continuation (LVNTA
     into GCI Liberty, Towers Watson into Willis, Waste Connections into Progressive Waste). The terms are stage 8's
-    reading (`MergerValues.read_terms`: none for a merger the caller gave terms for). A reading that rested on a
-    failed or stale read (the issuer record's, or any other SEC read's, now or when the reading was made) keeps the
-    merger, flagged degraded."""
+    reading (`MergerValues.read_terms`: none for a merger the caller gave terms for). Terms the payout gate refused
+    do not count against the statement (FNFV 2017: the LLM read another company's distribution); when that
+    statement's shares are a new issuer's the run holds no security of, the row stays a merger whose terms are the
+    statement's (`MergerValues.restate`: one Cannae share, a received close asked under CNNE; FB-003, the
+    consumer's ask), so no continuation is left without a successor. A reading that rested on a failed or stale read
+    (the issuer record's, or any other SEC read's, now or when the reading was made) keeps the merger, flagged
+    degraded."""
     out = _R1()
     mark = ctx.meter.start()
     starts = _starts(securities, sightings, values.added)
@@ -675,6 +682,12 @@ def _r1_continuations(ctx: _RunContext, delistings: list[Delisting], securities:
             continue
         if link is None and not unknown:
             continue
+        if link is None and (holder := own.new_issuer_entry()) is not None and holder[1]:
+            # one-for-one with no cash (`unknown` requires it): one share of the new issuer, priced by its request
+            values.restate(e.key, StatementTerms(own.statement.ratio, normalize_ticker(holder[1]), holder[2]),
+                           answers or PriceAnswers(), e.last_trade.day)
+            out.restated.append(e.key)
+            continue
         out.added.update(pending)
         sid, how = link if link is not None else ("", "")
         old = (e.record.bucket.value, e.record.crsp_code, e.record.reason)
@@ -691,6 +704,9 @@ def _r1_continuations(ctx: _RunContext, delistings: list[Delisting], securities:
                                      f"was {old[0]} (CRSP {old[1]}: {old[2]}); R1 makes it a continuation into {sid}",
                                      delist_date=e.delist_date))
     ctx.log(f"R1 continuations: {len(out.links)} merger rows ({', '.join(sorted(k.sec_id for k in out.links))})")
+    if out.restated:
+        ctx.log(f"R1 statements as merger terms: {len(out.restated)} rows "
+                f"({', '.join(sorted(k.sec_id for k in out.restated))})")
     ctx.meter.done("R1 continuations", mark)
     return out
 
@@ -1619,7 +1635,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     values = _merger_values(ctx, delistings, securities, sec_cusips, ftd, stage7, overrides, prices, tol,
                             search.sightings, ftd_lo)                                               # 8
     review += values.review
-    r1 = _r1_continuations(ctx, delistings, securities, search.sightings, values)                  # 8b
+    r1 = _r1_continuations(ctx, delistings, securities, search.sightings, values, prices)          # 8b
     review += r1.review
     successors = _find_successors(ctx, delistings, securities, search.sightings, {**values.added, **r1.added},
                                   lines.successors, ftd, sec_cusips)                                # 9

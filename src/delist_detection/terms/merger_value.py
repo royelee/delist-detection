@@ -47,10 +47,11 @@ from ..identity.added_securities import AddedAcquirer, AddedSecurity
 from ..vocabulary.crsp_codes import CrspBucket
 from ..outputs.degraded import DegradedWatch, degraded_item
 from ..endings.delistings import Delisting
-from ..outputs.dlret import MergerInputs
+from ..outputs.dlret import STATEMENT_SOURCE, MergerInputs, StatementTerms
 from ..endings.exchange_terms import one_share_no_cash
 from ..sources.fatal import FATAL
-from ..vocabulary.exit_kind import LLM_GATE_FAILED, PAYOUT_GATE_FAILED, TERMS_GATE_FAILED, flag_detail, flag_name
+from ..vocabulary.exit_kind import (GATE_FLAGS, LLM_GATE_FAILED, PAYOUT_GATE_FAILED, TERMS_GATE_FAILED,
+                                    TERMS_GATE_SKIPPED, flag_detail, flag_name)
 from ..sources.ftd import FtdIndex
 from .llm_merger_extractor import MergerTerms
 from ..vocabulary.identifiers import class_letter, normalize_ticker, share_class_from_name
@@ -98,6 +99,7 @@ class MergerValue:
     leg_sec_ids: Mapping[str, str] = field(default_factory=dict)
     request: tuple[str, str] | None = None
     own_verdict: tuple[float | None, Mapping[str, Any] | None] | None = None
+    statement: StatementTerms | None = None       # stage 8b's restatement (`MergerValues.restate`)
 
 
 @dataclass(frozen=True)
@@ -132,6 +134,23 @@ class MergerValues:
         """Forget the merger reads of an ending that is no merger after all (stage 8b's R1 continuation: a
         continuation has no value)."""
         self.records.pop(key, None)
+
+    def restate(self, key: DelistingKey, terms: StatementTerms, answers: PriceAnswers,
+                last_trade: date | None) -> None:
+        """Put the registrant's own statement in place of the merger's terms (stage 8b, FB-003: FNFV 2017, one Cannae
+        share for each share, where the LLM read another company's distribution and the gate refused it). The
+        stock leg asks a received close under the new issuer's ticker (`request`, no acquirer security: the run holds
+        none), and an answer to it prices the leg; the gate's flags about the refused terms give way to
+        `terms_gate_skipped:own_statement` (nothing checks a statement the run has no price for)."""
+        v = self.records.get(key) or MergerValue(key)
+        price = answers.received_close(key.sec_id, last_trade, terms.ticker) if answers else None
+        kept = tuple(f for f in v.flags if flag_name(f) not in GATE_FLAGS)
+        self.records[key] = replace(
+            v, statement=terms, payout=terms.cash_per_share, source=STATEMENT_SOURCE, confidence="medium",
+            terms={"cash_per_share": terms.cash_per_share, "stock_ratio": terms.stock_ratio,
+                   "acquirer_price": price, "acquirer_ticker": terms.ticker},
+            flags=(*kept, f"{TERMS_GATE_SKIPPED}:own_statement"), priced_by="", acquirer_sec_id="",
+            price_ticker=terms.ticker, leg_sec_ids={}, request=(terms.ticker, ""), own_verdict=None)
 
     def _decided(self, key: DelistingKey) -> tuple[float | None, Mapping[str, Any] | None]:
         """(payout, terms) as the run's decisions read them: the caller's --merger-terms row, else the gate's verdict
@@ -202,7 +221,7 @@ class MergerValues:
             pr = v.raw
             out[key] = MergerInputs(for_delisting(self.caller_terms, key), v.llm, getattr(pr, "value", None),
                                     getattr(pr, "source", "") or "", v.acquirer_sec_id or r["acquirer_sec_id"],
-                                    v.price_ticker, getattr(pr, "currency", "") or "", v.leg_sec_ids)
+                                    v.price_ticker, getattr(pr, "currency", "") or "", v.leg_sec_ids, v.statement)
         return out
 
     def requests(self, endings: Sequence[Mapping[str, str]]) -> dict[DelistingKey, tuple[str, str, str]]:
@@ -215,7 +234,9 @@ class MergerValues:
             key = DelistingKey(r["sec_id"], r["delist_date"])
             v = self.records.get(key)
             if v is not None and v.request is not None:
-                out[key] = (*v.request, (v.llm.acquirer_name or "") if v.llm is not None else "")
+                name = v.statement.name if v.statement is not None else \
+                    (v.llm.acquirer_name or "") if v.llm is not None else ""
+                out[key] = (*v.request, name)
         return out
 
     def leg_issuers(self, endings: Sequence[Mapping[str, str]]) -> dict[str, tuple[str, ...]]:

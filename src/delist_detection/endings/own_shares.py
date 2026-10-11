@@ -260,15 +260,27 @@ class OwnShares:
             return ""
         if not own.target_subsidiary and names_target(own, self.edgar_names):
             return SAME_ISSUER
+        if self.new_issuer_entry() is not None:
+            return NEW_ISSUER
+        # a subsidiary of a name the registrant carried: a new issuer when another registrant is found, else the
+        # registrant itself (ONEOK's holding company, "Legacy ONEOK" into "ONEOK")
+        return SAME_ISSUER if own.target_subsidiary and names_target(own, self.edgar_names) else ""
+
+    def new_issuer_entry(self) -> tuple[int, str, str] | None:
+        """The new issuer the statement's target names, as EDGAR's ticker file lists it: (CIK, ticker, title) of the
+        first registrant of another CIK the target names whose first filing is at most NEW_ISSUER_DAYS before the day
+        (`target_issuer`'s NEW_ISSUER; FNFV 2017's Cannae Holdings, CNNE). None without a statement or such an
+        entry."""
+        own = self.statement
+        if own is None or own.target_own or not own.target_names:
+            return None
         for entry in self.reader.edgar.company_tickers().values():
             other = entry.get("cik_str")
             if other is None or int(other) == self.cik or not names_target(own, [entry.get("title", "")]):
                 continue
             if new_issuer(self._watched(self.reader.issuers.first_filed, int(other)), self.day):
-                return NEW_ISSUER
-        # a subsidiary of a name the registrant carried: a new issuer when another registrant is found, else the
-        # registrant itself (ONEOK's holding company, "Legacy ONEOK" into "ONEOK")
-        return SAME_ISSUER if own.target_subsidiary and names_target(own, self.edgar_names) else ""
+                return int(other), str(entry.get("ticker") or ""), str(entry.get("title") or "")
+        return None
 
     def survived(self, deal_days: Iterable[date]) -> str:
         """Rule 1 (5c): the sentence that says the registrant survived the transaction its 8-K items call a merger --

@@ -43,6 +43,21 @@ def test_a_stock_leg_names_its_acquirers_ticker_on_the_price_date():
     assert f["value_formula"] == "1.05 × price(UAL, 2014-12-15) / last_close − 1"
 
 
+def test_a_registrants_statement_publishes_one_share_of_the_new_issuer_ungated():
+    """FB-003, FNFV 2017: stage 8b put the registrant's own statement (each share redeemed for one Cannae share) in
+    place of terms the gate refused; delistings.csv carries the ratio and ticker, the contract a stock rule priced
+    under the new issuer's ticker, no acquirer security, `terms_source` registrant_statement, the gate skipped."""
+    from delist_detection.outputs.dlret import StatementTerms
+    r = ending("A", "2014-12-20", last_trade_close="17.35", stock_ratio="1.0", acquirer_ticker="CNNE",
+               payout_source="registrant_statement")
+    s = StatementTerms(1.0, "CNNE", "Cannae Holdings, Inc.")
+    f = value_fields(r, LTD, MergerInputs(llm=_terms(ratio=0.3066, ticker="BKI"), price_ticker="CNNE", statement=s))
+    assert (f["value_rule"], f["stock_ratio"], f["price_ticker"], f["price_sec_id"], f["price_date"]) == (
+        "stock", 1.0, "CNNE", "", "2014-12-15")
+    assert (f["terms_source"], f["terms_gate"], f["cash_per_share"]) == ("registrant_statement", "skipped", None)
+    assert f["value_formula"] == "1 × price(CNNE, 2014-12-15) / last_close − 1"
+
+
 def test_cash_plus_stock_formula():
     r = ending("A", "2014-12-20", method="cash_plus_stock", last_trade_close="10", payout_per_share="65.5",
                stock_ratio="0.8025", acquirer_ticker="QSR")

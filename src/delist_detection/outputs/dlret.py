@@ -303,6 +303,22 @@ class DistressTerms:
     plan_source: str = ""
 
 
+STATEMENT_SOURCE = "registrant_statement"     # terms_source of `StatementTerms`
+
+
+@dataclass(frozen=True)
+class StatementTerms:
+    """What the registrant's own filings say one share became, published as a merger's terms when the payout gate
+    refused the LLM's and the shares are a new issuer's the run holds no security of (stage 8b, FB-003: FNFV 2017,
+    each share redeemed for one Cannae share): `stock_ratio` of the new issuer's shares, its `ticker` and `name` as
+    EDGAR's ticker file has them (the price request's ticker and `lookup_name`), and any cash. No gate checks them:
+    the run has no price for the new issuer until the caller answers the request."""
+    stock_ratio: float
+    ticker: str
+    name: str = ""
+    cash_per_share: float | None = None
+
+
 @dataclass(frozen=True)
 class MergerInputs:
     """What stage 8 holds about one merger ending beyond its delistings.csv row (`merger_value.MergerValues.
@@ -315,6 +331,7 @@ class MergerInputs:
     price_ticker: str = ""        # the acquirer security's symbol on the price date (sub-plan 5e), over the terms'
     raw_currency: str = ""        # the regex read's currency (ruling R5)
     leg_sec_ids: Mapping[str, str] = field(default_factory=dict)   # a basket's further legs: ticker -> sec_id
+    statement: StatementTerms | None = None       # stage 8b's restatement from the registrant's filings (FNFV)
 
 
 @dataclass(frozen=True)
@@ -372,17 +389,23 @@ def _llm_published(row: Mapping[str, str], inputs: MergerInputs) -> MergerTerms 
 
 
 def _merger_rule(row: Mapping[str, str], inputs: MergerInputs) -> Rule:
-    """A merger's terms come, in order, from a --merger-terms row (no gate), from the terms its delistings.csv row
-    carries (they passed the payout gate; `terms_gate` is `passed`, or blank when no last close existed to check
-    them), else from what the library read before the gate dropped them (the LLM terms, else the regex payout):
+    """A merger's terms come, in order, from a --merger-terms row (no gate), from the registrant's own statement
+    stage 8b put in their place (`StatementTerms`, source `registrant_statement`, `terms_gate` `skipped`: FNFV), from
+    the terms its delistings.csv row carries (they passed the payout gate; `terms_gate` is `passed`, or blank when no
+    last close existed to check them), else from what the library read before the gate dropped them (the LLM terms,
+    else the regex payout):
     `terms_gate` is `failed`, `skipped`, or blank (`_ungated`). An LLM answer (prompt v3) is the package one share
     became (ruling R4); one of two or more securities is a basket (R3)."""
     llm, override = inputs.llm, inputs.override
-    terms = _llm_published(row, inputs)
+    terms = _llm_published(row, inputs) if inputs.statement is None else None
     if override:
         cash, ratio = override.get("cash_per_share"), override.get("stock_ratio")
         ticker = override.get("acquirer_ticker") or (llm.acquirer_ticker if llm else "") or row["acquirer_ticker"]
         source, gate, currency = OVERRIDE_SOURCE, "", ""
+    elif inputs.statement is not None:       # the registrant's own statement (stage 8b): never gated
+        s = inputs.statement
+        cash, ratio, ticker = s.cash_per_share, s.stock_ratio, s.ticker
+        source, gate, currency = STATEMENT_SOURCE, SKIPPED, "USD" if cash else ""
     elif row["payout_per_share"] or row["stock_ratio"]:
         cash, ratio = _num(row["payout_per_share"]), _num(row["stock_ratio"])
         ticker = row["acquirer_ticker"] or (llm.acquirer_ticker if llm else "")

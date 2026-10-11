@@ -271,7 +271,8 @@ class _TitanBooks(_RoviBooks):
         return {"TTEC": {"cik_str": 999, "ticker": "TTEC", "title": "TITAN TECHNOLOGIES CORP"}}
 
 
-def _failed_gate_stage(monkeypatch, *, flags, ratio=0.3066, target="Titan Technologies Corporation"):
+def _failed_gate_stage(monkeypatch, *, flags, ratio=0.3066, target="Titan Technologies Corporation", answers=None,
+                       with_values=False):
     """Stage 8b over a merger row whose LLM terms (`ratio` of another acquirer's shares, read from the wrong filing)
     are not one share, `flags` the payout gate's; no 8-K12B candidate."""
     monkeypatch.setattr(pipeline, "successor_search_name", lambda *a: "Rovi Corp")
@@ -287,17 +288,32 @@ def _failed_gate_stage(monkeypatch, *, flags, ratio=0.3066, target="Titan Techno
     sec = Security("R", 1, "COMMON", "ROVI CORP", "Common Stock", True, "cusip")
     values = MergerValues({d.key: MergerValue(d.key, llm=MergerTerms("stock", None, ratio, None, "BKI", "high", "x", ""),
                                               flags=tuple(flags))})
-    return d, pipeline._r1_continuations(ctx, [d], {"R": sec}, {}, values)
+    r1 = pipeline._r1_continuations(ctx, [d], {"R": sec}, {}, values, answers)
+    return (d, r1, values) if with_values else (d, r1)
 
 
-def test_terms_that_failed_the_gate_do_not_outvote_a_one_for_one_statement_into_a_new_issuer(monkeypatch):
+def test_terms_that_failed_the_gate_give_way_to_a_one_for_one_statement_into_a_new_issuer(monkeypatch):
     """FNFV 2017: the LLM read BKI's 0.3066 from the wrong filing (terms_gate_failed:fail_sanity); the registrant's
-    own 8-K says each FNFV share was redeemed for one Cannae share, a new issuer the run does not hold. The row is a
-    continuation with its successor still unknown (stage 9 may find it), flagged r1_continuation."""
-    d, r1 = _failed_gate_stage(monkeypatch, flags=["terms_gate_failed:fail_sanity"])
-    assert (d.record.bucket, d.record.successor_sec_id) == (CrspBucket.EXCHANGE_TRANSFER, "")
-    assert pipeline.R1_CONTINUATION in d.flags and SUCCESSOR_UNKNOWN in d.flags
-    assert [i.flag for i in r1.review] == [pipeline.R1_REBUCKETED]
+    own 8-K says each FNFV share was redeemed for one Cannae share, a new issuer the run holds no security of. The row
+    stays a merger whose terms are the statement's (FB-003, the consumer's ask): one share of the new issuer, a
+    received close asked under its EDGAR ticker with its EDGAR name, no gate; no continuation without a successor."""
+    d, r1, values = _failed_gate_stage(monkeypatch, flags=["terms_gate_failed:fail_sanity"], with_values=True)
+    assert d.record.bucket is CrspBucket.MERGER and r1.links == {} and r1.restated == [d.key]
+    assert pipeline.R1_CONTINUATION not in d.flags and SUCCESSOR_UNKNOWN not in d.flags
+    v = values.get(d.key)
+    assert (v.statement.stock_ratio, v.statement.ticker, v.statement.name) == (1.0, "TTEC", "TITAN TECHNOLOGIES CORP")
+    assert v.request == ("TTEC", "") and v.flags == ("terms_gate_skipped:own_statement",)
+    assert values.requests([{"sec_id": "R", "delist_date": "2016-09-08"}]) == {
+        d.key: ("TTEC", "", "TITAN TECHNOLOGIES CORP")}
+    assert values.table_terms(d.key).stock_ratio == 1.0 and values.table_terms(d.key).acquirer_price is None
+
+
+def test_an_answered_close_prices_the_statements_stock_leg(monkeypatch):
+    """A second run with the request answered: the received close under the new issuer's ticker prices the leg."""
+    from delist_detection.outputs.price_requests import PriceAnswers, PriceKey
+    answers = PriceAnswers({PriceKey("R", "2016-09-07", "received_close", "TTEC", "2016-09-08"): 21.5})
+    d, _, values = _failed_gate_stage(monkeypatch, flags=["llm_gate_failed"], answers=answers, with_values=True)
+    assert values.table_terms(d.key).acquirer_price == 21.5
 
 
 def test_terms_the_gate_kept_still_outvote_the_statement(monkeypatch):
