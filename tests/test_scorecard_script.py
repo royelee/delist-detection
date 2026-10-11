@@ -59,6 +59,16 @@ def test_check_passes_on_a_held_floor_and_write_puts_the_card_next_to_the_tables
     assert (out / "disputes.csv").read_text() == "sec_id,last_trade_date,truth_file,case,field,truth,library\n"
 
 
+def test_write_refreshes_the_manifests_disputes_count_and_keeps_the_rest(tmp_path, out):
+    """FB-011 follow-up (batch 4 output): the truth loop's --write rewrote disputes.csv (180 rows) after the run wrote
+    run_manifest.json (`disputes` 182); --write now writes the count it wrote, leaving every other field as it was."""
+    (out / "run_manifest.json").write_text(json.dumps({"as_of": "2026-09-25", "disputes": 182, "code_version": "x"}))
+    cfg = _config(tmp_path, {"L1.left_view": 1})
+    assert scorecard_script.main(["--output-dir", str(out), "--config", str(cfg), "--write"]) == 0
+    manifest = json.loads((out / "run_manifest.json").read_text())
+    assert manifest == {"as_of": "2026-09-25", "disputes": 0, "code_version": "x"}
+
+
 def test_check_fails_on_a_drop_and_names_it(tmp_path, out, capsys):
     cfg = _config(tmp_path, {"L1.left_view": 0})
     assert scorecard_script.main(["--output-dir", str(out), "--config", str(cfg), "--check"]) == 1

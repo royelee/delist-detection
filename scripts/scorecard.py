@@ -36,6 +36,7 @@ from delist_detection.measurement.loop_round import Loop, unexplained
 from delist_detection.measurement.scorecard import (ScorecardConfigError, build, drops, flip, load_config, raise_floor,
                                                     write)
 from delist_detection.measurement.disputes import dispute_rows
+from delist_detection.outputs.manifest import refresh_disputes
 from delist_detection.outputs.run_snapshot import RunSnapshot, SnapshotError
 from delist_detection.outputs.store import table_path, write_tables
 from delist_detection.measurement.truth import TruthFileError
@@ -111,6 +112,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"wrote {write(args.output_dir, card)}")
         n = write_tables(args.output_dir, {"disputes": dispute_rows(run, config)})["disputes"]
         print(f"wrote {table_path(args.output_dir, 'disputes')} ({n} dispute(s))")
+        if refresh_disputes(args.output_dir, n) is not None:     # FB-011: the manifest's count is the file's
+            print(f"run_manifest.json disputes: {n}")
     if args.lifecycles:
         write_atomic(args.lifecycles, _csv_text(LIFECYCLE_COLUMNS, lifecycle_rows(LifecycleView(run))))
         print(f"wrote {args.lifecycles}")

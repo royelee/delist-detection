@@ -113,6 +113,20 @@ def write(out_dir: str | Path, manifest: dict) -> Path:
     return path
 
 
+def refresh_disputes(out_dir: str | Path, disputes: int) -> Path | None:
+    """Set the folder's run_manifest.json `disputes` to the row count of a disputes.csv written after the run
+    (`scripts/scorecard.py --write`, FB-011: the count must be the file's); every other field is kept. None when the
+    folder has no manifest."""
+    path = Path(out_dir) / MANIFEST_NAME
+    if not path.exists():
+        return None
+    manifest = json.loads(path.read_text())
+    if manifest.get("disputes") == disputes:
+        return path
+    manifest["disputes"] = disputes
+    return write(out_dir, manifest)
+
+
 class StageMeter:
     """SEC traffic per pipeline stage, from sec_stats.SEC_STATS: logged as each stage
     ends and kept for run_manifest.json. Counts cover every thread (the warm pass's
