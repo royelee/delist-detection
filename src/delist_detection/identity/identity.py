@@ -216,7 +216,7 @@ def _refine(index: ObservationIndex, ftd_client: Any, as_of: date, limit: int | 
 class FirstPass:
     """One era's first-pass answer out of its two lookups (`choose_first_pass`): `answer`, what the era-level passes
     see (a strong answer, or no CIK), and `fallback`, a weak answer kept aside, which stands only when no pass
-    infers an issuer."""
+    infers an issuer and the era's own fails rows fit it (`EraIssuers.rows_fit`)."""
     answer: TickerResolution
     fallback: TickerResolution | None = None
 
@@ -231,7 +231,8 @@ def choose_first_pass(capped: TickerResolution, followed: TickerResolution) -> F
     it is today's ticker map and the capped date's is not (by the end of the line a successor holds the ticker and
     the name: Prologis 2011, Merck 2009); one strong, that one (a later rename rejects the right company at the
     end: AMC Networks; a seed's early date finds no Form 25: Coca-Cola Enterprises); neither, no answer, with a
-    weak one kept aside (the capped date's first)."""
+    weak one kept aside (the capped date's first); it stands only when no pass infers an issuer and the era's own
+    fails rows fit it (`EraIssuers.rows_fit`)."""
     if capped.strong and followed.strong:
         successor = followed.source == "company_tickers" and capped.source != "company_tickers"
         return FirstPass(followed if followed.cik != capped.cik and not successor else capped)
@@ -274,7 +275,8 @@ def _resolve_issuers(eras: list[TickerEra], ftd: FtdIndex, handoffs: Sequence[Ha
     found by its 8-K frequency or by a CUSIP handoff. Then each issuer's EDGAR names
     (`IssuerRecord.names`), which stage 3 checks CUSIPs and FIGI names against:
     an issuer whose read failed has none (its eras are checked against their
-    observed names only) and is reported degraded."""
+    observed names only) and is reported degraded. A weak first-pass answer (its name does not agree) stands only
+    where no pass infers an issuer and the era's own fails rows fit it (`EraIssuers.rows_fit`)."""
     resolver, record = clients.resolver, clients.issuers
     capped, last_seen = capped_sightings(eras, ftd), last_sightings(eras, ftd)
 
@@ -312,9 +314,18 @@ def _resolve_issuers(eras: list[TickerEra], ftd: FtdIndex, handoffs: Sequence[Ha
     disagreements = {**by_end.disagreements, **by_cap.disagreements}
     for key, found in inferred.items():
         answers[key] = TickerResolution(tickers[key], found.cik, None, found.source)
-    for key, f in first.items():                 # a weak answer stands only where no pass inferred an issuer
-        if answers[key].cik is None and f.fallback is not None:
+    by_key = {e.key: e for e in eras}
+    dropped = []
+    for key, f in first.items():      # a weak answer stands only where no pass inferred an issuer and its rows fit
+        if answers[key].cik is not None or f.fallback is None:
+            continue
+        if passes.rows_fit(by_key[key], f.fallback.cik, era_rows(by_key[key], ftd, last_seen[key])):
             answers[key] = f.fallback
+        else:
+            dropped.append(key)
+    if dropped:
+        log(f"weak answers dropped: {len(dropped)} whose company the era's own fails rows do not fit "
+            f"({', '.join(sorted(dropped))})")
     log(f"resolver's second pass: {len(inferred)} issuers inferred, "
         f"{len(disagreements)} first-pass answers its CUSIP evidence contradicts")
     ciks = {k: r.cik for k, r in answers.items()}
@@ -970,6 +981,17 @@ class EraIssuers:
             return got
         names = self.issuers.names(got.cik, about=last_seen)
         return got if any(description_matches(n, names) for n in era.names) else None
+
+    def rows_fit(self, era: TickerEra, cik: int, rows: list[FtdRow]) -> bool:
+        """Whether the era's own fails rows are this company's: at least `ERA_MIN_ROWS` of them, and guard G's row
+        test (`_fits_rows`). A weak first-pass answer must pass it to stand (`_resolve_issuers`): the resolver took
+        it although its name does not agree with the observed one, and most such answers are another company's
+        (US Bancorp's 8-K frequency answer was Prologis). A read that fails marks the era degraded, as the
+        passes' own reads do."""
+        self._reset()
+        fits = len(rows) >= ERA_MIN_ROWS and self._fits_rows(cik, rows)
+        self._mark(era)
+        return fits
 
     def _guard(self, candidates: Iterable[int], rows: list[FtdRow]) -> int | None:
         """Guard G: the one candidate (`_fits_rows`) that could be the issuer of

@@ -23,7 +23,7 @@ import requests
 from delist_detection.sources.edgar import EdgarSubmission
 from delist_detection.sources.ftd import FtdIndex, FtdRow
 from delist_detection.identity.identity import (
-    EraIssuers, InferredIssuer, SecondPass, capped_sightings, identify, last_sightings, refine_eras,
+    ERA_MIN_ROWS, EraIssuers, InferredIssuer, SecondPass, capped_sightings, identify, last_sightings, refine_eras,
 )
 from delist_detection.identity.observations import ObservationIndex, load_observations
 from delist_detection.pipeline import Clients
@@ -701,6 +701,22 @@ def test_a_weak_answer_gives_way_to_the_second_pass():
 def test_a_weak_answer_stands_when_nothing_is_inferred(matx_dates):
     _, identity = _matx({MATX_CAP: (A, "efts_name_mismatch"), MATX_END: (A, "efts_name_mismatch")})
     assert _issuer_and_tier(identity) == (A, "efts_name_mismatch")
+
+
+def test_a_weak_answer_whose_company_the_rows_do_not_fit_does_not_stand(matx_dates):
+    """The era's fails rows say MATSON; the weak answer is another company (B). It is no issuer: the delisting
+    search would read B's filings."""
+    _, identity = _matx({MATX_CAP: (B, "efts_frequency_name_mismatch"), MATX_END: (B, "efts_frequency_name_mismatch")})
+    assert MATX not in identity.issuers
+
+
+def test_a_weak_answer_for_an_era_with_too_few_rows_does_not_stand():
+    """An era with fewer than ERA_MIN_ROWS rows of its own has nothing to test a weak answer against, though the
+    answer (Matson, for MATX) is the rows' own company: the same answer stands on the fixture's full rows."""
+    lookup = CommittedLookup({MATX: (A, "efts_name_mismatch")})
+    assert _issuer_and_tier(_identify({"MATX"}, lookup)) == (A, "efts_name_mismatch")
+    few = [r for r in _rows() if r.symbol == "MATX"][:ERA_MIN_ROWS - 1]
+    assert MATX not in _identify({"MATX"}, lookup, rows=few).issuers
 
 
 @pytest.mark.parametrize("degraded_date", [MATX_CAP, MATX_END])

@@ -612,7 +612,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   Both strong and one CIK: the capped date's answer. Both strong and two CIKs: the end of the line's (another company of
   the name answers early: ITC Holdings 2016, Sprint 2020), unless it is `company_tickers` and the capped date's is not (by
   the end a successor holds the ticker and the name: Prologis 2011, Merck 2009). One strong: that one. Neither: no
-  first-pass answer, the weak one (the capped date's first) kept aside, standing only when no pass infers an issuer. The
+  first-pass answer, the weak one (the capped date's first) kept aside, standing only when no pass infers an issuer and the era's own
+  fails rows fit it (`EraIssuers.rows_fit`: at least `ERA_MIN_ROWS` rows, and guard G's row test). The
   name search drops EDGAR's nameless multi-company hits and ranks up to 5
   candidates by the words the name shares with their EDGAR names (current
   and former). The era-level passes, which read the run's other eras and its fails rows and are never saved,
