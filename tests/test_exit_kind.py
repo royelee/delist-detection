@@ -220,6 +220,7 @@ def test_a_successor_registration_round_trips_for_every_form_and_amendment():
 def test_a_timing_link_round_trips_in_a_continuations_reason_and_in_a_successor_note():
     assert successor_note("same_issuer_class") == "; successor by same issuer class"
     assert successor_note("handoff", TIMING_CIK) == "; successor by handoff (timing:cik)"
+    assert successor_note("") == ""                 # no successor found: the reason ends at the continuation
     assert linked_by_timing(continuation_reason(TIMING_CIK, "A last traded as AAA"))
     assert linked_by_timing(CONTINUED + successor_note("handoff", TIMING_CIK))
     assert not linked_by_timing(continuation_reason(TIMING_CUSIP, "x"))       # a CUSIP switch is evidence of its own

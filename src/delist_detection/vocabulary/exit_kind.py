@@ -208,7 +208,10 @@ def continuation_reason(evidence: str, text: str) -> str:
 
 def successor_note(how: str, evidence: str = "") -> str:
     """The note a successor link adds to an existing reason ("; successor by same ticker", "; successor by handoff
-    (timing:cik)"): the published reason's one wording of how a successor was found."""
+    (timing:cik)"): the published reason's one wording of how a successor was found; none when nothing found one
+    (FNFV 2017's R1 continuation into a new issuer the run does not hold)."""
+    if not how:
+        return ""
     return f"; successor by {how.replace('_', ' ')}" + (f" {_evidence(evidence)}" if evidence else "")
 
 
