@@ -139,7 +139,9 @@ filing text in `cache/edgar/text/`, complete submissions in `cache/edgar/raw/`.
 OpenFIGI responses are cached under `cache/openfigi/`, paced on the
 `ratelimit-*` headers. SEC fails-to-deliver and MIDAS downloads live under
 `cache/sec_data/ftd/` and `cache/sec_data/midas/` (MIDAS summarizes each
-quarterly ZIP once into a small JSON and deletes the ZIP). The Nasdaq halt feed
+quarterly ZIP once into a small JSON and deletes the ZIP). Each fails ZIP is
+parsed once into `cache/sec_data/ftd/parsed/<zip>.sqlite` (about 1.9 GB in
+all), rebuilt when the ZIP or the line rule changes. The Nasdaq halt feed
 caches one file per day under `cache/nasdaq_halts/`. Each EDGAR payload records
 the day it was fetched (`__fetched__`; an older file is dated by its mtime). The
 resolver's checks and the classifier read a company's submissions fresh as of
@@ -244,12 +246,17 @@ way; those threads also read uncached filing text from EDGAR, inside the same
   batched mapping requests.
 - **Measured speed** (task 16's live measurement, 2026-09-24). Cold runs on
   150 eras: 1 worker 18m, 4 workers 11m, 8 workers 5m (3.6× wall time; issuer resolution 4.6×). A fully warm
-  full-universe rerun takes about 3–4 min (2m47s at 1 worker, 4m13s at 4) with 0 SEC requests. Guidance: use
+  full-universe rerun (no SEC request, no LLM call) took 3 m 35 s at 1 worker and 4 m 11 s at 4, measured at
+  `f808b15` on 2026-10-10 with the full `data/observations.csv`, `--as-of 2026-09-25` and
+  `--extract-merger-terms-llm`; the untouched fork point `799d1bc` took 10 m 59 s. A warm run has nothing to
+  fetch, so extra threads only add contention: 4 workers were about 17% slower than 1. The first run on a cache
+  without the parsed fails store took 4 m 07 s at 1 worker, about 31 s more than a warm run. The cold-run figures
+  in this bullet are older and were not measured again. Guidance: use
   `--sec-workers 8` for a cold or large refetch; use `--sec-workers 1` for a
   rerun whose caches are already warm — a warm pass redoes each stage's CPU
   work but sends no request, so a fully warm rerun at the default 4 workers is
-  about 50% slower (+CPU only, no extra SEC traffic) than at 1; the default
-  stays 4 (cold savings are hours, the warm-rerun cost is ~1.5 min, and 4
+  about 17% slower (+CPU only, no extra SEC traffic) than at 1; the default
+  stays 4 (cold savings are hours, the warm-rerun cost is ~36 s, and 4
   keeps company-search pressure moderate). SEC's company-name search
   (`cgi-bin/browse-edgar`) is 89% of cold issuer-resolution time and can slow
   to ~10 s/request after about 1,500 searches in under an hour, recovering

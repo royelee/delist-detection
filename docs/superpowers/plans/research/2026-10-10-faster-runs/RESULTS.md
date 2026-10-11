@@ -141,3 +141,55 @@ Run separately from the agent's own measurements, on a tree rebuilt from the dif
 
 The branch did not change `ftd.py`, `cik_lookup.py`, `atomic_io.py`, `edgar.py` or `evidence.py` between `6e43e09`
 and `c77365a`, so these three files are the same at both commits once the changes are applied.
+
+## At `799d1bc` (branch `faster-runs`)
+
+Measured by the controller on 2026-10-10. Code: branch `faster-runs` at `f808b15` (all six changes). Reference: the untouched fork point `799d1bc`. Input: the full `data/observations.csv`, `--as-of 2026-09-25 --sec-workers 1 --extract-merger-terms-llm`, one fixed `--id-baseline`. One machine; the runs of Steps 2 to 5 ran one at a time. "Warm" means no SEC request and no LLM call (OpenFIGI is still asked for listing status). Every run: exit 0, no SEC request, no degraded answer, no `resolution_degraded` row. Every figure is measured unless marked estimated.
+
+Suite: 3,838 passed, 44 xfailed (62 s). The fork point gave 3,760 passed, 44 xfailed; the branch adds 78 tests.
+
+The reference (untouched `799d1bc`, warm) took 658.6 s (10 m 59 s) with a peak memory of 5,528 MB. Other work (test runs of this plan) ran beside it, so its time is an upper figure.
+
+The warm figure here (3 m 35 s) is higher than the 2 m 11 s the same changes gave at `6e43e09`, because the untouched code itself is slower at this commit (659 s here against 522 s there). The saving is the same kind: about a third of the untouched time.
+
+### First run, then warm
+
+| Run | Wall time | Peak memory | Tables against the reference |
+| --- | --- | --- | --- |
+| First run on a fresh copy of the reference cache (it builds the parsed store) | 246.8 s (4 m 07 s) | 4,088 MB | byte-identical |
+| Warm run on the cache that run left, `--sec-workers 1` | 215.4 s (3 m 35 s) | 4,107 MB | byte-identical |
+
+The first run costs about 31 s more than a warm run: the one-time build of the store. The manifest differs in no field outside the allowed ones (`code_version`, `cache_answers.*`, `latency_ms.*`, `sec_requests.*`, per-stage `edgar_requests` and `seconds`).
+
+### `--sec-workers 4`, warm
+
+251.1 s (4 m 11 s), 4,189 MB, tables byte-identical. The one manifest field that differs is `sec_workers` (1, 4). On a warm cache 4 workers are about 17% slower than 1: the threads have nothing to fetch and only add contention.
+
+### Stand-in LLM runs
+
+Every merger-terms answer is asked again; each call sleeps 2.7 s; no LLM call is paid for.
+
+| `--llm-workers` | Wall time | Calls made | Most in flight | Tables | Answer files |
+| --- | --- | --- | --- | --- | --- |
+| 8 (the default) | 470.7 s (7 m 51 s) | 784 | 8 | byte-identical | 784 written, all byte-equal to the saved answers |
+| 16 (the maximum) | 352.1 s (5 m 52 s) | 784 | 16 | byte-identical | 784 written, all byte-equal |
+
+784 calls for 784 answer files: none was paid for twice. The run reads 785 answers (`merger_terms.asked` 785): two mergers read one file. One saved file, `000119312513440103_..._ICE.json`, is an answer this code no longer asks for. One call at a time would take about 215 s + 784 × 2.7 s = 2,332 s (39 minutes): estimated, not run.
+
+### Two-ticker run (`DAL` and `NWA`, one observation each on 2008-01-16)
+
+| Code | Cache | Wall time | Tables |
+| --- | --- | --- | --- |
+| untouched `799d1bc` | reference cache | 46.8 s | the comparison base |
+| this branch | parsed store already built | 3.7 s | byte-identical to the untouched code's |
+| this branch | no parsed store yet (the run builds all of it) | 51.8 s | byte-identical |
+
+### Disk
+
+The parsed store is 434 files, 1.9 GB, under `sec_data/ftd/parsed/`; the fails folder is 2.5 GB with it (0.6 GB of ZIPs).
+
+### Earlier checks on this branch (each compared with the same reference)
+
+- Task 1's commit `93f9c14`, first run on a fresh cache copy: tables byte-identical.
+- The real-ZIP equivalence script on that cache: `rows compared 28235581 mismatching zips/filters 0`.
+- The commit after Task 4, `09fb516`, warm: tables byte-identical.

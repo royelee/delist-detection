@@ -2258,6 +2258,8 @@ git commit -m "docs: faster runs (fails store, LLM workers): measured figures"
 
 ## Measured results (2026-10-10, one machine, one run at a time)
 
+The table below was measured at `6e43e09`. The figures for this branch (`f808b15`, against the untouched `799d1bc`) are in `docs/superpowers/plans/research/2026-10-10-faster-runs/RESULTS.md` under "At `799d1bc` (branch `faster-runs`)".
+
 | # | Change | Warm full run, before → after | Peak memory, before → after | Tables byte-identical to `out-full` |
 | --- | --- | --- | --- | --- |
 | 0 | Untouched code (reference, run twice) | 533.2 s and 521.9 s | 5,516 MB | yes (`contract/` and `scorecard.json` included) |

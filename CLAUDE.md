@@ -28,7 +28,7 @@ editable install.
 
 ```bash
 pip install -e .                         # editable install (Python ≥3.10) — once per env
-pytest   # full suite (3747 passed, 44 xfailed: the known-wrong golden cases and the diagnosis truth set's known_wrong cases, all residual, all strict; offline, no network)
+pytest   # full suite (3838 passed, 44 xfailed: the known-wrong golden cases and the diagnosis truth set's known_wrong cases, all residual, all strict; offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
 pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one test
 
@@ -1468,10 +1468,19 @@ expiration is 0.0 in the table and no correction in the firm month, which leaves
   (the controller confirms no other client is running before a live run).
 - **Measured SEC request speed** (task 16's live measurement, 2026-09-24). Cold
   runs on 150 eras: 1 worker 18m, 4 workers 11m, 8 workers 5m (3.6× wall time; issuer resolution 4.6×). A fully
-  warm full-universe rerun takes about 3–4 min (2m47s at 1 worker, 4m13s at 4) with 0 SEC requests. Use
+  warm full-universe rerun (no SEC request, no LLM call) took 3 m 35 s at 1 worker and 4 m 11 s at 4, measured
+  at `f808b15` on 2026-10-10 with the full `data/observations.csv`, `--as-of 2026-09-25` and
+  `--extract-merger-terms-llm`. The untouched fork point `799d1bc` took 10 m 59 s on the same input. A warm run
+  has nothing to fetch, so extra threads only add contention: 4 workers were about 17% slower than 1. The first
+  run on a cache without the parsed fails store took 4 m 07 s at 1 worker, about 31 s more than a warm run, the
+  one-time build of the store. A two-ticker run (`DAL` and `NWA`, one observation each on 2008-01-16) took 3.7 s
+  with the store built and 51.8 s while it built the whole store; the untouched code took 46.8 s. A run that must
+  ask the model for every merger (784 calls, measured with a stand-in that sleeps 2.7 s per call, no LLM call
+  paid for) took 7 m 51 s at `--llm-workers 8` and 5 m 52 s at 16; one call at a time would take about 39 minutes
+  (estimated, not run). The cold-run figures beside these are older (2026-09-24) and were not measured again. Use
   `--sec-workers 8` for a cold or large refetch; use `--sec-workers 1` for a
   rerun whose caches are already warm (a warm pass redoes each stage's CPU
-  work but sends no request, so 4 workers is about 50% slower than 1 on a
+  work but sends no request, so 4 workers is about 17% slower than 1 on a
   fully warm rerun); the CLI default stays 4. SEC's company-name search
   (`cgi-bin/browse-edgar`, the resolver's fallback tier) was 89% of cold
   issuer-resolution time and can slow to ~10 s/request after about 1,500
@@ -1479,7 +1488,7 @@ expiration is 0.0 in the table and no correction in the firm month, which leaves
   it answered HTTP 429 (a run-stopping `EdgarBlocked`) three times in a cold
   full run, at 8, 2 and 1 workers. That is why the name tier now reads SEC's
   `cik-lookup-data.txt` (one ~38 MB download; building the index takes about
-  9 s and ~440 MB) instead of searching. Peak memory was 1.8–4.2 GB in older runs (not profiled); the offline
+  9 s and ~440 MB) instead of searching. Peak memory of the warm full-input run at `f808b15` was 4,107 MB at 1 worker (4,189 MB at 4); the untouched `799d1bc` peaked at 5,528 MB (older runs: 1.8–4.2 GB, not profiled); the offline
   whole-run replay (2,468 eras, every cache warm, 1 worker; architecture step 12, 2026-10-07) takes 580 s and a
   5.0 GiB maximum resident set, its fails index holding about 4.0 million rows at the end, and its passes over the
   fails files take 252 s of it, 117 s of them stage 5b's 68 one-security passes (each ~1.7 s);
