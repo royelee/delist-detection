@@ -202,7 +202,8 @@ from sources.
   holder, an identifier pin or the class words changed (S3; the old seed file had dropped 26 rows on which the
   caller pins another issuer), and stage 4b reading the 8-K text for a line that moved and stopped (S4). The rule
   for the switch (that plan's decision D) asks for `endings_lost`, `kind_changed`, `securities_lost`,
-  `seeds_placed_differently` and `truth_cases_failing_only_in_seeds` at 0; they are 0, 6, 3, 10 and 5, so
+  `seeds_placed_differently` and `truth_cases_failing_only_in_seeds` at 0; they are 0, 6, 3, 10 and 5 (0, 5,
+  3, 10 and 5 measured again after the rebase onto `285bfb0`, whose FB-003 fix closed NFS), so
   qlib_practice keeps passing every sighting for now. Left by name: NFS, VIACA, CEG, SPB, WRK, SUNW (kind), XRX, ANN,
   WLL (a security missing), ALEX, DDR, WW (seeds on another security), CFFN (an ending the full run lacks). A seeds
   run needs two passes (seeds, a run, seeds again with that run's history), and costs about 7.5 minutes against the

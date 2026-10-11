@@ -4237,6 +4237,9 @@ are with it.
 
 ## Status at the end of this run (2026-10-11)
 
+*Written before the rebase. "After the rebase onto `285bfb0`" below withdraws part of item 1 and says which of items
+2 and 5 no longer hold.*
+
 Head `1882cb2`. Suite 4,063 passed, 44 xfailed. The whole-branch review's verdict after one fix round: ready to merge.
 
 **Done.** S0 (Task 1), S1 (Tasks 2 to 6), S2 (Tasks 7 to 18), S3 (Task 19), a first step of S4 (Tasks 20 and 21),
@@ -4283,6 +4286,70 @@ pass are logged and not applied; `derivable` reads issuer profiles when nothing 
 per pair; a new CUSIP's first fails row with a price that is not a close could switch off a right continuation by
 timing (none known); `last_sightings`' bound is strictly greater; the degraded path of `rows_fit` is untested; a 9d
 merger ending skips stage 8b's R1; the class-share and same-day tests of Task 10 are weak.
+
+## After the rebase onto `285bfb0` (2026-10-11)
+
+The owner asked for this branch to be rebased on the latest `worktree-reset-1-scorecard`. The base was 16 commits past
+the fork point `6bbeb7e` (upstream feedback FB-003, FB-004 and FB-011, and the batch 3 and batch 4 acceptance runs) and
+already held `faster-runs`. The 41 commits of this branch now sit on `285bfb0`. The head before the rebase is kept as
+the branch `seeds-only-parity-pre-rebase` (`b8e4fd4`). Suite on the rebased head: 4,145 passed, 43 xfailed.
+
+**Conflicts.** Four commits stopped. Two were both sides adding at the same place (new tests at the end of
+`tests/test_history.py`, and `pipeline.py`'s imports). One was the stated test count. The fourth was Task 21's Part C:
+the base's FB-003 commit `4f75249` (YRCW 2021) made the same change, a line end's 8-K text read in the round the line
+first has no step, once per line end. The base's code stands: it keys a line end by its last CUSIP and keeps the
+renamed-CUSIP scan in the first round, where Part C ran the scan in every round. Part C keeps its three tests and the
+doc wording, and its commit message says so. No case of this plan needs the scan in a later round (RRI's second step
+is named by an 8-K's text).
+
+**What in the status above no longer holds.** Item 5: the base holds `faster-runs` and this branch sits on its head.
+Item 2: the base already re-keyed both truth cases. Item 1's reason: the committed `output/` and
+`data/scorecard.json` are now built on claude-sonnet-5-5 answers (batches 3 and 4), so a run of this branch can be
+checked against the committed floor.
+
+**Parity, measured again** (`50194fd`, the same file of 2,900 seeds, full 352 s, seeds 436 s; the base's own code
+takes 243 s on the same cache): endings lost 0, endings gained 1, kind changed 5, value or date changed 2, securities
+lost 3, securities gained 2, seeds placed differently 10, truth cases failing only in seeds 5. Kind changed fell from 6
+to 5 because the base fixed NFS (FB-003). Every other case list is the same as at checkpoint 6. The floor is lowered
+to 5. Both runs use the rebuilt memo, as at every checkpoint.
+
+**The full run against the base.** The last three rows are runs on one scratch cache, which holds the same LLM answers
+and SEC files for each. The first row is the committed output, built on the other session's cache.
+
+| Run | Resolver memo | `D.mismatches` | `pass` cases failing | floored numbers below the committed floor |
+| --- | --- | --- | --- | --- |
+| committed `output/` (the base) | the base's | 135 | 0 | 0 |
+| the base's code `285bfb0` | rebuilt from empty | 141 | 2 (NWA 2008, WRK 2024) | 21 |
+| this branch `50194fd` | rebuilt from empty | 140 | 2 (the same) | 24 |
+| this branch `50194fd` | the base's | 134 | 0 | 12 |
+
+*The memo.* A memo rebuilt from empty costs the base's code and this branch's alike. On this branch Northwest Airlines
+and WestRock have no issuer and lose their mergers, four WW seeds of 2012 and 2013 are unplaced, and two `pass` cases
+fail. Checkpoint 1 found this, and it still holds. The byte-identical comparison at `22027dd` was between two runs
+that both started from the rebuilt memo, so it showed only that a rebuild is repeatable. Item 1's sentence "the memo
+can be rebuilt at no cost" is wrong and is withdrawn. Decision B is open: the memo behind the committed output is not
+rebuilt.
+
+*The branch.* With the base's memo, this branch against the committed output: no ending lost or gained, one more truth
+case matching (`D.mismatches` 135 to 134), no golden or `pass` case failing. The cases that differ are the ones this
+plan built, the same under either memo and the same as before the rebase:
+
+- three mergers priced (CCE 2016, GCI 2019, ODP 2025);
+- News Corp 2013 is no longer a continuation into the company spun off;
+- Weatherford's 2009 move to Switzerland is two securities joined by its 8-K12B, with two WFT seeds placed on the
+  second;
+- five securities the caller never observed (`observed=false`): new Gannett, Coca-Cola European Partners, new
+  Seadrill, BancorpSouth Bank and Weatherford Switzerland. Two of them end unexplained (BancorpSouth Bank 2021, new
+  Seadrill 2022).
+
+These changes put 12 floored numbers below the committed floor, so `scorecard.py --check` fails on a rebuilt output:
+both coverage shares (securities 0.98309 to 0.98264), `L1.left_view` 0 to 1, `R1.2.cusip_share`, placeholders 46 to
+47, `transfer_no_successor` 0 to 1, review rows 524 to 529, `unknown_reason` 6 to 8, blank DLRET in window 31 to 33,
+blank value in window 24 to 26, uncertain securities 14 to 15 and the uncertain input tickers' share.
+
+**For the owner now.** Publishing this branch's output needs those 12 floor entries lowered by hand with the reason,
+or the two unexplained endings on unobserved lines dealt with first. Decision D is still not met: the five numbers are
+0, 5, 3, 10 and 5.
 
 ## Rulings made while executing
 
