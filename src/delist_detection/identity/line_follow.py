@@ -628,7 +628,7 @@ class _Reads:
 
     def __init__(self, clients: LineSources) -> None:
         self.issuers, self._edgar = clients.issuers, clients.edgar
-        self._search = clients.full_text_search
+        self._search = getattr(clients, "full_text_search", None)      # a double of the identity stage has none
         self._stage = self.issuers.watch()          # every issuer read of the stage
         self._search_failed: set[int] = set()       # the CIKs whose other-registrant search failed
 
@@ -682,6 +682,19 @@ class _Reads:
         if other == READ_FAILED:
             self._search_failed.add(cik)
         return other
+
+
+def step_refusal(clients: Any, step: LineStep, *, cik: int, name: str, share_class: str, tickers: Collection[str],
+                 as_of: date) -> tuple[str, str, bool]:
+    """R1 for one step of a line outside `follow_lines`: (evidence, refusal, degraded) from the issuer `cik`'s record
+    (`corroborate`, as the stage reads it), for a line named `name` of class `share_class` trading under `tickers`.
+    `degraded`: a read of the step failed or came from a stale copy (or the other-registrant search failed), so the
+    refusal, if any, is no finding. Used by the identity stage to judge a fold (`identity._check_folds`)."""
+    reads = _Reads(clients)
+    watch = reads.issuers.watch()
+    s = Security(step.sec_id, cik, share_class, name, "Common Stock", True, "cusip")
+    evidence, refusal = reads.corroborate(step, s, set(tickers), as_of)
+    return evidence, refusal, watch.tripped() or reads.degraded(cik)
 
 
 def _cusip_holders(cusips: Mapping[str, Sequence[str]]) -> dict[str, set[str]]:

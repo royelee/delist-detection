@@ -13,7 +13,8 @@ It writes:
   checks read;
 - ftd_rows.csv.gz: every fails row stage 1 loads for those tickers, and every row of `HISTORY_CUSIPS` (the MSG
   history case: the old line's MSGZZZZ settle rows);
-- edgar.json.gz: each CIK's EDGAR names, tickers and first filing, as the code read them;
+- edgar.json.gz: each CIK's EDGAR names, tickers and first filing, its bankruptcy 8-Ks and the filings that judge a
+  fold (8-Ks 5.03/3.03, 8-K12B/G3, periodic reports), as the code read them;
 - figi.json: every OpenFIGI mapping job and filter query stage 3 sends, with the cached answer (an uncached one is
   an error answer).
 """
@@ -37,6 +38,7 @@ import identity_cases as ic  # noqa: E402
 from delist_detection.sources.atomic_io import write_atomic  # noqa: E402
 from delist_detection.sources.cik_lookup import CikLookupClient  # noqa: E402
 from delist_detection.sources.edgar import EdgarClient  # noqa: E402
+from delist_detection.identity.line_follow import CARRYING_ON_FORMS, SUCCESSOR_FORMS  # noqa: E402
 from delist_detection.identity.observations import Observation  # noqa: E402
 from delist_detection.sources.openfigi import OpenFigiClient  # noqa: E402
 
@@ -80,6 +82,14 @@ class RecordingEdgar:
         self.issuers[key]["filings"] += [[f.accession, f.form, f.filing_date, f.report_date, f.items, f.primary_doc]
                                          for f in sorted(filings, key=lambda f: f.filing_date)
                                          if f.form.startswith("8-K") and "1.03" in f.item_set and f is not first]
+        # And the filings stage 4b's R1 test reads to judge a fold (`identity._check_folds`): an 8-K item 5.03 or 3.03,
+        # an 8-K12B/8-K12G3 and the periodic reports
+        have = {f[0] for f in self.issuers[key]["filings"]}
+        self.issuers[key]["filings"] += [[f.accession, f.form, f.filing_date, f.report_date, f.items, f.primary_doc]
+                                         for f in sorted(filings, key=lambda f: f.filing_date)
+                                         if f.accession not in have and (
+                                             (f.form.startswith("8-K") and {"5.03", "3.03"} & f.item_set)
+                                             or f.form in SUCCESSOR_FORMS or f.form.split("/")[0] in CARRYING_ON_FORMS)]
 
     def submissions(self, cik, fresh_after=None):
         self._record(cik)

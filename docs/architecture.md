@@ -650,7 +650,16 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   with it, at most `MAX_VERDICT_PASSES` (3) times, and the result equals a fresh call given the verdicts
   (`verdicts=`, `Identity.verdicts`; a pair with a verdict is not judged again). It logs `derived eras not made: N whose
   price did not carry over onto the line they came from (...)` and `derived eras asked without the old line's issuer:
-  N (...)` and the run's fails index, opened by stage 1 over the fails files (`ftd`;
+  N (...)`. The same loop judges the folds (`_check_folds`): a part of the fails rows with no observation that
+  `_split_era` joined to the era before it (`TickerEra.folds`, a `Fold` each: XRX 2017, ITT 2011, ALEX 2012) is kept only
+  when (a) the era has no US composite of its own (no CUSIP it held before the fold, observed or from its fails rows,
+  has one in OpenFIGI: the fold exists to supply one) and (b) stage 4b's own R1 test, `line_follow.corroborate`
+  (`line_follow.step_refusal`), follows the step from the era's last CUSIP to the part's with the era's issuer; an era
+  with no issuer fails (b). A fold that fails gets the verdict `fold_refused` and the next pass splits the part off as
+  a derived era (`refine_eras(unfold=...)`): HTZ 2016 (R1 refuses `name`), Z 2015 (`merged_out`) and NRF 2014 (the era
+  has a composite of its own) are new securities, not the old one. A read that failed or came from a stale copy decides
+  nothing: the fold stays and the era gets a `resolution_degraded` item. It logs `folds not kept: N (...)`. Stage 1
+  alone (`refine_eras` without a verdict) keeps every fold. The run's fails index, opened by stage 1 over the fails files (`ftd`;
   `ftd_lo`, its `opened_from`; later stages ask it for more rows), each era's issuer (`issuers`, by era key, the one source of an era's CIK: asked at its capped date and at its last sighting,
   `era_capped_seen` and `era_last_seen`, with its own pin, name and first sighting; `choose_first_pass` takes one answer), each era's FIGI resolution, the securities, each
   security's CUSIPs over its whole life (`cusips`, their rows followed to the run date), the identity review items, and the
@@ -892,8 +901,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   returns the last round's identity and lines, so a derived line is a security of the run like any other: the FIGI
   stage resolves it by its own CUSIP, the handoff stage pairs it with the line before it, the finder searches its
   Form 25. The step stage 4b refused is held by the derived security in the next round, so it is not refused again.
-  Each round's `Identity.verdicts` (`not_made`, `without_old_issuer`) go to the next round's `identify`, and a pair
-  with `not_made` is never counted as new.
+  Each round's `Identity.verdicts` (`not_made`, `without_old_issuer`, `fold_refused`) go to the next round's `identify`,
+  and a pair with `not_made` is never counted as new.
 - `identity/carried_price.py` — whether a share became one share across a CUSIP change: `CARRIED_PRICE` (2/3 to 3/2,
   the one band), `price_carried(ratio)` (None is carried) and `step_price_ratio(ftd, ticker, old_cusip, new_cusip)` (the
   new CUSIP's first fails price under the ticker over the old CUSIP's last on or before it; None when a side has no

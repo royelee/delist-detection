@@ -52,14 +52,16 @@ from ..outputs.manifest import StageMeter
 from ..vocabulary.names import (
     description_matches, description_name, description_names, names_agree, names_an_issuer,
 )
+from .line_follow import SWITCH, LineStep, composites, step_refusal
 from .observations import (
-    ERA_GAP_DAYS, DerivedFrom, Observation, ObservationError, ObservationIndex, TickerEra, eras_by_key, number_eras,
+    ERA_GAP_DAYS, DerivedFrom, Fold, Observation, ObservationError, ObservationIndex, TickerEra, eras_by_key,
+    number_eras,
 )
 from ..sources.prefetch import warm
 from ..outputs.review_triage import ReviewItem
 from .security_master import (
     EraResolution, FigiResolver, Handoff, Issuer, Security, build_securities, cik_of, cusip_handoffs,
-    detached_review, foreign_ticker_eras, guarded_eras, issuers_by_era, observation_conflict_review,
+    cusip_job, detached_review, foreign_ticker_eras, guarded_eras, issuers_by_era, observation_conflict_review,
     resolve_with_identity_guard, ticker_unconfirmed_review, trades_at_switch,
 )
 from .ticker_resolver import TickerResolution, TickerResolver
@@ -67,6 +69,7 @@ from .ticker_resolver import TickerResolution, TickerResolver
 MAX_VERDICT_PASSES = 3   # passes that add a verdict on a derived era: stages 1 to 3 again with the new ones
 NOT_MADE = "not_made"                          # a verdict: the derived era is not made (rule J)
 WITHOUT_OLD_ISSUER = "without_old_issuer"      # a verdict: the derived era is asked without the old line's issuer (rule X)
+FOLD_REFUSED = "fold_refused"                  # a verdict: the part is no fold, it is a derived era (the fold's gates)
 
 ERA_MIN_RUN = 3          # an FTD CUSIP run shorter than this is noise, not a CUSIP switch
 ERA_MIN_ROWS = 3         # an era with fewer fails rows of its own gets no second-pass answer
@@ -117,7 +120,7 @@ class Identity:
     lookup tier (`tiers`: the first pass's, or the source of the 2b or second-pass rule that answered it) and the
     eras whose ticker's fails rows decided their issuer (`rows_decided`, 2b's `ticker_rows`: their observed name
     was refuted, so the issuer in force keeps their CIK), and `verdicts`, what the check of the derived eras found
-    (`identify`): by (ticker, new CUSIP) pair, `NOT_MADE` or `WITHOUT_OLD_ISSUER`."""
+    (`identify`): by (ticker, new CUSIP) pair, `NOT_MADE`, `WITHOUT_OLD_ISSUER` or `FOLD_REFUSED`."""
     eras: list[TickerEra]
     era_by_key: dict[str, TickerEra]
     ftd: FtdIndex
@@ -196,13 +199,18 @@ def identify(index: ObservationIndex, clients: Sources, *, as_of: date, limit: i
     otherwise is `NOT_MADE`. Rule X: an era from a `merged_out` step that took the origin's issuer under a composite
     of its own is asked again without that issuer in any resolver tier; the pair is `WITHOUT_OLD_ISSUER`. A new verdict
     sends stages 1 to 3 around again with it (at most `MAX_VERDICT_PASSES` times: the result equals a fresh call given
-    the verdicts, and a pair with a verdict is not judged again). `Identity.verdicts` holds the final mapping."""
+    the verdicts, and a pair with a verdict is not judged again). `Identity.verdicts` holds the final mapping.
+
+    A fold (`Fold`: an unobserved CUSIP part `_split_era` joined to the era before it) is judged after stage 3 too
+    (`_check_folds`); one that fails gets the verdict `FOLD_REFUSED`, and the next pass splits the part off as a derived
+    era (`refine_eras(unfold=...)`)."""
     meter = meter if meter is not None else StageMeter(log)
     verdicts = dict(verdicts)
-    found_keys: dict[str, dict[tuple[str, str], str]] = {NOT_MADE: {}, WITHOUT_OLD_ISSUER: {}}     # verdict -> pair -> era key
+    found_keys: dict[str, dict[tuple[str, str], str]] = {NOT_MADE: {}, WITHOUT_OLD_ISSUER: {}, FOLD_REFUSED: {}}   # verdict -> pair -> era key
     for pass_no in range(MAX_VERDICT_PASSES + 1):
         made = [pair for pair in derive if verdicts.get(pair) != NOT_MADE]
-        eras, era_by_key, ftd = _refine(index, clients.ftd_client, as_of, limit, log, made, ftd)        # 1
+        unfold = [pair for pair, verdict in verdicts.items() if verdict == FOLD_REFUSED]
+        eras, era_by_key, ftd = _refine(index, clients.ftd_client, as_of, limit, log, made, ftd, unfold)  # 1
         for e in eras:
             e.derived_from = _origin(e, derive) if e.derived else None
         handoffs = cusip_handoffs(eras, ftd)    # the CUSIP links between the eras: the second pass and stage 3 read them
@@ -210,6 +218,8 @@ def identify(index: ObservationIndex, clients: Sources, *, as_of: date, limit: i
         found = _resolve_issuers(eras, ftd, handoffs, clients, log, workers, meter, excluded)           # 2, 2b
         resolutions, securities, review = _resolve_securities(eras, era_by_key, ftd, handoffs, found, clients, log)  # 3
         new = _check_derived(eras, derive, verdicts, ftd, resolutions, found)
+        refused, fold_review = _check_folds(eras, verdicts, resolutions, securities, found, clients, as_of)
+        new |= refused
         if not new:
             break
         if pass_no == MAX_VERDICT_PASSES:
@@ -218,6 +228,9 @@ def identify(index: ObservationIndex, clients: Sources, *, as_of: date, limit: i
         for pair, (verdict, key) in new.items():
             found_keys[verdict][pair] = key
         verdicts |= {pair: verdict for pair, (verdict, _) in new.items()}
+    review = [*review, *fold_review]           # the last pass's: the folds it could not judge
+    if found_keys[FOLD_REFUSED]:
+        log(f"folds not kept: {len(found_keys[FOLD_REFUSED])} ({', '.join(sorted(found_keys[FOLD_REFUSED].values()))})")
     if found_keys[NOT_MADE]:
         log(f"derived eras not made: {len(found_keys[NOT_MADE])} whose price did not carry over onto the line they "
             f"came from ({', '.join(sorted(found_keys[NOT_MADE].values()))})")
@@ -294,9 +307,57 @@ def _check_derived(eras: Sequence[TickerEra], derive: Mapping[tuple[str, str], D
     return out
 
 
+def _own_composite(figi: Any, cusips: Sequence[str]) -> bool:
+    """Whether OpenFIGI names a US composite for one of `cusips`."""
+    cusips = list(dict.fromkeys(cusips))
+    return bool(cusips) and any(composites(a) for a in figi.map([cusip_job(c) for c in cusips]))
+
+
+def _check_folds(eras: Sequence[TickerEra], verdicts: Mapping[tuple[str, str], str],
+                 resolutions: Mapping[str, EraResolution], securities: Mapping[str, Security], found: "_Issuers",
+                 clients: Sources, as_of: date) -> tuple[dict[tuple[str, str], tuple[str, str]], list[ReviewItem]]:
+    """The new verdicts on the folds (`Fold`) that have none yet: (pair -> (`FOLD_REFUSED`, era key)), and the
+    `resolution_degraded` items of the folds whose reads failed.
+
+    A fold is kept only when both hold. (a) The era has no US composite of its own: none of its CUSIPs before the fold,
+    observed or from its fails rows, has one in OpenFIGI (the fold exists to supply one: NRF 2014's era had
+    BBG000Q5RW63 already, and the new Northstar Realty Finance, the successor issuer, is another security). (b) Stage 4b's
+    own R1 test, `line_follow.corroborate`, follows the step from the era's last CUSIP to the part's, using the era's
+    issuer (HTZ 2016: the new rows do not carry a name the issuer held, `name`; Z 2015: the old registrant files no
+    periodic report after it, `merged_out`). An era with no issuer fails (b): stage 4b follows no security without
+    one. A read that failed or came from a stale copy decides nothing: the fold stays and the era gets a
+    `resolution_degraded` item."""
+    out: dict[tuple[str, str], tuple[str, str]] = {}
+    review: list[ReviewItem] = []
+    for e in eras:
+        for fold in e.folds:
+            pair = (e.ticker, fold.cusip)
+            if pair in verdicts:
+                continue
+            cik = cik_of(found.issuers, e.key)
+            if cik is None or _own_composite(clients.figi, [*e.cusips, *fold.earlier]):
+                out[pair] = (FOLD_REFUSED, e.key)
+                continue
+            res = resolutions[e.key]
+            s = securities.get(res.sec_id) if res.sec_id else None
+            step = LineStep(res.sec_id or "", SWITCH, fold.old_cusip, fold.cusip, e.ticker, fold.first, fold.first,
+                            fold.descriptions)
+            _, why, degraded = step_refusal(
+                clients, step, cik=cik, name=s.name if s else (e.name or ""), share_class=s.share_class if s else "COMMON",
+                tickers={e.ticker} | (s.own_tickers() if s else set()), as_of=as_of)
+            if degraded:
+                review.append(degraded_item(res.sec_id or "", e.ticker, cik,
+                                            f"{e.key} {e.name or ''}: the fold of CUSIP {fold.cusip} into {fold.old_cusip}",
+                                            "; the fold was kept", last_seen=e.last))
+            elif why:
+                out[pair] = (FOLD_REFUSED, e.key)
+    return out, review
+
+
 def _refine(index: ObservationIndex, ftd_client: Any, as_of: date, limit: int | None,
             log: Callable[[str], None], derive: Collection[tuple[str, str]] = (),
-            ftd: FtdIndex | None = None) -> tuple[list[TickerEra], dict[str, TickerEra], FtdIndex]:
+            ftd: FtdIndex | None = None,
+            unfold: Collection[tuple[str, str]] = ()) -> tuple[list[TickerEra], dict[str, TickerEra], FtdIndex]:
     """1. The observation eras, refined on SEC fails-to-deliver evidence: the run's
     fails index is opened over `ftd_client` with the eras' tickers' and CUSIPs' rows
     first (they date each era's real last sighting), then each era is split further
@@ -322,7 +383,7 @@ def _refine(index: ObservationIndex, ftd_client: Any, as_of: date, limit: int | 
                 class_names[e.ticker] += e.names
         ftd = FtdIndex.opened(ftd_client, lo, hi, through=as_of, symbols={e.ticker for e in eras},
                               cusips={c for e in eras for c in e.cusips}, names=class_names, first_seen=first_seen)
-    eras = refine_eras(eras, ftd, derive)
+    eras = refine_eras(eras, ftd, derive, unfold)
     era_by_key = eras_by_key(eras)               # raises on a duplicate key: an era is never dropped
     log(f"{len(eras)} eras after the FTD split")
     return eras, era_by_key, ftd
@@ -665,8 +726,20 @@ def _derived_era(era: TickerEra, part_rows: Sequence[FtdRow], kept: tuple[str, .
                      ftd_cusips=kept)
 
 
+def _fold_of(joined: TickerEra, group_rows: Sequence[FtdRow], part_rows: Sequence[FtdRow], cusip: str) -> Fold:
+    """The `Fold` of the part `part_rows` (its kept CUSIP `cusip`) into `joined`, the era before it: the era's last
+    CUSIP before the part is the one of its latest row before the part, in the gap group's rows `group_rows`."""
+    own = [r for r in part_rows if r.cusip == cusip]
+    first = own[0].date
+    before = [r.cusip for r in group_rows if r.date < first and r.cusip in joined.ftd_cusips]
+    until = (date.fromisoformat(first) + timedelta(days=DERIVED_NAME_DAYS)).isoformat()
+    return Fold(cusip, before[-1] if before else joined.ftd_cusips[-1], joined.ftd_cusips, first,
+                tuple(sorted({r.description for r in own if r.date <= until})))
+
+
 def _split_era(era: TickerEra, rows: list[FtdRow], *, contested: bool,
-               derive: Collection[str] = (), later: Collection[str] | None = None) -> list[TickerEra]:
+               derive: Collection[str] = (), later: Collection[str] | None = None,
+               unfold: Collection[str] = ()) -> list[TickerEra]:
     """The era split on its rows. `derive`: CUSIPs approved for the era's ticker (as the era spells it), already
     without any CUSIP that has rows under the ticker from the next era's first day on (`refine_eras`). `later`: the
     CUSIPs with rows under the ticker from the next era's first day on, None for an era with no next era.
@@ -678,7 +751,12 @@ def _split_era(era: TickerEra, rows: list[FtdRow], *, contested: bool,
     its FIGI can be found by any CUSIP of the chain. Only a part between observations: a part with a part holding an
     observation after it in the group, or an era of the ticker after this one (a tail past the last observation is
     stage 4b's to follow). Not a CUSIP of `later`, not a part whose description does not agree with the era's names
-    (another holder of the ticker)."""
+    (another holder of the ticker).
+
+    The fold is recorded on the era (`TickerEra.folds`) for `identify` to judge after stage 3: the era must have no
+    composite of its own and stage 4b's R1 test must follow the step to the part's CUSIP (`_check_folds`; HTZ 2016,
+    NRF 2014 and Z 2015 are new securities, not the old one). `unfold`: the CUSIPs whose fold failed; such a part is
+    an era with one derived observation (`_derived_era`), as a part `derive` approves is."""
     out: list[TickerEra] = []
     for g_obs, g_rows in _cut(era.observations, rows, _gap_cuts(era.observations, rows)):
         follows = False                   # the part before is an era of this group: a line is derived only after one
@@ -694,7 +772,12 @@ def _split_era(era: TickerEra, rows: list[FtdRow], *, contested: bool,
                 elif tail >= 0 and kept and kept[0] not in out[tail].ftd_cusips and kept[0] not in (later or ()) and \
                         (later is not None or any(o for o, _ in parts[i + 1:])) and \
                         _described(kept[0], part_rows, [o.name for o in out[tail].observations if o.name]):
-                    out[tail] = replace(out[tail], ftd_cusips=out[tail].ftd_cusips + (kept[0],))
+                    if kept[0] in unfold:
+                        out.append(_derived_era(era, part_rows, kept))
+                        tail = -1
+                    else:
+                        out[tail] = replace(out[tail], ftd_cusips=out[tail].ftd_cusips + (kept[0],),
+                                            folds=out[tail].folds + (_fold_of(out[tail], g_rows, part_rows, kept[0]),))
                 continue
             follows = True
             names = [o.name for o in obs if o.name]
@@ -710,7 +793,8 @@ def _split_era(era: TickerEra, rows: list[FtdRow], *, contested: bool,
 
 
 def refine_eras(eras: Sequence[TickerEra], ftd: FtdIndex,
-                derive: Collection[tuple[str, str]] = ()) -> list[TickerEra]:
+                derive: Collection[tuple[str, str]] = (),
+                unfold: Collection[tuple[str, str]] = ()) -> list[TickerEra]:
     """Stage 2 of era building (stage 1 is `observations.split_eras`): split each
     observation era further on SEC fails-to-deliver evidence under its ticker.
 
@@ -751,6 +835,9 @@ def refine_eras(eras: Sequence[TickerEra], ftd: FtdIndex,
     no observation whose kept CUSIP is approved, that follows an era of its gap group and whose CUSIP has no rows
     under the ticker from the next era's first day on, is an era with one derived observation (`_derived_era`). A
     pair names the ticker as the era spells it ("BF-B", as the caller observed it, not the fails way "BFB").
+
+    `unfold`: (ticker, CUSIP) pairs of folds (`_split_era`) that did not pass `identify`'s gates (`FOLD_REFUSED`): such
+    a part is an era with one derived observation instead of joining the era before it.
     """
     spans: dict[str, list[tuple[str, str]]] = defaultdict(list)
     seen_on: Counter[tuple[str, str]] = Counter()
@@ -766,7 +853,8 @@ def refine_eras(eras: Sequence[TickerEra], ftd: FtdIndex,
         contested = any(seen_on[(e.ticker, o.as_of)] > 1 for o in e.observations)
         later = {r.cusip for r in ftd.by_symbol(e.ticker, nxt)} if nxt else None   # the next era's own
         approved = {c for t, c in derive if t == e.ticker and c not in (later or ())}
-        out += _split_era(e, ftd.by_symbol(e.ticker, lo, hi), contested=contested, derive=approved, later=later)
+        out += _split_era(e, ftd.by_symbol(e.ticker, lo, hi), contested=contested, derive=approved, later=later,
+                          unfold={c for t, c in unfold if t == e.ticker})
     return number_eras(out)
 
 

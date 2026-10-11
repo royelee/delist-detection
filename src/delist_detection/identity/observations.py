@@ -120,6 +120,19 @@ class DerivedFrom:
     first: str
 
 
+@dataclass(frozen=True)
+class Fold:
+    """A part of an era's fails rows that no observation names, joined to the era before it (`identity._split_era`): its
+    CUSIP (`cusip`), the era's last CUSIP before it (`old_cusip`), the CUSIPs the era held before the fold
+    (`earlier`), the part's first row for `cusip` (`first`) and that CUSIP's descriptions in its first days
+    (`descriptions`). `identity.identify` judges it after stage 3 (`identity.FOLD_REFUSED`)."""
+    cusip: str
+    old_cusip: str
+    earlier: tuple[str, ...]
+    first: str
+    descriptions: tuple[str, ...] = ()
+
+
 @dataclass
 class TickerEra:
     ticker: str
@@ -136,6 +149,8 @@ class TickerEra:
     seq: int = 0
     # The step a derived era came from; set by identity.identify, matched on the era's ticker and one of its CUSIPs
     derived_from: DerivedFrom | None = None
+    # Set by identity.refine_eras: the unobserved CUSIP parts joined to this era (`Fold`), whose CUSIPs are in ftd_cusips
+    folds: tuple[Fold, ...] = ()
 
     @property
     def caller_observations(self) -> list[Observation]:
