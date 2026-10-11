@@ -248,7 +248,7 @@ way; those threads also read uncached filing text from EDGAR, inside the same
   150 eras: 1 worker 18m, 4 workers 11m, 8 workers 5m (3.6× wall time; issuer resolution 4.6×). A fully warm
   full-universe rerun (no SEC request, no LLM call) took 3 m 35 s at 1 worker and 4 m 11 s at 4, measured at
   `f808b15` on 2026-10-10 with the full `data/observations.csv`, `--as-of 2026-09-25` and
-  `--extract-merger-terms-llm`; the untouched fork point `799d1bc` took 10 m 59 s. A warm run has nothing to
+  `--extract-merger-terms-llm`; the untouched fork point `799d1bc` took 10 m 59 s (an upper figure: other work ran beside that run). A warm run has nothing to
   fetch, so extra threads only add contention: 4 workers were about 17% slower than 1. The first run on a cache
   without the parsed fails store took 4 m 07 s at 1 worker, about 31 s more than a warm run. The cold-run figures
   in this bullet are older and were not measured again. Guidance: use
@@ -262,8 +262,8 @@ way; those threads also read uncached filing text from EDGAR, inside the same
   to ~10 s/request after about 1,500 searches in under an hour, recovering
   after ~20 idle minutes; every such answer is a normal 200 with a valid ATOM
   body, so nothing in the code notices the slowdown — it only costs time.
-  Peak memory of the warm full-input run at `f808b15` was 4,107 MB at 1 worker (4,189 MB at 4); the untouched `799d1bc` peaked at 5,528 MB (older runs: 1.8–4.2 GB, not profiled); threads add
-  at most about 37 MB (measured). SEC does not keep full-text-search hit order stable
+  Peak memory of the warm full-input run at `f808b15` was 4,107 MB at 1 worker (4,189 MB at 4); the untouched `799d1bc` peaked at 5,528 MB (older runs: 1.8–4.2 GB, not profiled);
+  the 4-worker warm run peaked 82 MB above the 1-worker warm run, and the two 1-worker runs (first run, warm run) peaked at 4,088 and 4,107 MB, so worker threads add little memory. SEC does not keep full-text-search hit order stable
   between two fetches of the same query: the same cache always gives the same
   output, but a refetch can reorder tied hits (three EDGAR-side places take
   the first match in hit order — the resolver's first pass, the frequency

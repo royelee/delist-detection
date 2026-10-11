@@ -1470,7 +1470,7 @@ expiration is 0.0 in the table and no correction in the firm month, which leaves
   runs on 150 eras: 1 worker 18m, 4 workers 11m, 8 workers 5m (3.6× wall time; issuer resolution 4.6×). A fully
   warm full-universe rerun (no SEC request, no LLM call) took 3 m 35 s at 1 worker and 4 m 11 s at 4, measured
   at `f808b15` on 2026-10-10 with the full `data/observations.csv`, `--as-of 2026-09-25` and
-  `--extract-merger-terms-llm`. The untouched fork point `799d1bc` took 10 m 59 s on the same input. A warm run
+  `--extract-merger-terms-llm`. The untouched fork point `799d1bc` took 10 m 59 s on the same input (an upper figure: other work ran beside that run). A warm run
   has nothing to fetch, so extra threads only add contention: 4 workers were about 17% slower than 1. The first
   run on a cache without the parsed fails store took 4 m 07 s at 1 worker, about 31 s more than a warm run, the
   one-time build of the store. A two-ticker run (`DAL` and `NWA`, one observation each on 2008-01-16) took 3.7 s
@@ -1492,7 +1492,7 @@ expiration is 0.0 in the table and no correction in the firm month, which leaves
   whole-run replay (2,468 eras, every cache warm, 1 worker; architecture step 12, 2026-10-07) takes 580 s and a
   5.0 GiB maximum resident set, its fails index holding about 4.0 million rows at the end, and its passes over the
   fails files take 252 s of it, 117 s of them stage 5b's 68 one-security passes (each ~1.7 s);
-  threads add at most about 37 MB (measured). SEC does not keep full-text-search hit order
+  the 4-worker warm run peaked 82 MB above the 1-worker warm run, and the two 1-worker runs (first run, warm run) peaked at 4,088 and 4,107 MB, so worker threads add little memory. SEC does not keep full-text-search hit order
   stable between two fetches of the same query: the same cache always gives
   the same output, but a refetch can reorder tied hits (see `docs/data-flow.md`).
 - **OpenFIGI refusals abort too.** A 401/403 from OpenFIGI raises
