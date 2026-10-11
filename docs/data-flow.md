@@ -262,7 +262,7 @@ way; those threads also read uncached filing text from EDGAR, inside the same
   to ~10 s/request after about 1,500 searches in under an hour, recovering
   after ~20 idle minutes; every such answer is a normal 200 with a valid ATOM
   body, so nothing in the code notices the slowdown — it only costs time.
-  Peak memory is 1.8–4.2 GB, mostly data (likely the fails-to-deliver panel; not profiled); threads add
+  Peak memory of the warm full-input run at `f808b15` was 4,107 MB at 1 worker (4,189 MB at 4); the untouched `799d1bc` peaked at 5,528 MB (older runs: 1.8–4.2 GB, not profiled); threads add
   at most about 37 MB (measured). SEC does not keep full-text-search hit order stable
   between two fetches of the same query: the same cache always gives the same
   output, but a refetch can reorder tied hits (three EDGAR-side places take
