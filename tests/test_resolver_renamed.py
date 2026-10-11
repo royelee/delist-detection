@@ -725,14 +725,19 @@ def test_the_second_pass_runs_with_the_capped_dates_first(eras, ftd, frequency):
 
 def test_the_capped_dates_run_wins_when_the_two_second_pass_runs_disagree(matx_dates, monkeypatch):
     """The second pass is scripted: with the capped dates it answers MATX with issuer A, with the followed dates with
-    issuer B. The stage ends with A: the capped dates' run is merged last."""
+    issuer B. The stage ends with A: the capped dates' run is merged last. It calls the pass twice, with the capped
+    dates first and the followed dates second."""
+    called = []
+
     def infer(self, eras, ftd, last_seen, ciks, handoffs):
+        called.append(last_seen[MATX])
         cik, source = (A, "efts_frequency_renamed") if last_seen[MATX] == MATX_CAP else (B, "shared_cusip")
         return SecondPass({MATX: InferredIssuer(cik, source, "scripted")}, {})
 
     monkeypatch.setattr(EraIssuers, "infer", infer)
     _, identity = _matx({})
     assert _issuer_and_tier(identity) == (A, "efts_frequency_renamed")
+    assert called == [MATX_CAP, MATX_END]
 
 
 def test_a_second_pass_read_that_failed_degrades_the_era_it_was_read_for():
