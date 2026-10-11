@@ -714,7 +714,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   (`is_backfilled`: no fails-to-deliver row of the security's CUSIPs under the
   observed ticker within 30 days, but at least one under another symbol) from
   the ticker_history-building sightings only — the delisting search's own
-  copy is untouched. `observation_map_rows(eras, sec_id_of, issuer_cik_of, history, conflicts)` builds
+  copy is untouched
+  `observation_map_rows(eras, sec_id_of, issuer_cik_of, history, conflicts)` builds
   `observation_map.csv` from the history's own answer (`Histories`):
   one row per observation, its era, `sec_id`, issuer CIK, `ticker_history`
   spelling/coverage on its date, and a status (`unresolved`,
@@ -828,6 +829,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `with_registrants` adds a security's successor registrants (`endings/registrants.py`: the new registrant a
   holding-company reorganization put in the old one's place) as the issuer in force from the day they registered,
   dated after the timeline's last change; stage 10c3 applies it, and only for a security whose line goes on.
+  A change to a CIK whose agreeing name began before the old CIK's listing ended (a holding company's, from its
+  formation: ICE 2013, formed 2013-03-20) is dated no earlier than the old CIK's first Form 25 or Form 15 in the gap
+  between the two sightings (`_deregistered`, its submissions JSON's recent filings).
 
 ## endings/
 

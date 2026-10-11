@@ -96,6 +96,15 @@ def with_registrants(timeline: Sequence[tuple[str, str]],
     return out
 
 
+def _deregistered(sub: dict | None, lo: str, hi: str) -> str | None:
+    """The first day in [`lo`, `hi`] the issuer's own list (its submissions JSON's recent filings) holds a Form 25
+    (25, 25-NSE, 25/A) or a Form 15: the day its registered stock's listing or registration ended. None without one."""
+    recent = (sub.get("filings") or {}).get("recent") or {} if isinstance(sub, dict) else {}
+    days = [d for f, d in zip(recent.get("form") or [], recent.get("filingDate") or [])
+            if (str(f).startswith("25") or str(f).startswith("15")) and lo <= (d or "")[:10] <= hi]
+    return min(d[:10] for d in days) if days else None
+
+
 def issuer_changes(sightings: Iterable[Sighting], submissions: Submissions,
                    exact_names: ExactNames) -> dict[str, list[tuple[str, str]]]:
     """sec_id -> [(from ISO date, CIK)], earliest first: the CIK in force on the
@@ -121,7 +130,12 @@ def issuer_changes(sightings: Iterable[Sighting], submissions: Submissions,
                 sub = submissions(int(cik))
                 since = agreeing_since(sub, s.name, date.fromisoformat(s.day)) if isinstance(sub, dict) else None
                 after = (date.fromisoformat(last_day) + timedelta(days=1)).isoformat()
-                timeline.append((min(max(since.isoformat() if since else s.day, after), s.day), cik))
+                day = max(since.isoformat() if since else s.day, after)
+                if since:
+                    # a holding company carries the agreeing name from its formation, long before it is the
+                    # registrant of the listed stock (ICE 2013): not before the old registrant's listing ended
+                    day = max(day, _deregistered(submissions(int(timeline[-1][1])), after, s.day) or day)
+                timeline.append((min(day, s.day), cik))
             last_day = s.day
         if timeline:
             out[sid] = timeline
