@@ -519,7 +519,9 @@
   (versions 2 and 3, keyed `TICKER|date`, load re-keyed from their stored
   `member_name`; an older file is ignored, not trusted, and replaced on the
   next save) and never holds a miss, a second-pass or 2b (`identity.EraIssuers`) answer, or
-  an answer that rested on a failed request or a stale copy. The pipeline
+  an answer that rested on a failed request or a stale copy. An answer found with an issuer excluded (rule X of the
+  derived eras) is saved under its own key, the usual key followed by `|!<cik>`, so a lookup without the exclusion
+  never reads it, and the cache's `__version__` did not change. The pipeline
   writes it after each resolving stage and on the way out of a run. A remembered `name_search` answer stands only
   while it agrees with the name tier's first rule (`TickerResolver._still_named`, FB-004: with the name index, the one
   active holder of exactly the expected name, `_exact_holder`, is the company): one the retired live company search

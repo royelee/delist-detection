@@ -744,8 +744,9 @@ def _line_successor_links(delistings: list[Delisting], securities: dict[str, Sec
         ls = line_successors.get(e.sec_id)
         if ls is None or not (awaits_successor(e) or e.record.bucket in (CrspBucket.UNKNOWN, CrspBucket.MERGER)):
             continue
-        if e.record.bucket is CrspBucket.MERGER and payouts is not None and payouts.reconciled(e.key):
-            continue                # a payout the gate reconciled with the last close stands against a timing link
+        if e.record.bucket is CrspBucket.MERGER and (payouts is None or payouts.reconciled(e.key)):
+            continue                # a payout the gate reconciled with the last close stands against a timing link;
+                                    # without the values nothing can be reconciled and `rewrites.continuation` refuses
         day = e.anchor
         lo = (day - timedelta(days=SUCCESSOR_BEFORE_DAYS)).isoformat()
         hi = (day + timedelta(days=SUCCESSOR_AFTER_DAYS)).isoformat()

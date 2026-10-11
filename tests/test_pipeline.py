@@ -3083,12 +3083,26 @@ def test_a_merger_at_the_switch_takes_the_line_successor_as_a_continuation():
     """TEAM, LSXMA, LSXMK, FWONA, FWONK (seeds-only parity S2): a Form 25 the classifier read as a merger, at a switch
     stage 4b followed to a CUSIP with its own composite, links to that composite."""
     from delist_detection.sources.ftd import FtdIndex
+    from delist_detection.terms.merger_value import MergerValues
+    d = _unit_delisting("BBGRS01", CrspBucket.MERGER, 231, [])
+    found = pipeline._Successors()
+    pipeline._line_successor_links([d], _switch_securities(), {}, {"BBGRS01": _line_successor("BBGRS01")},
+                                   FtdIndex(), found, MergerValues({}))
+    assert found.links == {d.key: ("BBGRSNEW1", "line_follow")}
+    assert d.key in found.rebucketed and "BBGRSNEW1" in found.added
+
+
+def test_a_merger_at_the_switch_without_the_values_stays_a_merger_and_nothing_raises():
+    """A caller that leaves the merger values out cannot reconcile a payout, and `rewrites.continuation` refuses a
+    merger without them: the row is left as it is (no link, not queued); with the values it is linked as above."""
+    from delist_detection.sources.ftd import FtdIndex
     d = _unit_delisting("BBGRS01", CrspBucket.MERGER, 231, [])
     found = pipeline._Successors()
     pipeline._line_successor_links([d], _switch_securities(), {}, {"BBGRS01": _line_successor("BBGRS01")},
                                    FtdIndex(), found)
-    assert found.links == {d.key: ("BBGRSNEW1", "line_follow")}
-    assert d.key in found.rebucketed and "BBGRSNEW1" in found.added
+    assert found.links == {} and found.added == {} and found.rebucketed == {}
+    pipeline._link_successors([d], found)
+    assert (d.record.bucket, d.record.successor_sec_id) == (CrspBucket.MERGER, None)
 
 
 def test_a_merger_made_a_continuation_by_the_line_link_loses_its_value_and_payout_flags():
