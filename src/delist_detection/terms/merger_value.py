@@ -129,9 +129,14 @@ class MergerValues:
 
     def absorb(self, other: MergerValues) -> None:
         """Take `other`'s records and acquirers (the valuation of endings found after this stage ran: stage 9d's added
-        successors); its review items stay the caller's."""
+        successors); its review items stay the caller's. An acquirer this valuation already added keeps its entry
+        and takes the other's fails rows as well (its ticker_history span runs over every merger that names it); a
+        security that is not an acquirer under that composite is never replaced."""
         self.records.update(other.records)
-        self.added.update(other.added)
+        for sid, new in other.added.items():
+            have = self.added.setdefault(sid, new)
+            if have is not new and isinstance(have, AddedAcquirer) and isinstance(new, AddedAcquirer):
+                have.rows += new.rows
 
     def get(self, key: DelistingKey) -> MergerValue | None:
         return self.records.get(key)

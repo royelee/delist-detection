@@ -1666,7 +1666,8 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
                                      prices, tol, search.sightings, ftd_lo)                     # 9d: C5
         values.absorb(ends_values)
         review += ends_values.review
-        added.update(ends_values.added)
+        for sid in ends_values.added:       # the run's entry stays (`absorb` kept the acquirer's, and took the rows)
+            added.setdefault(sid, values.added[sid])
     distress = _distress(ctx, delistings, {**sec_cusips, **ends.cusips}, ftd, review)              # 9e
     confirmations = _continuation_filings(ctx, delistings, securities, review, added)             # 9g
     _log_role_refusals(ctx, delistings)

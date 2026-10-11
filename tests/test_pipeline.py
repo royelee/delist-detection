@@ -2891,6 +2891,10 @@ def test_the_ending_of_a_line_successor_the_run_added_is_valued(fake_edgar, tmp_
     assert llm.asked == [("RS", "BBGRSNEW1")]
     assert (row["payout_per_share"], row["payout_source"]) == ("40.900000", "llm")
     assert "merger_at_par" not in row["review_flags"].split(";")
+    c = next(r for r in t["contract_delistings"] if r["sec_id"] == "BBGRSNEW1")
+    # the published return is the cash's, not an assumed par: the row's method and the contract's rule say so
+    assert (row["terminal_value"], row["dlret_method"], row["dlret_confidence"]) == ("40.900000", "cash_only", "high")
+    assert (c["value_rule"], c["cash_per_share"], c["verdict"]) == ("cash", "40.900000", "confirmed")
 
 
 def test_an_unknown_form25_at_the_lines_switch_becomes_the_continuation(fake_edgar, tmp_path):

@@ -340,3 +340,32 @@ def test_absorb_takes_the_records_and_acquirers_of_another_valuation_and_not_its
     first.absorb(second)
     assert set(first.records) == {k1, k2} and set(first.added) == {"BBGACQ"}
     assert [r.sec_id for r in first.review] == ["A"]
+
+
+def _acquirer(rows, ticker="ACQ"):
+    from delist_detection.identity.added_securities import AddedAcquirer
+    from delist_detection.sources.ftd import FtdRow
+    sec = Security("BBGACQ", 99, "COMMON", "ACQUIRER CO", "Common Stock", False, "cusip")
+    return AddedAcquirer(sec, ticker, date(2020, 1, 2), [FtdRow(d, "C", ticker, "ACQUIRER CO", 10.0) for d in rows])
+
+
+def test_absorb_keeps_the_first_entry_of_an_acquirer_added_twice_and_extends_its_rows():
+    """Stage 8 added acquirer X from its fails rows around one merger; the stage 9d valuation names X again, from the
+    rows around another merger. The run has one entry for X: the first, holding the rows of both (its ticker_history
+    span runs over every merger that names it, as inside one valuation)."""
+    first_entry, again = _acquirer(["2020-01-02", "2020-01-03"]), _acquirer(["2021-05-03"])
+    first = MergerValues(added={"BBGACQ": first_entry})
+    first.absorb(MergerValues(added={"BBGACQ": again}))
+    assert first.added["BBGACQ"] is first_entry
+    assert first_entry.span() == ("2020-01-02", "2021-05-03")
+
+
+def test_absorb_never_replaces_a_security_that_is_not_an_acquirer():
+    """An added successor under the same composite stays as it is; the acquirer's rows are not put on it."""
+    from delist_detection.identity.added_securities import AddedSuccessor
+    sec = Security("BBGACQ", 99, "COMMON", "ACQUIRER CO", "Common Stock", False, "cusip")
+    successor = AddedSuccessor(sec, "ACQ", "2020-02-03")
+    first = MergerValues(added={"BBGACQ": successor})
+    first.absorb(MergerValues(added={"BBGACQ": _acquirer(["2021-05-03"])}))
+    assert first.added["BBGACQ"] is successor
+    assert successor.span() == ("2020-02-03", "2020-02-03")
