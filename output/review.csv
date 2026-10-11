@@ -35,6 +35,7 @@ fix,CIK929351-COMMON,2016-12-08,LGF,929351,unknown,,last_trade_date_unconfirmed;
 fix,,,APTV,,,,observation_unresolved,APTV@2012-06-29 APTIV PLC,,2013-12-31
 check,BBG000BLDXH5,2024-05-05,MDRX,1124804,compliance_failure,-0.550000,member_name_mismatch;last_trade_date_conflict;distress_at_normal_price,"Listing deficiency notice (8-K 2024-02-27), no merger evidence; the registrant kept filing after it",,
 check,BBG000BT0CM2,2023-05-12,SIVB,719739,liquidation,-0.550000,last_trade_date_conflict;distress_at_normal_price,Bankruptcy (8-K item 1.03 filed 2023-03-10),,
+check,BBG000BX6PW7,2023-09-18,YELL,716006,liquidation,-0.550000,member_name_mismatch;last_trade_date_conflict,Bankruptcy (8-K item 1.03 filed 2023-08-07),,
 check,BBG000CSY9H9,2023-07-20,BBBY,886158,liquidation,-0.550000,last_trade_date_conflict,Bankruptcy (8-K item 1.03 filed 2023-04-24),,
 check,BBG000DY8ZS4,2019-05-15,WFT,1603923,compliance_failure,-0.550000,no_form25;delist_date_approx,"Listing deficiency notice (8-K 2019-05-16), no merger evidence; the registrant kept filing after it (its stated reason: a price deficiency)",,
 check,BBG000FVQ185,2024-09-30,SPWR,867773,liquidation,-0.550000,last_trade_date_conflict,Bankruptcy (8-K item 1.03 filed 2024-08-06),,
@@ -202,7 +203,7 @@ check,BBG0055XMF02,2021-06-17,STAY,1581164,expiration,0.000000,no_form25;delist_
 check,BBG0069FL5L5,2016-09-26,MRD,1599222,merger,0.000000,ftd_close_lagged;terms_gate_failed:fail_sanity;merger_at_par,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.02,2.01,3.01,3.03,5.01,5.02,5.03,5.07,9.01",
 check,BBG006F8QZK4,2024-12-07,VSTO,1616318,merger,0.000000,bankruptcy_tag_unconfirmed;terms_gate_failed:fail_sanity;merger_at_par,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.01,1.03,2.01,3.01,3.03,5.01,5.02,5.03,8.01,9.01",
 check,BBG006G57XG0,2025-08-19,VNOM,1602065,exchange_transfer,0.000000,last_trade_date_unconfirmed;no_form25;r1_continuation,"Continuation (R1): each share became one of New Viper Class A Common Stock and each share of Former Viper's Class B commo, no cash; successor by new issuer","1.02,2.01,3.01,3.03,5.02,5.03,9.01",
-check,BBG006N7RYV7,2017-11-30,FNFV,1331875,exchange_transfer,0.000000,member_name_mismatch;r1_continuation;successor_unknown,"Continuation (R1): each share became one of Cannae common stock, as of 5:00 p.m., Eastern time, on November 17, 2017, no cash",,
+check,BBG006N7RYV7,2017-11-30,FNFV,1331875,merger,0.000000,member_name_mismatch;terms_gate_skipped:own_statement;merger_at_par,"Completed acquisition (8-K item 2.01 filed 2017-12-07, 425 2017-11-07); the registrant kept filing after it",,
 check,BBG006XVD9G0,2019-11-30,GCI,1635718,merger,0.000000,payout_gate_failed:6.25;terms_gate_failed:fail_sanity;merger_at_par,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.01,1.02,2.01,3.01,3.03,5.01,5.03,5.07,9.01",
 check,BBG0077VS2C0,2026-07-11,BLD,1633931,merger,0.000000,resolved_by_current_ticker_map;terms_gate_failed:fail_sanity;merger_at_par,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.01,1.02,2.01,2.03,3.01,3.03,5.01,5.02,5.03,8.01,9.01",
 check,BBG007SV7NV3,2017-10-03,BKFS,1627014,exchange_transfer,0.000000,no_form25;delist_date_approx,Successor registration 8-K12B 2017-10-02: the security continues under a successor; the registrant kept filing after it; successor by same issuer,,
@@ -217,8 +218,6 @@ check,CIK1011006-COMMON,2019-10-17,AABA,1011006,unknown,0.000000,no_evidence_def
 check,CIK1308161-COMMON,2013-07-01,NWS-A,1308161,exchange_transfer,0.000000,last_trade_date_unconfirmed;no_form25;delist_date_approx;handoff_continuation,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off); successor by handoff (timing:cusip),,
 check,CIK1355096-COMMON-53071M302,2011-10-03,LCAPA,1355096,exchange_transfer,0.000000,member_name_mismatch;resolved_by_cik_map;last_trade_date_unconfirmed;ftd_close_prior:5;r1_continuation,"Continuation (R1): each share became one of Splitco's Series A Liberty Capital common stock, no cash; successor by new issuer",,
 check,CIK1579877-COMMON,2014-11-20,CBSO,1579877,exchange_transfer,0.000000,no_form25;delist_date_approx,Ticker change / listing transfer: renamed from 'CBS OUTDOOR AMERICAS INC.'; company still reports results; successor by same issuer,,
-check,CIK352363-COMMON,2014-02-25,FNP,352363,merger,0.000000,member_name_mismatch;no_form25;delist_date_approx;ftd_close_prior:1;merger_at_par,"Completed acquisition (8-K item 2.01 filed 2014-02-07, S-4 2013-01-18); the registrant kept filing after it",,
-check,CIK716006-COMMON,2021-02-10,YRCW,716006,exchange_transfer,0.000000,no_form25;delist_date_approx;successor_unknown,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
 check,CIK898660-COMMON,2007-11-18,STN,898660,merger,0.000000,observed_after_delisting,Change in control (8-K item 5.01 filed 2007-11-08); the registrant kept filing after it,,
 check,,,AGN,,,,observation_conflict:2014-06-30,AGN seen on 2014-06-30 under 2 names: ALLERGAN INC (AGN@2008-01-16 -> BBG000BHQ1H0); ALLERGAN PLC (AGN@2014-06-30 -> BBG000BHQ1H0),,2014-06-30
 check,,,APTV,,,,identity_detached,APTV@2012-06-29 APTIV PLC: its ticker or name pick BBG01R914LT5 would carry that security's APTV range across BBG001QD41M9's confirmed one; resolved again as unresolved,,2013-12-31
@@ -401,6 +400,7 @@ check,BBG000C2PW58,2024-10-12,BLK,1364742,,,r1_rebucketed,"was merger (CRSP 231:
 check,BBG000C2YHG9,,DISH,1001082,,,issuer_inferred,DISH@2008-01-16 ECHOSTAR COMMUNICATIONS: issuer 1001082 by shared_cusip: shares CUSIP 25470M109 with DISH@2012-06-29,,2009-06-08
 check,BBG000C496P7,2025-08-17,PARA,813828,,,r1_rebucketed,was merger (CRSP 231: M&A 2.01+3.01+5.01 (acquired by external acquirer)); R1 makes it a continuation into BBG01VS5NK99,,
 check,BBG000C4DPX1,2016-02-08,AVGO,1441634,,,handoff_rebucketed,was merger (CRSP 231: M&A 2.01+3.01+5.01 (acquired by external acquirer)); BBG009XV39D8 continues it under AVGO (8-K12B 0001193125-16-446865),,
+check,BBG000C4WJT9,,LIZ,352363,,,issuer_inferred,LIZ@2008-01-16 LIZ CLAIBORNE INC: issuer 352363 by efts_frequency_renamed: the one 8-K frequency candidate whose names match its fails rows; EDGAR names it CLAIBORNE LIZ INC then,,2009-06-08
 check,BBG000C6CFJ5,2007-12-27,GS,886982,,,form25_unclassified,25 0000891092-07-005430 ('') has no recognized class,,
 check,BBG000C6F3T8,2015-04-17,IGT,353944,,,handoff_conflict,"BBG0081VHTP3 continues BBG000C6F3T8 under IGT (timing:cusip), but its merger row says holders were paid, and only timing across two issuers says otherwise; the row stands",,
 check,BBG000C6GN04,2022-06-06,QDEL,353569,,,handoff_rebucketed,was merger (CRSP 231: Merger filing 425 2022-05-06 before the delisting); BBG017TGV7M2 continues it under QDEL (8-K12B 0001193125-22-161806),,
@@ -471,7 +471,6 @@ check,BBG0029SNR63,,KORS,1530721,,,issuer_inferred,KORS@2012-06-29 CAPRI HOLDING
 check,BBG003FHPBQ9,2016-12-12,EVHC,1578318,,,handoff_conflict,"BBG00D3CHRC0 continues BBG003FHPBQ9 under EVHC (timing:cusip), but its merger row says holders were paid, and only timing across two issuers says otherwise; the row stands",,
 check,BBG006G57XG0,2025-08-19,VNOM,1602065,,,r1_rebucketed,"was merger (CRSP 200: M&A 2.01+3.01 (acquisition with delisting) (no Form 25 anchor, 8-K-only)); R1 makes it a continuation into BBG01VXTFCN2",,
 check,BBG006N7RYV7,,FNFV,1331875,,,issuer_inferred,FNFV@2014-12-31 FNFV GROUP INC: issuer 1331875 by cusip_issuer: its CUSIP's issuer code 31620R is the issuer's own,,2014-12-31
-check,BBG006N7RYV7,2017-11-30,FNFV,1331875,,,r1_rebucketed,"was merger (CRSP 231: Completed acquisition (8-K item 2.01 filed 2017-12-07, 425 2017-11-07); the registrant kept filing after it); R1 makes it a continuation into ",,
 check,BBG008FCJZ83,2019-04-07,STE,1624899,,,r1_rebucketed,was merger (CRSP 231: M&A 2.01+3.01+5.01 (acquired by external acquirer)); R1 makes it a continuation into BBG00MRHG523,,
 check,BBG009NMJJJ4,,FDC,883980,,,ticker_unconfirmed,FDC@2008-01-16 FIRST DATA CORP: no fails-to-deliver row under FDC from 2007-12-17 to 2009-07-08,,2009-06-08
 check,BBG009XV39D8,2018-04-14,AVGO,1649338,,,handoff_rebucketed,"was merger (CRSP 231: M&A change in control (5.01) with delisting/rights change, closing 8-K without 2.01); BBG00KHY5S69 continues it under AVGO (8-K12B 0001193125-18-107559)",,
@@ -511,7 +510,6 @@ check,CIK1611983-COMMON,,LBKRV,1611983,,,ticker_unconfirmed,LBKRV@2014-12-31 LIB
 check,CIK18568-COMMON,,CBSS,18568,,,ticker_unconfirmed,CBSS@2008-01-16 COMPASS BANCSHARES INC: no fails-to-deliver row under CBSS from 2007-12-17 to 2009-07-08,,2009-06-08
 check,CIK230463-COMMON,,PPP,230463,,,ticker_unconfirmed,PPP@2008-01-16 POGO PRODUCING CO: no fails-to-deliver row under PPP from 2007-12-17 to 2009-07-08,,2009-06-08
 check,CIK351346-COMMON,,BMET,351346,,,ticker_unconfirmed,BMET@2008-01-16 BIOMET INC: no fails-to-deliver row under BMET from 2007-12-17 to 2009-07-08,,2009-06-08
-check,CIK352363-COMMON,,LIZ,352363,,,issuer_inferred,LIZ@2008-01-16 LIZ CLAIBORNE INC: issuer 352363 by efts_frequency_renamed: the one 8-K frequency candidate whose names match its fails rows; EDGAR names it CLAIBORNE LIZ INC then,,2009-06-08
 check,CIK47580-COMMON,,HLT,47580,,,ticker_unconfirmed,HLT@2008-01-16 HILTON HOTELS CORP: no fails-to-deliver row under HLT from 2007-12-17 to 2009-07-08,,2009-06-08
 check,CIK48898-CLASS-B,2016-01-03,HUB-B,48898,,,form25_unmatched,25-NSE 0000876661-15-000664 ('Class A Common Stock'): ambiguous class,,
 check,CIK65873-COMMON,,AT,65873,,,ticker_unconfirmed,AT@2008-01-16 ALLTEL CORP: no fails-to-deliver row under AT from 2007-12-17 to 2009-07-08,,2009-06-08

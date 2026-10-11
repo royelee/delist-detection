@@ -322,6 +322,7 @@ BBG000BX3TD3,2025-06-17,merger,,false,,,0.002918,,55.000000,confirmed,cash,55.00
 BBG000BX5ZF5,2019-07-31,exchange,,true,BBG00NNG2ZJ8,,,,,confirmed,continuation,,,,,,,,,,
 BBG000BX67G5,,merger,,false,,,0.001201,,25.000000,uncertain,cash,25.000000,USD,,,,,,8K_1.01,passed,25.00 / last_close − 1
 BBG000BX6BJ3,2022-10-18,merger,,false,,,0.000271,,848.020000,confirmed,cash,848.020000,USD,,,,,,8K_2.01,passed,848.02 / last_close − 1
+BBG000BX6PW7,2023-08-15,dropped,bankruptcy,false,,,,-0.550000,,confirmed,otc_print,,,,BBG000BX6PW7,YELLQ,2023-08-16,,,,"otc_print(YELLQ, from 2023-08-16) / last_close − 1"
 BBG000BX8DC4,2025-09-05,merger,,false,,,-0.000416,,24.000000,confirmed,cash,24.000000,USD,,,,,,8K_1.01,passed,24.00 / last_close − 1
 BBG000BXNJ07,2020-04-15,merger,,false,,,0.001259,,23.850000,confirmed,cash,23.850000,USD,,,,,,8K_2.01,passed,23.85 / last_close − 1
 BBG000BXRPH1,2024-05-02,merger,,false,,,0.001676,,270.072016,confirmed,stock,,,2.323400,BBG000GZQ728,XOM,2024-05-03,,llm,passed,"2.3234 × price(XOM, 2024-05-03) / last_close − 1"
@@ -724,7 +725,7 @@ BBG006GNSZW5,2026-08-19,merger,,false,,,-0.001029,,35.982920,confirmed,stock,,,0
 BBG006KY8KV2,2020-07-30,merger,,false,,,0.106081,,21.402675,confirmed,stock,,,0.476250,BBG00W5FS571,BEPC,2020-07-31,,llm_election_package,passed,"0.47625 × price(BEPC, 2020-07-31) / last_close − 1"
 BBG006LYGNL7,,merger,,false,,,,,,uncertain,unknown,,,,,,,,,,
 BBG006MG2D41,2018-10-08,merger,,false,,,0.000159,,63.000000,confirmed,cash,63.000000,USD,,,,,,8K_2.01,passed,63.00 / last_close − 1
-BBG006N7RYV7,2017-11-17,exchange,,false,,,,0.000000,,uncertain,transfer,,,,,,,,,,
+BBG006N7RYV7,2017-11-17,merger,,false,,,,0.000000,17.350000,uncertain,stock,,,1.000000,,CNNE,2017-11-20,,registrant_statement,skipped,"1 × price(CNNE, 2017-11-20) / last_close − 1"
 BBG006Q53H50,2017-11-21,merger,,false,,,0.000000,,33.250000,confirmed,cash,33.250000,USD,,,,,,8K_2.01,passed,33.25 / last_close − 1
 BBG006QRCDZ8,2017-01-10,merger,,false,,,-0.015609,,15.878224,confirmed,stock,,,1.099600,BBG00D30HGP6,CLNS,2017-01-11,,llm,passed,"1.0996 × price(CLNS, 2017-01-11) / last_close − 1"
 BBG006XVD9G0,2019-11-19,merger,,false,,,,0.000000,9.670000,uncertain,cash_plus_stock,6.250000,USD,0.542700,,GCI,2019-11-20,,llm,failed,"(6.25 + 0.5427 × price(GCI, 2019-11-20)) / last_close − 1"
@@ -862,13 +863,11 @@ CIK18568-COMMON,,merger,,false,,,0.115911,,71.820000,uncertain,cash,71.820000,US
 CIK230463-COMMON,2007-11-06,merger,,false,,,0.007224,,59.798912,confirmed,cash_plus_stock,24.880000,USD,0.682010,BBG000NDZ417,PXP,2007-11-07,,llm,passed,"(24.88 + 0.68201 × price(PXP, 2007-11-07)) / last_close − 1"
 CIK314808-COMMON,,exchange,,true,BBG000BJ2VQ6,,,,,uncertain,continuation,,,,,,,,,,
 CIK351346-COMMON,2007-09-25,merger,,false,,,0.000217,,46.000000,confirmed,cash,46.000000,USD,,,,,,8K_1.01,passed,46.00 / last_close − 1
-CIK352363-COMMON,2014-02-25,merger,,false,,,,0.000000,31.460000,uncertain,unknown,,,,,,,,,,
 CIK38079-COMMON,2014-12-15,dropped,guidelines,false,,,,-0.300000,,uncertain,otc_print,,,,CIK38079-COMMON,FSTO,2014-12-16,,,,"otc_print(FSTO, from 2014-12-16) / last_close − 1"
 CIK47580-COMMON,2007-10-24,merger,,false,,,0.000421,,47.500000,confirmed,cash,47.500000,USD,,,,,,8K_1.01,passed,47.50 / last_close − 1
 CIK48898-CLASS-B,2015-12-23,exchange,,true,BBG000BLK267,,,,,uncertain,continuation,,,,,,,,,,
 CIK65873-COMMON,2007-11-16,merger,,false,,,0.004213,,71.500000,confirmed,cash,71.500000,USD,,,,,,llm,passed,71.50 / last_close − 1
 CIK709519-COMMON,,merger,,false,,,,,,uncertain,cash,9.500000,USD,,,,,,8K_2.01,,9.50 / last_close − 1
-CIK716006-COMMON,2021-02-05,exchange,,false,,,,0.000000,,uncertain,transfer,,,,,,,,,,
 CIK718482-COMMON,2007-09-28,merger,,false,,,0.016927,,85.167660,confirmed,cash_plus_stock,35.800000,USD,0.984400,BBG000FRBSS9,WB,2007-10-01,,llm,passed,"(35.80 + 0.9844 × price(WB, 2007-10-01)) / last_close − 1"
 CIK737874-COMMON,2007-09-28,merger,,false,,,0.000852,,35.250000,confirmed,cash,35.250000,USD,,,,,,DEFM14A,passed,35.25 / last_close − 1
 CIK804055-COMMON,2010-10-01,merger,,false,,,0.029923,,32.010000,confirmed,cash_plus_stock,10.000000,USD,1.000000,BBG000BF5RY1,CCE,2010-10-04,,llm,passed,"(10.00 + 1 × price(CCE, 2010-10-04)) / last_close − 1"

@@ -178,9 +178,4 @@ CIK18568-COMMON,,diagnosis_truth.csv,CIK18568-COMMON_2007-09-16,price_ticker,BBV
 CIK18568-COMMON,,diagnosis_truth.csv,CIK18568-COMMON_2007-09-16,stock_ratio,1.462,
 CIK18568-COMMON,,diagnosis_truth.csv,CIK18568-COMMON_2007-09-16,value_rule,cash_plus_stock,cash
 CIK314808-COMMON,,accuracy_audit.csv,left_view:CIK314808-COMMON:2010-01-08,ends_after,2020-08-18,2020-08-14
-CIK352363-COMMON,2014-02-25,accuracy_audit.csv,left_view:CIK352363-COMMON:2012-05-14,ends_after,2017-07-10,2014-02-25
-CIK352363-COMMON,2014-02-25,accuracy_audit.csv,left_view:CIK352363-COMMON:2012-05-14,tickers,LIZ;FNP;KATE,FNP;LIZ
 CIK38079-COMMON,2014-12-15,accuracy_audit.csv,left_view:CIK38079-COMMON:2015-01-25,tickers,FST;SABO,FST
-CIK716006-COMMON,2021-02-05,accuracy_audit.csv,left_view:CIK716006-COMMON:2010-10-04,ends_after,2023-08-15,2021-02-05
-CIK716006-COMMON,2021-02-05,accuracy_audit.csv,left_view:CIK716006-COMMON:2010-10-04,exit_kind,dropped,exchange
-CIK716006-COMMON,2021-02-05,accuracy_audit.csv,left_view:CIK716006-COMMON:2010-10-04,tickers,YRCW;YELL,YRCW;YRCWD
