@@ -18,7 +18,7 @@ from typing import Any, Callable
 from ..filings.evidence import names_until
 from ..vocabulary.names import description_names_issuer
 from .identity import NOT_MADE, Identity, identify
-from .line_follow import SWITCH, Lines, RefusedStep, follow_lines
+from .line_follow import SWITCH, LineMemo, Lines, RefusedStep, follow_lines
 from .observations import DerivedFrom, ObservationIndex
 from .security_master import Security
 
@@ -60,15 +60,17 @@ def identify_with_lines(index: ObservationIndex, clients: Any, *, as_of: date, l
                         meter: Any = None) -> tuple[Identity, Lines]:
     """Stages 1 to 4b with the derived lines: `identify` and `follow_lines`, again with the lines the last round
     refused that `derivable` gives, over the same fails index (`Identity.ftd`, opened once), until a round adds no
-    line or `MAX_DERIVE_ROUNDS` rounds have added one. Returns the last round's identity and lines."""
+    line or `MAX_DERIVE_ROUNDS` rounds have added one. A repeat round's stage 4b takes what the round before read about
+    each line's end (`LineMemo`) and reads again only for a line that changed. Returns the last round's identity and lines."""
     derive: dict[tuple[str, str], DerivedFrom] = {}
     verdicts: Mapping[tuple[str, str], str] = {}
     ftd = None
+    memo = LineMemo()          # what stage 4b read about each line's end: a repeat round asks only about a line that changed
     for round_no in range(MAX_DERIVE_ROUNDS + 1):
         identity = identify(index, clients, as_of=as_of, limit=limit, log=log, workers=workers, meter=meter,
                             derive=dict(derive), ftd=ftd, verdicts=verdicts)
         verdicts = identity.verdicts          # what the identity stage found about the derived eras goes to the next
-        lines = follow_lines(identity, clients, as_of=as_of, log=log, meter=meter)
+        lines = follow_lines(identity, clients, as_of=as_of, log=log, meter=meter, memo=memo)
         ftd = identity.ftd
         new = {pair: origin for pair, origin in derivable(lines.refused, lines.securities,
                                                           clients.issuers.profile).items()

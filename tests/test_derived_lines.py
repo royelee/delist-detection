@@ -93,7 +93,7 @@ def _loop(monkeypatch, answers, verdicts=()):
     """`identify_with_lines` over scripted stages: round n's `derivable` answer is answers[n] (a set of pairs) and
     round n's identity holds the verdicts[n] (a mapping; none by default). `calls` holds each round's `derive`, `ftd`
     and `verdicts`."""
-    calls, logs = [], []
+    calls, logs, memos = [], [], []
     ftd = object()
 
     def identify(index, clients, **kw):
@@ -102,8 +102,12 @@ def _loop(monkeypatch, answers, verdicts=()):
         return SimpleNamespace(ftd=ftd, round=n, verdicts=dict(verdicts[n - 1]) if n <= len(verdicts) else {})
 
     monkeypatch.setattr(derived_lines, "identify", identify)
-    monkeypatch.setattr(derived_lines, "follow_lines",
-                        lambda identity, clients, **kw: SimpleNamespace(refused=[], securities={}))
+    def follow_lines(identity, clients, **kw):
+        memos.append(kw.get("memo"))
+        return SimpleNamespace(refused=[], securities={})
+
+    monkeypatch.setattr(derived_lines, "follow_lines", follow_lines)
+    monkeypatch.setattr(derived_lines, "_memos", memos, raising=False)
     monkeypatch.setattr(derived_lines, "derivable",
                         lambda refused, securities, profile:
                         {p: ORIGIN for p in answers[min(len(calls), len(answers)) - 1]})
@@ -147,3 +151,11 @@ def test_a_pair_with_a_not_made_verdict_is_never_new_and_does_not_keep_the_loop_
     assert len(calls) == 2 and dict(identity.verdicts) == judged
     calls, logs, identity, ftd = _loop(monkeypatch, [{("X", "AAA"), ("X", "BBB")}] * 3, verdicts=[judged, judged])
     assert [set(c[0]) for c in calls] == [set(), {("X", "BBB")}] and len(calls) == 2
+
+
+def test_every_round_gives_stage_4b_the_one_memo_of_the_loop(monkeypatch):
+    both = {("X", "AAA"), ("X", "BBB")}
+    _loop(monkeypatch, [{("X", "AAA")}, both, both])
+    memos = derived_lines._memos
+    assert len(memos) == 3 and isinstance(memos[0], derived_lines.LineMemo)
+    assert memos[0] is memos[1] is memos[2]

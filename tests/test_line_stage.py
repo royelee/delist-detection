@@ -366,6 +366,90 @@ def test_the_text_of_a_lines_end_is_read_once_however_many_rounds_follow(monkeyp
     assert reads == [("BBGA", _monday(WEEKS * 3 - 1))]
 
 
+# --- a repeat call of the derived-line loop asks again only about the lines that changed ---------------------------
+
+def _asked_ends(monkeypatch):
+    """The (security, last CUSIP) of each line end whose 8-K texts `follow_lines` reads, and of each whose renamed-CUSIP
+    pass it runs."""
+    from delist_detection.identity import line_follow
+    texts, passes = [], []
+    text_sources, renamed = line_follow._Reads.text_sources, line_follow._Reads.renamed_cusips
+
+    def counting_texts(self, s, end):
+        texts.append((s.sec_id, end.cusip))
+        return text_sources(self, s, end)
+
+    def counting_pass(self, s, end, cusips, ftd):
+        passes.append((s.sec_id, end.cusip))
+        return renamed(self, s, end, cusips, ftd)
+
+    monkeypatch.setattr(line_follow._Reads, "text_sources", counting_texts)
+    monkeypatch.setattr(line_follow._Reads, "renamed_cusips", counting_pass)
+    return texts, passes
+
+
+STOPPED = [_Spec("BBGA", 1, "AA", ["A1"]), _Spec("BBGB", 2, "BB", ["B1"])]
+STOPPED_ROWS = _line("AA", ["A1"]) + _line("BB", ["B1"])
+
+
+def _follow_again(specs, rows, memo, edgar=None):
+    """A round of the loop: the identity stage's answer built afresh, stage 4b given the loop's `memo`."""
+    identity = _identity(specs, rows)
+    edgar = edgar if edgar is not None else _Edgar(_stating(rows))
+    clients = Clients(edgar=edgar, resolver=None, classifier=None, figi=_Figi(), ftd_client=_NoFiles(),
+                      issuers=IssuerRecord(edgar))
+    return follow_lines(identity, clients, as_of=AS_OF, memo=memo)
+
+
+def test_a_round_that_touches_no_line_asks_stage_4b_about_none_and_gives_the_same_lines(monkeypatch):
+    from delist_detection.identity.line_follow import LineMemo
+    texts, passes = _asked_ends(monkeypatch)
+    memo = LineMemo()
+    first = _follow_again(STOPPED, STOPPED_ROWS, memo)
+    assert texts == passes == [("BBGA", "A1"), ("BBGB", "B1")]
+    again = _follow_again(STOPPED, STOPPED_ROWS, memo)
+    assert texts == passes == [("BBGA", "A1"), ("BBGB", "B1")]            # no line asked again
+    assert _fingerprint(again) == _fingerprint(first) == _fingerprint(_follow(STOPPED, STOPPED_ROWS))
+
+
+def test_a_line_a_derived_era_joined_or_whose_cusips_changed_is_asked_again_and_no_other(monkeypatch):
+    from delist_detection.identity.line_follow import LineMemo
+    texts, passes = _asked_ends(monkeypatch)
+    memo = LineMemo()
+    _follow_again(STOPPED, STOPPED_ROWS, memo)
+    del texts[:], passes[:]
+    joined = [*STOPPED, _Spec("BBGA", 1, "AA2", ["A1"], first="2010-01-01", last="2011-01-01")]     # a new era of AA's
+    again = _follow_again(joined, STOPPED_ROWS, memo)
+    assert texts == passes == [("BBGA", "A1")]
+    assert _fingerprint(again) == _fingerprint(_follow(joined, STOPPED_ROWS))
+    del texts[:], passes[:]
+    cusips = [STOPPED[0], _Spec("BBGB", 2, "BB", ["B1", "B0"])]                                 # a CUSIP added to BB's
+    again = _follow_again(cusips, STOPPED_ROWS, memo)
+    assert texts == passes == [("BBGA", "A1"), ("BBGB", "B1")]          # AA's stamp is the joined one's no more
+    assert _fingerprint(again) == _fingerprint(_follow(cusips, STOPPED_ROWS))
+
+
+def test_a_line_end_the_fails_index_now_shows_otherwise_is_asked_again(monkeypatch):
+    from delist_detection.identity.line_follow import LineMemo
+    texts, passes = _asked_ends(monkeypatch)
+    memo = LineMemo()
+    _follow_again(STOPPED, STOPPED_ROWS, memo)
+    del texts[:], passes[:]
+    longer = _line("AA", ["A1"]) + [FtdRow(_monday(WEEKS + 1), "A1", "AA", NAME, 12.0)] + _line("BB", ["B1"])
+    _follow_again(STOPPED, longer, memo)
+    assert texts == passes == [("BBGA", "A1")]
+
+
+def test_a_read_that_rested_on_a_stale_copy_is_not_kept(monkeypatch):
+    from delist_detection.identity.line_follow import LineMemo
+    texts, passes = _asked_ends(monkeypatch)
+    memo = LineMemo()
+    _follow_again(STOPPED, STOPPED_ROWS, memo, edgar=_Down(_stating(STOPPED_ROWS), stale=True))
+    del texts[:], passes[:]
+    _follow_again(STOPPED, STOPPED_ROWS, memo)
+    assert texts == passes == [("BBGA", "A1"), ("BBGB", "B1")]
+
+
 # --- failures: the ones that stop the run, and the reads that are reported, never cached ---------------------------
 
 def test_openfigi_unavailable_inside_the_stage_stops_the_run():

@@ -884,7 +884,13 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `tests/fixtures/lines/` (`scripts/build_line_fixtures.py`), through the rules and through `follow_lines`; the
   stage's own rules are tested at `follow_lines` with doubles (tests/test_line_stage.py). It also returns the steps
   it refused (`Lines.refused`, a `RefusedStep(sec_id, step, why)` each; its `sec_id` follows a fold, like the review
-  items'), which `derived_lines` reads.
+  items'), which `derived_lines` reads. `follow_lines(..., memo=LineMemo)`: the reads of a line's end (the issuer's 8-K
+  texts, and the renamed-CUSIP pass over the fails files when they name nothing, which is most of the stage's time) are
+  taken from the memo when the line is what an earlier call read, and asked again, then kept, when it is not. The
+  stamp that decides is everything the two reads and their round read: the security (issuer, class, name, eras with
+  their observations, line tickers), its eras' resolutions, its CUSIPs, the line's end in the fails index and whether
+  it is the call's first round; a read that rested on a failed request or a stale copy is never kept. The answer is
+  the same with or without a memo; the log says how many line ends were taken and how many read again.
 - `identity/derived_lines.py` — seeds-only parity S2: which refused steps are lines of the run. `derivable(refused,
   securities, profile)` gives the `(ticker, new CUSIP)` pairs, each with its origin, a `DerivedFrom` (the first step
   that names a pair wins; the ticker as the security's eras spell it, `BF-B`
@@ -902,7 +908,10 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   stage resolves it by its own CUSIP, the handoff stage pairs it with the line before it, the finder searches its
   Form 25. The step stage 4b refused is held by the derived security in the next round, so it is not refused again.
   Each round's `Identity.verdicts` (`not_made`, `without_old_issuer`, `fold_refused`) go to the next round's `identify`,
-  and a pair with `not_made` is never counted as new.
+  and a pair with `not_made` is never counted as new. The loop makes one `LineMemo` and gives it to every round's
+  `follow_lines`, so a repeat round asks stage 4b again only about the lines the round touched (a derived era joined
+  the security; the new CUSIP of a step is now a derived line's; its eras, resolution, issuer or CUSIPs changed; the
+  fails index shows the line's end otherwise) and takes every other line's reads from the round before.
 - `identity/carried_price.py` — whether a share became one share across a CUSIP change: `CARRIED_PRICE` (2/3 to 3/2,
   the one band), `price_carried(ratio)` (None is carried) and `step_price_ratio(ftd, ticker, old_cusip, new_cusip)` (the
   new CUSIP's first fails price under the ticker over the old CUSIP's last on or before it; None when a side has no
