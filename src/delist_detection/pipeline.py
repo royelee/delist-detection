@@ -26,7 +26,7 @@ from .sources.capabilities import CAPABILITIES, FULL_TEXT_SEARCH, Capability, Fu
 from .vocabulary.crsp_codes import CrspBucket
 from .endings.continuation_evidence import needs_doubt_check, needs_filing, read_continuation
 from .outputs.degraded import DegradedWatch, degraded_item, flag_degraded, report_halt_feed_failures
-from .endings.delistings import Delisting, DelistingFinder, SecurityContexts
+from .endings.delistings import Delisting, DelistingFinder, SecurityContexts, unexplained_ending
 from .endings.distress import (
     BANKRUPTCY_WORDS, OTC_SYMBOL_DAYS, otc_symbol_from_fails, otc_symbol_from_text, plan_ratio,
     new_cusips as plan_new_cusips, price_only, substitutes_new_shares,
@@ -1187,6 +1187,42 @@ def _distress(ctx: _RunContext, delistings: list[Delisting], sec_cusips: Mapping
     return out
 
 
+def _unexplained_endings(ctx: _RunContext, history: Histories, securities: dict[str, Security], search: _DelistingSearch,
+                         sec_cusips: Mapping[str, list[str]], ftd: FtdIndex, review: list[ReviewItem],
+                         dating: Dating) -> list[Delisting]:
+    """9h. FB-004 part d, the last stage before the history is built: an observed security whose history closes with
+    no ending (`history.end`: no ending of any rule ends it, it is not listed today and not sighted at the fails
+    data's last day) gets the spec's end-of-era branch 6 ending, nothing found: kind `unknown`, dated from SEC data,
+    unconfirmed (`DelistingFinder.unexplained`, flag `unexplained_ending`, a `fix` row; its verdict is uncertain).
+    `history` is the one over the delistings every earlier stage settled (`_histories`), so no rule's ending, no
+    listed-today answer and no data-edge security is second-guessed. A security whose listing status is unknown
+    (`search.listed` None: a failed read) gets none; its `listing_status_unknown` row stands.
+
+    The finder's `ended_without_delisting` review item is raised before any history exists, so it also stands on a
+    security the history keeps open (Disney, sighted at the data edge): it is dropped there, and for a security that
+    gets the ending here, where the flag on the new row replaces it. Returns the new delistings, `review` edited."""
+    mark = ctx.meter.start()
+    made: list[Delisting] = []
+    settled: set[str] = set()                    # securities whose `ended_without_delisting` item has an answer
+    for sid, security in securities.items():
+        end = history.end(sid)
+        if end.day is not None:
+            continue
+        if end.listed:
+            settled.add(sid)                     # open: listed today, or sighted at the fails data's last day
+            continue
+        if search.listed.get(sid) is None:
+            continue
+        record = TradingRecord.observed(security, ftd, sec_cusips.get(sid, []), search.sightings.get(sid))
+        if (d := unexplained_ending(dating, record, security.issuer_cik)) is not None:
+            made.append(d)
+            settled.add(sid)
+    review[:] = [r for r in review if not (r.flag == "ended_without_delisting" and r.sec_id in settled)]
+    ctx.log(f"unexplained endings: {len(made)} securities")
+    ctx.meter.done("unexplained endings", mark)
+    return made
+
+
 def _delisting_rows(delistings: list[Delisting], closes: dict[DelistingKey, float], values: MergerValues,
                     overrides: Overrides, answers: PriceAnswers,
                     distress: Mapping[DelistingKey, DistressTerms]) -> tuple[list[dict], list[dict]]:
@@ -1589,6 +1625,12 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     # go on as themselves before its handoffs; the handoff stage then creates continuations (AON 2012) and sets
     # successors, and 9c to 9e re-date, add and reclassify endings, so the ranges read it over the final delistings.
     history = _histories(ctx, delistings, securities, search, sec_cusips, ftd, added)
+    # 9h: a security that history closes with no ending gets one (FB-004 part d), and the history is read again over it
+    unexplained = _unexplained_endings(ctx, history, securities, search, sec_cusips, ftd, review,
+                                       Dating(clients.edgar, midas=clients.midas, halts=clients.halts))
+    if unexplained:
+        delistings += unexplained
+        history = _histories(ctx, delistings, securities, search, sec_cusips, ftd, added)
 
     # 10. rows
     delisting_rows, review_rows = _delisting_rows(delistings, closes, values, overrides, prices, distress)

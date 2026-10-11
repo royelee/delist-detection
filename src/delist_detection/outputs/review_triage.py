@@ -109,6 +109,17 @@ CATALOG: dict[str, FlagInfo] = {
         "after confirming the security really still trades (e.g. under another ticker) or is out of scope -- "
         "there is no override to add a missing delisting."),
 
+    "unexplained_ending": FlagInfo(
+        "fix", "The security's history closes (not listed today, not sighted at the fails data's last day) and no "
+               "rule gave it an ending, so the library wrote one of kind unknown (the spec's end-of-era branch 6: "
+               "nothing found, no kind asserted), dated by the last day its own CUSIPs' fails rows show it trading, "
+               "else MIDAS's last day of volume, else its last sighting. The date is a guess and is never published; "
+               "the verdict is uncertain, and the row has no DLRET.",
+        "Find what ended it (a Form 25 under another CIK or class, a merger, a bankruptcy, a drop to the OTC "
+        "market) in the issuer's filings and the fails rows; if the identity is wrong, pin the right cik/sec_id on "
+        "the observations. Accept it only once you've confirmed the security really ended on about that day or is "
+        "out of scope."),
+
     # --- check: a rule could not settle the answer ---
     # merger terms and payouts
     "merger_at_par": FlagInfo(

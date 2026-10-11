@@ -268,8 +268,9 @@ EX99_NOTICE = "ex99_notice"         # the exchange's Form 25 notice (EX-99.25)
 EIGHTK_301 = "8k_301"               # an 8-K's Item 3.01 text
 CLOSING_DAY = "closing_day"         # rule 4: a worked-out closing day (never published)
 LAST_SIGHTING = "last_sighting"     # the handoff stage: A's last sighting under the ticker, before B's first
+FAILS_ROWS = "fails_rows"           # the unexplained ending: the last day the security's own fails rows show it trading
 UNSOURCED = ""                      # no source: no day, or the fallback's last sighting with nothing to date it
-SOURCES = (MIDAS, NASDAQ_HALT, EX99_NOTICE, EIGHTK_301, CLOSING_DAY, LAST_SIGHTING, UNSOURCED)
+SOURCES = (MIDAS, NASDAQ_HALT, EX99_NOTICE, EIGHTK_301, CLOSING_DAY, LAST_SIGHTING, FAILS_ROWS, UNSOURCED)
 EXCHANGE_PRINTS = frozenset({MIDAS, NASDAQ_HALT, EX99_NOTICE, EIGHTK_301})   # an exchange print gave the day
 MEASURED = frozenset({MIDAS, NASDAQ_HALT})                                   # measured, not worded
 # the review flags a dating writes onto its delisting

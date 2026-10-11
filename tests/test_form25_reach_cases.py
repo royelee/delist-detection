@@ -11,7 +11,8 @@ import dataclasses
 import pytest
 
 import delist_detection.endings.delistings as delistings
-from delist_detection.endings.delistings import SecurityContexts
+from delist_detection.endings.last_trade import Dating
+from delist_detection.endings.delistings import SecurityContexts, unexplained_ending
 from tests import form25_cases as fc
 
 # The rules of sub-plan 5b built so far; each task adds its own (the cases it moves change then, and only then)
@@ -185,6 +186,9 @@ STAY = {
     # FB-004 part d: banks that filed with the FDIC; MIDAS dates the drop (CRSP 500, no filing to give a reason)
     'BBG000M6TR37': ([('2023-03-10', 'compliance_failure', 500, '2023-03-10', False, '', 1288784)], []),   # SBNY 2023
     'BBG0019LSQ49': ([('2023-04-28', 'compliance_failure', 500, '2023-04-28', False, '', 1132979)], []),   # FRCB 2023
+    # the vendor's ticker for a security that traded under another (no CUSIP, no fails row): the fallback's relabel
+    'CIK1308161-CLASS-A': ([('2013-06-28', 'merger', 231, '2013-06-28', False, '', 1308161)], []),   # NCRA 2013
+    'CIK1409012-COMMON': ([], ['ended_without_delisting']),   # ABBI 2009: no ending of any rule
 }
 
 
@@ -315,3 +319,27 @@ def test_the_right_registrants_form25_is_reached_once_the_issuer_is_right(sec_id
              d.last_trade.day.isoformat() if d.last_trade.day else "", d.record.successor_sec_id == sec_id,
              d.form25_sub.accession if d.form25_sub else "", d.cik) for d in found] == delistings
     assert sorted({(r.flag, r.filing.accession if r.filing else "") for r in items}) == review
+
+
+# FB-004 part d, the unexplained ending on real securities no rule ends: dated from SEC data (the fails rows, else MIDAS,
+# else the last sighting), never from the caller's observations
+def _unexplained(sec_id):
+    return unexplained_ending(Dating(fc.FixtureEdgar(), midas=fc.FixtureMidas(), halts=fc.FixtureHalts()),
+                              fc.context(sec_id).record, fc.DATA["securities"][sec_id]["issuer_cik"])
+
+
+def test_abraxis_with_no_cusip_and_no_volume_ends_on_its_last_sighting():
+    """ABBI: the snapshot ticker is not what the fails files carry (ABII), so it has no CUSIP, no fails row and no MIDAS
+    day under ABBI: the only evidence is the last snapshot that listed it, 2009-06-08."""
+    d = _unexplained("CIK1409012-COMMON")
+    assert (d.delist_date, d.last_trade.source, d.record.bucket.value, d.cik) == (
+        "2009-06-08", "last_sighting", "unknown", 1409012)
+    assert d.flags == ["last_trade_date_unconfirmed", "unexplained_ending"] and not d.last_trade.publishable(None)
+
+
+def test_alberto_culver_under_the_wrong_issuer_ends_on_the_last_day_its_fails_rows_show_it_trading():
+    """ACV (issuer CIK 3327, the old registrant): its CUSIP's fails rows run to 2011-05-09, the trading day before the
+    row that opens the last run of one price is 2011-05-06; the snapshots (to 2009-06-08) are not read."""
+    d = _unexplained("BBG000BB41G8")
+    assert (d.delist_date, d.last_trade.day.isoformat(), d.last_trade.source) == ("2011-05-06", "2011-05-06", "fails_rows")
+    assert d.record.bucket.value == "unknown" and d.ending.real

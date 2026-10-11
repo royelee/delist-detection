@@ -141,6 +141,11 @@ CASES = {
                     "fails rows go on over the counter",
     "BBG0019LSQ49": "FRCB 2023: First Republic Bank, closed by the FDIC; no EDGAR filing, MIDAS volume (FRC) to "
                     "2023-04-28, the fails rows go on as FRCB at about $0.40",
+    # ... and the closed histories no rule ends (the unexplained ending: dated by the fails rows, else the last sighting)
+    "CIK1308161-CLASS-A": "NCRA 2013: the vendor's ticker for the old News Corp's class A, which traded as NWSA; no CUSIP "
+                          "of its own, so no fails row and no MIDAS day (CIK 1308161 renamed Twenty-First Century Fox)",
+    "CIK1409012-COMMON": "ABBI 2009: Abraxis BioScience, whose fails rows are under ABII; no CUSIP, no fails row, no MIDAS "
+                         "day under ABBI",
 }
 # cases whose MIDAS days are kept over their whole life, not near a Form 25 or the last sighting: the drop rule
 # (FB-004 part d) reads the last day of exchange volume wherever it falls

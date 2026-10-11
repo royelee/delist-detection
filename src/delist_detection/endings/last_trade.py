@@ -39,8 +39,8 @@ from typing import TYPE_CHECKING
 from ..filings.evidence import ITEM_MIN_SECTION, item_mention
 # the last trade's sources, flags and facts are the row vocabulary's (exit_kind): this module dates an ending and
 # answers a `LastTrade`, the measurement side reads the same definitions back from a row
-from ..vocabulary.exit_kind import (CLOSING_DAY, CONFLICT, EIGHTK_301, EX99_NOTICE, LAST_SIGHTING, MIDAS, NASDAQ_HALT,
-                                    NO_DAY, UNCONFIRMED, UNSOURCED, LastTrade, effective_date)
+from ..vocabulary.exit_kind import (CLOSING_DAY, CONFLICT, EIGHTK_301, EX99_NOTICE, FAILS_ROWS, LAST_SIGHTING, MIDAS,
+                                    NASDAQ_HALT, NO_DAY, UNCONFIRMED, UNSOURCED, LastTrade, effective_date)
 from ..filings.form25 import ISSUER_FORM25_FORMS, Form25, is_involuntary, notice_last_trade, parse_form25
 from ..sources.midas import MIDAS_START
 from ..sources.nasdaq_halts import last_trade_from_halt
@@ -451,6 +451,30 @@ class Dating:
         if not trading.trades_after(day.isoformat()):
             return None
         return LastTrade(day, MIDAS, ())
+
+    def unexplained(self, trading: TradingRecord, ticker: str, last_seen: date) -> LastTrade:
+        """The last trade of an unexplained ending (FB-004 part d: a security whose history closes and that no rule
+        gave an ending), worked out from SEC data, never from the caller's observations: the last day its own CUSIPs'
+        fails rows show it trading (`TradingRecord.trades_until`, source `fails_rows`), else the last day MIDAS shows
+        exchange volume under its tickers (`midas_last`, source `midas`), else its last sighting `last_seen` (source
+        `last_sighting`: no fails row and no MIDAS day). A fails-row day before the first row of the CUSIP it held last
+        (its rows at one price throughout: the run of fails settling at the last close is all there is) counts as none. Always
+        `UNCONFIRMED`: a guess, never published."""
+        shown = trading.trades_until()
+        if shown and shown >= self._first_row_of_last_cusip(trading):   # rows at one price throughout show no stop
+            return LastTrade(date.fromisoformat(shown), FAILS_ROWS, (UNCONFIRMED,))
+        volume = self.midas_last(trading, ticker, last_seen)
+        if volume is not None:
+            return LastTrade(volume, MIDAS, (UNCONFIRMED,))
+        return LastTrade(last_seen, LAST_SIGHTING, (UNCONFIRMED,))
+
+    @staticmethod
+    def _first_row_of_last_cusip(trading: TradingRecord) -> str:
+        """The first fails row's day of the CUSIP the security held last (`TradingRecord.rows`)."""
+        rows = trading.rows
+        last = max(r.date for r in rows)
+        held = next(r.cusip for r in rows if r.date == last)
+        return min(r.date for r in rows if r.cusip == held)
 
     def midas_last(self, trading: TradingRecord, ticker: str, last_seen: date) -> date | None:
         """The last day SEC MIDAS shows exchange volume, from its start to `last_seen`, under `ticker` and every

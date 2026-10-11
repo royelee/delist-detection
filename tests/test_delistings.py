@@ -5,7 +5,8 @@ from delist_detection.endings.classifier import DelistClassifier
 
 from delist_detection.outputs.reconstruction import DelistRecord
 from delist_detection.vocabulary.crsp_codes import CrspBucket
-from delist_detection.endings.delistings import DelistingFinder, SecurityContext, SecurityContexts
+from delist_detection.endings.delistings import DelistingFinder, SecurityContext, SecurityContexts, unexplained_ending
+from delist_detection.endings.last_trade import Dating
 from delist_detection.sources.edgar import EdgarSubmission
 from delist_detection.vocabulary.exit_kind import effective_date
 from delist_detection.sources.ftd import FtdIndex, FtdRow
@@ -1302,3 +1303,22 @@ def test_a_drop_with_a_filing_around_its_end_is_not_a_midas_drop(fake_edgar):
     clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))
     events, review = DelistingFinder(fake_edgar, clf, midas=_MidasDays(SBNK="2023-03-10")).find(_ctx(sec, rows=rows))
     assert events == [] and [r.flag for r in review] == ["ended_without_delisting"]
+
+
+def test_the_unexplained_ending_is_unknown_dated_from_the_fails_rows_and_never_published(fake_edgar):
+    clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))
+    sec = _sec("BBG_GONE", 777, "GONE", "2012-06-29", "2013-06-28", "GONE INC")
+    rows = [_row("2013-01-02", "GONE", 5.0), _row("2013-02-04", "GONE", 6.0), _row("2013-03-04", "GONE", 7.0)]
+    record = TradingRecord.observed(sec, FtdIndex(rows), [CUSIP])
+    ev = unexplained_ending(Dating(fake_edgar, midas=_MidasDays(GONE="2013-02-01")), record, 777)
+    assert ev.record.bucket is CrspBucket.UNKNOWN and ev.record.crsp_code is None and ev.record.confidence == "low"
+    assert (ev.delist_date, ev.last_trade.day, ev.last_trade.source) == ("2013-03-01", date(2013, 3, 1), "fails_rows")
+    assert not ev.last_trade.confirmed and not ev.last_trade.publishable(None)
+    assert ev.flags == ["last_trade_date_unconfirmed", "unexplained_ending"] and ev.record.successor_sec_id is None
+    assert ev.ending.real and ev.ending.bucket is CrspBucket.UNKNOWN
+
+
+def test_the_unexplained_ending_of_a_security_with_no_day_is_none(fake_edgar):
+    clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))
+    sec = Security("BBG_NODAY", 777, "COMMON", "NODAY INC", "Common Stock", True, "cusip")
+    assert unexplained_ending(Dating(fake_edgar), TradingRecord.observed(sec, FtdIndex([]), []), 777) is None

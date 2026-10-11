@@ -24,7 +24,8 @@ from ..outputs.reconstruction import DelistRecord
 from ..vocabulary.crsp_codes import CrspBucket
 from ..sources.edgar import EdgarSubmission
 from ..filings.evidence import edgar_names
-from ..vocabulary.exit_kind import effective_date, merger_relabel, rests_on_continued_filings
+from ..vocabulary.exit_kind import (FAILS_ROWS, LAST_SIGHTING, MIDAS, effective_date, merger_relabel,
+                                    rests_on_continued_filings)
 from ..sources.ftd import FtdIndex
 from ..filings.form25 import (
     ISSUER_FORM25_FORMS, REGIONAL_EXCHANGES, Form25, SecurityRef, class_kind, class_letters, is_involuntary,
@@ -61,6 +62,7 @@ EIGHT_A_DAYS = 10                   # the issuer's own Form 25 and its 8-A12B th
 EIGHT_A_FORMS = frozenset({"8-A12B"})      # not 8-A12B/A: a rights-plan amendment registers no class (Biomet 2006)
 EARLY_REACH_DAYS = 365              # gone today: Form 25s this far before the floor are judged in the main scan
 MIDAS_DROP = "midas_drop"           # the review flag of a drop MIDAS dated when the issuer filed nothing (info)
+UNEXPLAINED_ENDING = "unexplained_ending"   # the review flag of the ending a closed history gets when no rule gave one (fix)
 LATE_ROW_DAYS = 30                # no sibling alive: the security's own CUSIP traded this close before the Form 25
 
 # Buckets whose delisting ends the security's exchange life even when it is
@@ -848,3 +850,30 @@ class DelistingFinder:
                                     ("no_form25", *extra_flags), exchange=exch)
         delisting.own_shares = own if own is not None and own.stated else None
         return delisting
+
+
+def unexplained_ending(dating: Dating, record: TradingRecord, cik: int | None) -> Delisting | None:
+    """FB-004 part d, the ending of a security whose history closes with no ending of any rule (pipeline stage 9h
+    decides which): the spec's end-of-era branch 6, nothing found, so no bucket asserted (`unknown`, CRSP code none,
+    confidence low). Dated from SEC data (`Dating.unexplained`: the last day its own CUSIPs' fails rows show it
+    trading, else MIDAS's last day of volume, else its last sighting), unconfirmed and so never published; the delist
+    date is that day. Flags `unexplained_ending` and the dating's `last_trade_date_unconfirmed`. None for a security
+    with no day the run knows it by."""
+    last_seen = record.last_seen
+    if not record.known_from or not last_seen:
+        return None
+    lt = dating.unexplained(record, record.ticker, date.fromisoformat(last_seen))
+    day = lt.day.isoformat()
+    ticker = record.ticker_on(day) or record.ticker
+    source = {FAILS_ROWS: "the last day its own CUSIPs' fails rows show it trading",
+              MIDAS: "the last day SEC MIDAS shows exchange volume",
+              LAST_SIGHTING: "its last sighting (no fails row and no MIDAS volume)"}[lt.source]
+    rec = DelistRecord(ticker=ticker.upper(), cik=cik, observed_delist_date=day, crsp_code=None,
+                       bucket=CrspBucket.UNKNOWN, confidence="low",
+                       reason=f"Unexplained: no filing, drop or listing ends this security, and it is not listed "
+                              f"today; its last trade is {source}, {day}")
+    rec.sec_id, rec.delist_date = record.security.sec_id, day
+    delisting = Delisting(record.security.sec_id, cik, ticker, day, rec, lt, None, None, "")
+    for flag in (*lt.flags, UNEXPLAINED_ENDING):
+        delisting.add_flag(flag)
+    return delisting

@@ -189,8 +189,16 @@
    "note": "LSXMK 2024: one 25-NSE for the Series A, B and C Liberty SiriusXM Common Stock",
    "other_cik": null
   },
+  "CIK1308161-CLASS-A": {
+   "note": "NCRA 2013: the vendor's ticker for the old News Corp's class A, which traded as NWSA; no CUSIP of its own, so no fails row and no MIDAS day (CIK 1308161 renamed Twenty-First Century Fox)",
+   "other_cik": null
+  },
   "CIK1355096-SERIES-A": {
    "note": "Liberty Series A 2011: a 25-NSE of the Capital and Starz groups (R3)",
+   "other_cik": null
+  },
+  "CIK1409012-COMMON": {
+   "note": "ABBI 2009: Abraxis BioScience, whose fails rows are under ABII; no CUSIP, no fails row, no MIDAS day under ABBI",
    "other_cik": null
   },
   "CIK1469372-CLASS-A": {
@@ -7514,6 +7522,108 @@
    "security_type": "Common Stock",
    "share_class": "COMMON"
   },
+  "CIK1308161-CLASS-A": {
+   "cusips": [],
+   "eras": {
+    "NCRA@2012-06-29": [
+     [
+      "NCRA",
+      "2012-06-29",
+      "NEWS CORP. CL A",
+      "",
+      ""
+     ],
+     [
+      "NCRA",
+      "2012-12-31",
+      "NEWS CORP. CL A",
+      "",
+      ""
+     ],
+     [
+      "NCRA",
+      "2013-06-28",
+      "NEWS CORP. CL A",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "placeholder",
+   "issuer_cik": 1308161,
+   "line_tickers": [],
+   "listed": false,
+   "name": "NEWS CORP. CL A",
+   "observed": true,
+   "security_type": "",
+   "share_class": "CLASS A"
+  },
+  "CIK1308161-COMMON": {
+   "cusips": [
+    "65248E104"
+   ],
+   "eras": {
+    "NWS-A@2008-01-16": [
+     [
+      "NWS-A",
+      "2008-01-16",
+      "NEWS CORP",
+      "",
+      ""
+     ],
+     [
+      "NWS-A",
+      "2008-05-31",
+      "NEWS CORP",
+      "",
+      ""
+     ],
+     [
+      "NWS-A",
+      "2008-07-25",
+      "NEWS CORP",
+      "",
+      ""
+     ],
+     [
+      "NWS-A",
+      "2008-11-18",
+      "NEWS CORP",
+      "",
+      ""
+     ],
+     [
+      "NWS-A",
+      "2009-01-23",
+      "NEWS CORP",
+      "",
+      ""
+     ],
+     [
+      "NWS-A",
+      "2009-03-20",
+      "NEWS CORP",
+      "",
+      ""
+     ],
+     [
+      "NWS-A",
+      "2009-06-08",
+      "NEWS CORP",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "placeholder",
+   "issuer_cik": 1308161,
+   "line_tickers": [],
+   "listed": false,
+   "name": "NEWS CORP",
+   "observed": true,
+   "security_type": "",
+   "share_class": "COMMON"
+  },
   "CIK1355096-COMMON": {
    "cusips": [
     "53071M104",
@@ -7744,6 +7854,70 @@
    "observed": true,
    "security_type": "",
    "share_class": "SERIES A"
+  },
+  "CIK1409012-COMMON": {
+   "cusips": [],
+   "eras": {
+    "ABBI@2008-01-16": [
+     [
+      "ABBI",
+      "2008-01-16",
+      "ABRAXIS BIOSCIENCE INC",
+      "",
+      ""
+     ],
+     [
+      "ABBI",
+      "2008-05-31",
+      "ABRAXIS BIOSCIENCE INC",
+      "",
+      ""
+     ],
+     [
+      "ABBI",
+      "2008-07-25",
+      "ABRAXIS BIOSCIENCE INC",
+      "",
+      ""
+     ],
+     [
+      "ABBI",
+      "2008-11-18",
+      "ABRAXIS BIOSCIENCE INC",
+      "",
+      ""
+     ],
+     [
+      "ABBI",
+      "2009-01-23",
+      "ABRAXIS BIOSCIENCE INC",
+      "",
+      ""
+     ],
+     [
+      "ABBI",
+      "2009-03-20",
+      "ABRAXIS BIOSCIENCE INC",
+      "",
+      ""
+     ],
+     [
+      "ABBI",
+      "2009-06-08",
+      "ABRAXIS BIOSCIENCE INC",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "placeholder",
+   "issuer_cik": 1409012,
+   "line_tickers": [],
+   "listed": false,
+   "name": "ABRAXIS BIOSCIENCE INC",
+   "observed": true,
+   "security_type": "",
+   "share_class": "COMMON"
   },
   "CIK1469372-CLASS-A": {
    "cusips": [
