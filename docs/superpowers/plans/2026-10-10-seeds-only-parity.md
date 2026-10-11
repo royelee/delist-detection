@@ -3638,6 +3638,136 @@ Each needs a short trace before a plan, because none was followed to the decidin
 - **Unexplained.** WLL; CEG 2008 (issuer blank after S1); DNB 2020 (issuer blank in the subset
   test, where the fails index was cut at 2024-08-03: recheck at Task 3).
 
+### Task 21: Three smaller causes (S4): a late Form 25, the seed builder's class words, stage 4b's text sources
+
+Three independent changes, one commit each, in this order. Each cause was traced on real data and its rule tried in an
+instrumented clone; read the clone's patch before you write the real thing, and do not copy its environment switches.
+`E` is `/private/tmp/claude-501/-Users-royeli-repo-github-com-delist-detection/a6c3c0f4-120e-40f6-9019-80889ff3e772/scratchpad/exec`.
+The two reference runs are the full run `E/pout-full8` and the seeds run `E/pout-seeds7h` (seed file
+`E/seeds-hist.csv`, cache it left `E/pcache-seeds7h`, code snapshot `E/psnap-seeds7h`).
+
+#### Part A: a Form 25 after the security's last observation
+
+**Why.** `DelistingFinder.find` (`src/delist_detection/endings/delistings.py`) keeps a Form 25 of the issuer only if
+the security is alive at it (`_alive_at`: from its first sighting to its last seen plus `SIBLING_ALIVE_AFTER_DAYS`,
+400) or traded within 30 days of it. In a seeds run a security with no fails rows of its own ends its span at its last
+seed: Sun Microsystems (SUNW, last seed 2008-05-31, Form 25 2010-01-26), Liberty Ventures (LVNTA, history to
+2016-12-30, Form 25 2018-03-19), Paramount class A (VIACA/PARAA, sightings to 2023-12-31, Form 25 2025-08-07). The
+filing is skipped, the fallback writes a continued-filings or an unexplained row, and the full run, whose
+observations reach the end, has the merger. A last observation says the caller held the security then; it does not
+say the security ended there.
+
+**The rule.** When no reference date makes the security alive at a Form 25, the filing is still kept if the
+security's last sighting is one of the caller's observations (not a fails row) and the filing's date is after it.
+Everything else about the scan (`_judge`, the class title, the sibling and tie rules) applies to it as to any kept
+filing. The tried patch is `E/s4/endings/patch4.py` (its switch is `S4RULEA`); the trace's account is in the ledger
+entry "S4 step zero, endings trace".
+
+**Tests** (in the finder's test file, with its fixtures): a security whose last sighting is an observation 600 days
+before its issuer's Form 25, with no fails row after it, gets that Form 25's ending; the same security whose last
+sighting is a fails row 600 days before the filing does not (it stopped trading: today's behaviour); a Form 25 before
+the last observation is not kept by this rule; a second security of the same issuer that is alive at the filing still
+owns it (the rule does not take a filing from a security the existing rules give it to). Prove the first by removing
+the rule.
+
+**Check on real data:**
+`CODE=<your clone of E/psnap-seeds7h with the worktree's src copied over> OBSFILE=E/seeds-hist.csv SRC_CACHE=E/pcache-seeds7h bash E/s2reg/sub_run.sh t21a SUNW JAVA VIACA PARAA VIAC LVNTA QVCA QRTEA`
+(hosts for every `sub_run.sh` call in this task: `data.sec.gov`, `www.sec.gov`, `efts.sec.gov`, `api.openfigi.com`,
+`api.nasdaq.com`, `www.nasdaqtrader.com`, `api.anthropic.com`). Expected, read with `E/rows_of.py`: SUNW
+`CIK709519-COMMON`, VIACA `BBG000BWDFD4` and LVNTA `BBG0038K9G41` each end as in `E/pout-full8` (a merger; LVNTA's
+dlret 0.024523). Put the rows in the report; a difference is a finding to report, not to tune.
+
+Commit: "A Form 25 after the last observation of a security with no later row is kept".
+
+#### Part B: the seed builder keeps a row when the class words change, and the row after an unheld one
+
+**Why.** (1) `scripts/seeds_from_observations.py` cuts a seed on a new name only when `names_agree` fails. "DISCOVERY
+HOLDING CO" and "DISCOVERY INC SERIES A" agree, so the seeds run never learns the class, its Discovery security is
+class COMMON, and the 2022 successor search ties (DISCA and DISCK end as mergers where the full run has the
+continuation into WBD). (2) With `--security-history`, the first snapshot after a ticker changed hands can fall in the
+days when nobody holds it (GCI 2015-06-30: old Gannett left the ticker on 06-26, the new Gannett began 07-01). That
+row is a seed, but its era cannot tell the two lines apart, and the next snapshot, which sits in the new line, is not
+a seed because the holders are "nobody" on both dates.
+
+**The rules,** both additions (`or`-ed on, as the pin and history rules are):
+3. A row is a seed when its name and the ticker's previous row's name are both non-blank and give different share
+   classes. Use the package's own reader of a class from a name (the function `build_securities` and
+   `placeholder_id` rely on; find it by grep for `share_class_from_name`), not a new one.
+4. With a history: a row is a seed when the ticker's previous row became a seed by the holder rule (rule 2: its
+   holders differed from the row before it) and nobody held the ticker on that previous row's date (its holder set
+   was empty). A seed made by rule 4 itself, or by any other rule, does not trigger rule 4: one extra seed per run of
+   unheld snapshots, not one per snapshot.
+
+**Tests** (`tests/test_seeds_from_observations.py`, written first):
+
+```python
+def test_a_row_whose_name_changes_only_its_class_words_is_a_seed():
+    rows = [_o("DISCA", "2008-12-31", "DISCOVERY HOLDING CO"), _o("DISCA", "2009-06-30", "DISCOVERY HOLDING CO"),
+            _o("DISCA", "2009-12-31", "DISCOVERY INC SERIES A"), _o("DISCA", "2010-06-30", "DISCOVERY INC SERIES A")]
+    assert mod.names_agree(rows[1]["name"], rows[2]["name"])            # the name rule alone does not cut here
+    assert _keys(mod.seeds(rows)) == [("DISCA", "2008-12-31"), ("DISCA", "2009-12-31")]
+    blank = [_o("AAA", "2010-06-30", "ALPHA CORP CLASS A"), _o("AAA", "2010-12-31", ""),
+             _o("AAA", "2011-06-30", "ALPHA CORP CLASS A")]
+    assert _keys(mod.seeds(blank)) == [("AAA", "2010-06-30")]            # a blank name is no class change
+
+
+def test_the_row_after_an_unheld_seed_is_a_seed_once():
+    """GCI 2015: old Gannett held the ticker to 2015-06-26 and the previous run has no line after it."""
+    rows = [_o("GCI", d, "GANNETT CO INC") for d in ("2014-12-31", "2015-06-30", "2015-12-31", "2016-06-30")]
+    history = [_h("BBGOLD", "GCI", "2008-01-02", "2015-06-26")]
+    assert _keys(mod.seeds(rows, history=history)) == [("GCI", "2014-12-31"), ("GCI", "2015-06-30"),
+                                                       ("GCI", "2015-12-31")]
+    held = [_h("BBGOLD", "GCI", "2008-01-02", "2015-06-26"), _h("BBGNEW", "GCI", "2015-06-29")]
+    assert _keys(mod.seeds(rows, history=held)) == [("GCI", "2014-12-31"), ("GCI", "2015-06-30")]
+    assert _keys(mod.seeds(rows)) == [("GCI", "2014-12-31")]             # no history: rule 4 is off
+```
+
+If "DISCOVERY HOLDING CO" and "DISCOVERY INC SERIES A" do not give two classes with the package's reader, or
+`names_agree` does not hold for them, stop and report what they give.
+
+**Check on real data** (offline): build `E/task21/seeds-b.csv` with
+`--security-history E/pout-seeds7h/contract/security_history.csv` and report how many seeds it has against the 2,742
+of `E/seeds-hist.csv` built with the same history by the code before this part (build that one too, as
+`E/task21/seeds-before.csv`), how many rows each new rule added, and the added rows of DISCA, DISCK and GCI.
+
+Commit: "The seed builder keeps a class change and the row after an unheld seed".
+
+#### Part C: stage 4b reads the text sources for a line that moved and then stopped
+
+**Why.** `line_follow.follow_lines` reads `text_sources` (the 8-K text that names a new ticker or CUSIP) only in its
+first round and only for a line with no step. Reliant Energy (RRI) takes a step in round 1 (75952B105 to 74971X107,
+RRI Energy), so the later step to GenOn (GEN, 37244E107) is never looked for; the seeds run lacks `BBG000BDB3H1`'s
+later life and Mirant's merger into it is valued at assumed par. The full run observes GEN.
+
+**The rule.** The text sources are read in every round for a line that took a step in an earlier round and has no
+further step in this one (once per line and end, so a line is not read twice for the same end). The tried patch is
+the `TEXTALL` switch in `E/s4/identity/code3` (diff it against `E/psnap-seeds7h`); the trace's account is in the
+ledger entry "S4 step zero, identity trace".
+
+**Tests** (in stage 4b's test file, with its fixtures): a line whose first step is found from the fails rows and whose
+second step is named only by an 8-K's text takes both; a line with no text source behaves as today; the text of a
+line's end is read once however many rounds follow (count the reads). Prove the first by restoring the
+`round_no == 1` condition.
+
+**Check on real data:** `... sub_run.sh t21c RRI GEN MIR` on the seeds side (the same `CODE`, `OBSFILE`,
+`SRC_CACHE` as Part A). Expected: the RRI seed's security is `BBG000BDB3H1` with tickers RRI and GEN as in
+`E/pout-full8`, and Mirant's merger (`BBG000DQV8M1`) names it as acquirer with the full run's dlret (0.056399). Report
+the run's SEC request count for stage 4b from its log (`line follow: N EDGAR requests`).
+
+Commit: "Stage 4b reads the text sources for a line that moved and then stopped".
+
+#### All parts
+
+Run the whole suite once at the end (expected 4,053 passed plus the new tests, 44 xfailed). Update the docs that
+describe each rule: `docs/architecture.md` (the `delistings`, `line_follow` entries), `docs/invariants.md` where it
+states the finder's alive test or stage 4b's rounds, `docs/commands.md` for the seed builder, the script's docstring.
+
+**Not in this task:** making an unobserved CUSIP run between two seeds an era (the ITT and XRX cause); the tie rule
+of the successor search; anything about derived lines; the parity floor.
+
+**Outcome (2026-10-11):** Parts B and C were built (`5f6ebe8`, `84f8637`). Part A was built, checked and not
+kept: see "Checkpoint 6".
+
 ## S5: Acceptance
 
 1. Decision B: delete `cache/ticker_resolution.json`, rerun the full input, judge it with the
@@ -4039,3 +4169,68 @@ run looks like the better one.
 
 **Decision D** (when a caller may send seeds only) asks for `endings_lost`, `kind_changed`, `securities_lost`,
 `seeds_placed_differently` and `truth_cases_failing_only_in_seeds` at 0. They are 0, 11, 8, 16 and 13.
+
+### Checkpoint 6: S4, first step, the floor (Task 21, 2026-10-11)
+
+Code `84f8637` (Task 21's Parts B and C on top of checkpoint 5), run date 2026-09-25, `claude-sonnet-5-5`. The seed
+file is built by the committed seed builder from `data/observations.csv` with the history of checkpoint 5's seeds run:
+2,900 seeds (2,738 by the earlier rules with that history, 95 more by the class-word rule, 67 more by the row after an
+unheld seed).
+
+| Run | Wall | SEC requests |
+|---|---|---|
+| full, `84f8637` | 374 s | 7 |
+| seeds, `84f8637`, 2,900 seeds | 444 s | 394 |
+
+**The full run against checkpoint 5's** (`pout-full8`). Stage 4b now reads the 8-K text sources for a line that moved
+and then stopped (Part C). No ending lost or gained, no kind or value changed. Two placeholders are gone because their
+lines follow through to a composite: Liz Claiborne (LIZ, `CIK352363-COMMON`) onto `BBG000C4WJT9`, the Fifth & Pacific
+and Kate Spade line, and YRC Worldwide (YRCW, `CIK716006-COMMON`) onto `BBG000BX6PW7`. `left_view` 5 to 4,
+placeholders 51 to 49, uncertain endings 112 to 110. `D.mismatches` 148 to 150: the two truth cases
+`CIK352363-COMMON_2012-05-14` and `CIK716006-COMMON_2010-10-04` say "the old event is not the ending, the line ends
+later", which is what the run now does, but they are keyed by the placeholder ids the run no longer has
+(`contract/id_changes.csv` records both). They have to be re-keyed to the composites before `scorecard.py --check` can
+pass.
+
+**The seeds run against the full run.**
+
+| Number | Floor of checkpoint 5 | Now (the new floor) |
+|---|---|---|
+| endings_lost | 0 | 0 |
+| endings_gained | 1 | 1 |
+| kind_changed | 11 | 6 |
+| value_or_date_changed | 5 | 2 |
+| securities_lost | 8 | 3 |
+| securities_gained | 5 | 2 |
+| seeds_placed_differently | 16 | 10 |
+| truth_cases_failing_only_in_seeds | 13 | 5 |
+| observed_flag_differs (not floored) | 0 | 1 |
+
+Coverage: tickers 0.9757 (full 0.9770), securities 0.9799 (full 0.9808), `left_view` 4 in both.
+
+**What is left, by name.**
+
+| List | Names |
+|---|---|
+| kind_changed | NFS, VIACA/PARAA, CEG, SPB, WRK, SUNW |
+| value_or_date_changed | NRF, MTCH (the same ending with another verdict) |
+| securities_lost | XRX (the old line), ANN, WLL |
+| securities_gained | ALEX and DDR placeholders |
+| endings_gained | CFFN (rule J leaves the 2.26-for-1 conversion unjoined) |
+| seeds_placed_differently | ALEX four times, DDR twice, ANN, WLL, WW, XRX |
+| truth cases | ANN 2011, SPB 2018, WLL 2017, SUNW 2010, MRK 2020 |
+
+**Rules that were tried and not kept.** A Form 25 after the last observation of a security with no later row (Task 21
+Part A): as stated it has no bound, and five existing case tests fail (in NCRA a Form 25 of 2019 replaces the
+security's own 2013 merger ending); in the whole run it does not reach VIACA or LVNTA, because a live sibling of the
+issuer takes the filing under the existing tie rule. SUNW and VIACA stay. **Not built yet:** a CUSIP run between two
+seeds that holds no observation becomes a derived era (XRX and ALEX; tried on a subset, it adds 76 eras over the seed
+file and moved ESV).
+
+**The class-word rule is mostly naming drift** (the review's count: of 119 name pairs it fires on, about 80 are one
+security named with and without its class words in turn, 4 are class-to-class changes, 6 are names the file cuts
+inside the class words). It is kept: every added seed is one of the caller's own observations, and the numbers above
+are with it.
+
+**Decision D** asks for `endings_lost`, `kind_changed`, `securities_lost`, `seeds_placed_differently` and
+`truth_cases_failing_only_in_seeds` at 0. They are 0, 6, 3, 10 and 5.
