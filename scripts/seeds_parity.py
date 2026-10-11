@@ -7,7 +7,10 @@ seeds-only run loses or changes (docs/superpowers/plans/2026-10-10-seeds-only-pa
                                                                                    # floor in --floor (data/seeds_parity.json)
   python scripts/seeds_parity.py --full out-full --seeds out-seeds --write-floor   # lower the floor to today's numbers
 
-Offline. Reads each folder's contract/delistings.csv, contract/seeds.csv, securities.csv and scorecard.json.
+Offline. Reads each folder's contract/delistings.csv, contract/seeds.csv, securities.csv (sec_id, observed) and
+scorecard.json. The numbers are the endings and securities one run has and the other lacks, the endings whose kind or
+value or date changed, the seeds placed differently, the truth cases failing only in the seeds run, and
+observed_flag_differs (the securities both runs have whose `observed` flag differs: reported and printed, never floored).
 """
 from __future__ import annotations
 
@@ -21,6 +24,9 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_FLOOR = ROOT / "data" / "seeds_parity.json"
 DLRET_TOL = 0.0005          # two runs' LLM answers can differ in the last digit of a ratio (NVRI, PXP)
 SCORE_KEYS = ("L1.coverage_tickers", "L1.coverage_securities", "L1.left_view", "L1.closed_no_event")
+# Reported, never floored: a line the seeds-only run derives from the fails rows is unobserved there and observed in a
+# full run (the caller kept observing it), so the number says how many of the full run's lines are derived.
+NOT_FLOORED = ("observed_flag_differs",)
 
 
 def _rows(path: Path) -> list[dict[str, str]]:
@@ -63,8 +69,9 @@ def parity(full: Path, seeds: Path) -> dict:
     """The parity numbers (`numbers`), the cases behind each (`cases`) and the two scorecards' lines (`scores`)."""
     f_end = {r["sec_id"]: r for r in _rows(full / "contract" / "delistings.csv")}
     s_end = {r["sec_id"]: r for r in _rows(seeds / "contract" / "delistings.csv")}
-    f_sec = {r["sec_id"] for r in _rows(full / "securities.csv")}
-    s_sec = {r["sec_id"] for r in _rows(seeds / "securities.csv")}
+    f_obs = {r["sec_id"]: r.get("observed", "") for r in _rows(full / "securities.csv")}
+    s_obs = {r["sec_id"]: r.get("observed", "") for r in _rows(seeds / "securities.csv")}
+    f_sec, s_sec = set(f_obs), set(s_obs)
     f_seed = {(r["ticker"], r["as_of"]): r["sec_id"] for r in _rows(full / "contract" / "seeds.csv")}
     s_seed = {(r["ticker"], r["as_of"]): r["sec_id"] for r in _rows(seeds / "contract" / "seeds.csv")}
     f_card = json.loads((full / "scorecard.json").read_text())
@@ -97,6 +104,8 @@ def parity(full: Path, seeds: Path) -> dict:
                             for k in sorted(f_sec - s_sec)],
         "securities_gained": [{"sec_id": k, "seeds_ending": _kind(s_end[k]) if k in s_end else ""}
                               for k in sorted(s_sec - f_sec)],
+        "observed_flag_differs": [{"sec_id": k, "full_observed": f_obs[k], "seeds_observed": s_obs[k]}
+                                  for k in sorted(f_sec & s_sec) if f_obs[k] != s_obs[k]],
         "seeds_placed_differently": [{"ticker": t, "as_of": d, "full_sec_id": f_seed.get((t, d), ""),
                                       "seeds_sec_id": sid}
                                      for (t, d), sid in sorted(s_seed.items()) if f_seed.get((t, d), "") != sid],
@@ -109,7 +118,8 @@ def parity(full: Path, seeds: Path) -> dict:
 
 def drops(numbers: dict[str, int], floor: dict[str, int]) -> list[str]:
     """The numbers above their floor (a number the floor does not name has none)."""
-    return [f"{k}: {floor[k]} -> {v}" for k, v in sorted(numbers.items()) if k in floor and v > floor[k]]
+    return [f"{k}: {floor[k]} -> {v}" for k, v in sorted(numbers.items())
+            if k in floor and k not in NOT_FLOORED and v > floor[k]]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -142,7 +152,7 @@ def main(argv: list[str] | None = None) -> int:
     for line in worse:
         print(f"parity drop: {line}", file=sys.stderr)
     if args.write_floor:
-        new = {k: min(v, floor.get(k, v)) for k, v in result["numbers"].items()}
+        new = {k: min(v, floor.get(k, v)) for k, v in result["numbers"].items() if k not in NOT_FLOORED}
         args.floor.write_text(json.dumps(new, indent=2, sort_keys=True) + "\n")
         print(f"Wrote {args.floor}")
     return 1 if args.check and worse else 0
