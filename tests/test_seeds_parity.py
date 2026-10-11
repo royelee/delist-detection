@@ -94,17 +94,51 @@ def test_a_run_without_an_observed_column_leaves_the_number_not_computed(tmp_pat
     assert "the full run's" in capsys.readouterr().err
 
 
-def test_write_floor_writes_the_committed_floors_eight_keys_and_check_still_holds_them(tmp_path):
+def test_write_floor_writes_the_committed_floors_keys_and_check_still_holds_them(tmp_path):
     committed = Path(seeds_parity.DEFAULT_FLOOR)
     keys = list(json.loads(committed.read_text()))
     full, seeds = _two_runs(tmp_path)
+    floored = sorted(k for k in seeds_parity.parity(full, seeds)["numbers"] if k not in seeds_parity.NOT_FLOORED)
+    assert keys == floored                  # the committed floor names every number the script floors, and no other
     floor = tmp_path / "floor.json"
     args = ["--full", str(full), "--seeds", str(seeds), "--floor", str(floor)]
     assert seeds_parity.main([*args, "--write-floor"]) == 0
     written = json.loads(floor.read_text())
-    assert list(written) == keys and len(keys) == 8                       # the same keys, the same order
+    assert list(written) == keys                       # the same keys, the same order
     assert floor.read_text() == json.dumps(written, indent=2, sort_keys=True) + "\n"    # the same format
     floor.write_text(json.dumps({k: 99 for k in keys}))
     assert seeds_parity.main([*args, "--check"]) == 0                     # the ninth number cannot fail it
     floor.write_text(json.dumps({**{k: 99 for k in keys}, "kind_changed": 0}))
     assert seeds_parity.main([*args, "--check"]) == 1                     # a floored number still does
+
+
+def test_a_floor_file_that_is_not_json_exits_2_naming_the_file_and_line(tmp_path, capsys):
+    full, seeds = _two_runs(tmp_path)
+    floor = tmp_path / "floor.json"
+    floor.write_text('{\n  "endings_lost": 1,\n  oops\n}\n')
+    cases = tmp_path / "cases"
+    args = ["--full", str(full), "--seeds", str(seeds), "--floor", str(floor), "--cases", str(cases)]
+    assert seeds_parity.main([*args, "--check"]) == 2
+    captured = capsys.readouterr()
+    assert str(floor) in captured.err and "line 3" in captured.err
+    assert len(captured.err.strip().splitlines()) == 1                  # one stderr line
+    assert captured.out == "" and not cases.exists()                    # nothing compared, no case list written
+
+
+def test_a_floor_file_that_is_not_an_object_of_numbers_exits_2(tmp_path, capsys):
+    full, seeds = _two_runs(tmp_path)
+    floor = tmp_path / "floor.json"
+    args = ["--full", str(full), "--seeds", str(seeds), "--floor", str(floor)]
+    for bad in ("[1, 2]", '{"endings_lost": "one"}', '{"endings_lost": true}', "3"):
+        floor.write_text(bad)
+        assert seeds_parity.main([*args, "--check"]) == 2, bad
+        err = capsys.readouterr().err
+        assert str(floor) in err and len(err.strip().splitlines()) == 1
+
+
+def test_write_floor_creates_the_floors_parent_folders(tmp_path):
+    full, seeds = _two_runs(tmp_path)
+    floor = tmp_path / "a" / "b" / "floor.json"
+    args = ["--full", str(full), "--seeds", str(seeds), "--floor", str(floor)]
+    assert seeds_parity.main([*args, "--write-floor"]) == 0
+    assert json.loads(floor.read_text())["endings_lost"] == 1

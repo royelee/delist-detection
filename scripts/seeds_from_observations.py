@@ -14,6 +14,8 @@ snapshot after a ticker changed hands can fall in the days nobody holds it, GCI 
 one extra seed per run of unheld snapshots). The history rules need
 two passes for a first run: seeds, a run, seeds again with that run's history. Reset-3 runs classify_universe.py on this file to
 measure what passing seeds only would cost (roadmap: "Risk to measure first").
+A name the observation file cuts inside its class words ("TWENTY FIRST CENTURY FOX INC CLASS") reads as common
+stock, so the first snapshot whose name carries the full class words ("FOX CORP CLASS A") is a seed.
 
     PYTHONPATH=src python scripts/seeds_from_observations.py --observations data/observations.csv --out seeds.csv
 """

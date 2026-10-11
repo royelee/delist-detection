@@ -153,3 +153,13 @@ def test_the_row_after_an_unheld_seed_is_a_seed_once():
     held = [_h("BBGOLD", "GCI", "2008-01-02", "2015-06-26"), _h("BBGNEW", "GCI", "2015-06-29")]
     assert _keys(mod.seeds(rows, history=held)) == [("GCI", "2014-12-31"), ("GCI", "2015-06-30")]
     assert _keys(mod.seeds(rows)) == [("GCI", "2014-12-31")]             # no history: rule 4 is off
+
+
+def test_a_name_cut_inside_its_class_words_reads_as_common_stock_and_the_full_class_words_cut():
+    """The observation file cuts long names ("... INC CLASS"); the class reader gives such a name common stock, so the
+    class rule fires at the first snapshot whose name carries the full class words ("FOX CORP CLASS A"). Accepted: the
+    row is one of the caller's own observations."""
+    rows = [_o("FOXA", "2018-06-30", "TWENTY FIRST CENTURY FOX INC CLASS"),
+            _o("FOXA", "2018-12-31", "TWENTY FIRST CENTURY FOX INC CLASS"),
+            _o("FOXA", "2019-06-30", "FOX CORP CLASS A"), _o("FOXA", "2019-12-31", "FOX CORP CLASS A")]
+    assert _keys(mod.seeds(rows)) == [("FOXA", "2018-06-30"), ("FOXA", "2019-06-30")]

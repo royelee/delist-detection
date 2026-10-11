@@ -132,6 +132,22 @@ def drops(numbers: dict[str, int], floor: dict[str, int]) -> list[str]:
             if k in floor and k not in NOT_FLOORED and v > floor[k]]
 
 
+def read_floor(path: Path) -> dict[str, float]:
+    """The floor file's object of numbers ({} when the file does not exist); ValueError names the file and why not."""
+    if not path.exists():
+        return {}
+    try:
+        floor = json.loads(path.read_text())
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{path}: not valid JSON (line {exc.lineno}: {exc.msg})") from None
+    except (OSError, UnicodeDecodeError) as exc:
+        raise ValueError(f"{path}: cannot be read ({exc})") from None
+    if not isinstance(floor, dict) or not all(isinstance(v, (int, float)) and not isinstance(v, bool)
+                                              for v in floor.values()):
+        raise ValueError(f"{path}: the floor must be a JSON object of numbers")
+    return floor
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--full", required=True, type=Path, help="the full run's output folder")
@@ -141,6 +157,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--check", action="store_true", help="exit 1 if a number is above its floor")
     p.add_argument("--write-floor", action="store_true", help="lower the floor to today's numbers (never raise it)")
     args = p.parse_args(argv)
+    try:
+        floor = read_floor(args.floor)
+    except ValueError as exc:
+        print(f"seeds_parity: {exc}", file=sys.stderr)
+        return 2
     try:
         result = parity(args.full, args.seeds)
     except (OSError, KeyError, ValueError) as exc:
@@ -157,12 +178,12 @@ def main(argv: list[str] | None = None) -> int:
                 w = csv.DictWriter(fh, fieldnames=list(rows[0]) if rows else ["sec_id"], lineterminator="\n")
                 w.writeheader()
                 w.writerows(rows)
-    floor = json.loads(args.floor.read_text()) if args.floor.exists() else {}
     worse = drops(result["numbers"], floor)
     for line in worse:
         print(f"parity drop: {line}", file=sys.stderr)
     if args.write_floor:
         new = {k: min(v, floor.get(k, v)) for k, v in result["numbers"].items() if k not in NOT_FLOORED}
+        args.floor.parent.mkdir(parents=True, exist_ok=True)
         args.floor.write_text(json.dumps(new, indent=2, sort_keys=True) + "\n")
         print(f"Wrote {args.floor}")
     return 1 if args.check and worse else 0
