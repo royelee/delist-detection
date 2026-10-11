@@ -1,0 +1,49 @@
+===== SEEDS-ONLY RUN: golden_failures (7) =====
+ANAT: last_trade_date 2020-07-01 != 2022-05-24; dlret -0.022118 != -0.000105 +/- 0.005; no successor traded ANAT
+CLWR: no single security traded CLWR on 2012-06-29
+MRK-2020: issuer_cik 64978 != 310158; terminal closed_no_event != active
+APTV: no single security traded APTV on 2020-06-30
+ITT: issuer_cik (blank) != 216228; no successor traded ITT
+FOXA-2020: no single security traded FOXA on 2020-06-30
+FOX-2020: no single security traded FOX on 2020-06-30
+===== SEEDS-ONLY RUN: diagnosis_failures (35) =====
+BBG000BBBP59_2016-03-28: exit_kind dropped != merger; drop_reason bankruptcy != (blank); last_trade_date (blank) != 2016-03-17; value_rule otc_print != cash; cash_per_share (blank) != 137.50; cash_currency (blank) != USD; price_sec_id BBG000BBBP59 != (blank); price_ticker PRE != (blank); internal_last_trade_date 2008-11-26 != 2016-03-17
+BBG000BBG3P1_2009-01-25: sec_id (not in the run) != BBG000BBG3P1
+BBG000BHBK84_2017-09-11: ending (no contract row) != present
+BBG000BJVZF7_2014-07-12: price_sec_id CIK1578845-COMMON != BBG000FH8PX5
+BBG000BMB7R1_2016-05-17: sec_id (not in the run) != BBG000BMB7R1
+BBG000BPQD31_2020-11-26: exit_kind merger != exchange; continuation false != true; successor_sec_id (blank) != BBG00Y4RQNH4; last_trade_date 2015-02-27 != (blank); value_rule stock != continuation; stock_ratio 1.000000 != (blank); price_ticker MYL != (blank); price_date 2015-03-02 != (blank); internal_last_trade_date 2015-02-27 != 2020-11-16
+BBG000BTMDX4_2012-04-06: value_rule cash != stock; cash_per_share 44.250000 != (blank); cash_currency USD != (blank); stock_ratio (blank) != 1.0; price_ticker (blank) != ETE; price_date (blank) != 2012-03-27
+BBG000BWPN99_2008-10-11: price_sec_id (blank) != BBG000D52545
+BBG000C0NY96_2019-08-11: price_sec_id (blank) != BBG000BFK8Y6
+BBG000C9N6Q9_2011-03-15: sec_id (not in the run) != BBG000C9N6Q9
+BBG000FJJW82_2008-12-06: sec_id (not in the run) != BBG000FJJW82
+BBG000FL1TC8_2015-08-03: sec_id (not in the run) != BBG000FL1TC8
+BBG000FRVFM1_2011-12-15: ending (no contract row) != present
+BBG000G0PPW3_2016-12-11: exit_kind merger != exchange; continuation false != true; successor_sec_id (blank) != BBG00D3CHRC0; value_rule stock != continuation; stock_ratio 1.000000 != (blank); price_sec_id BBG003FHPBQ9 != (blank); price_ticker EVHC != (blank); price_date 2016-12-02 != (blank)
+BBG000P4BQM9_2018-07-16: exit_kind merger != exchange; continuation false != true; successor_sec_id (blank) != BBG000DS5588; value_rule stock != continuation; stock_ratio 1.000000 != (blank); price_sec_id BBG000DS5588 != (blank); price_ticker SPB != (blank); price_date 2018-07-16 != (blank)
+BBG000QDST26_2016-10-24: ending (no contract row) != present
+BBG0038K9G41_2018-03-19: last_trade_date (blank) != 2018-03-09; stock_ratio 0.400000 != 1.0; price_sec_id BBG00BFHL5F0 != BBG00K7K2XZ0; price_ticker LEXEA != GLIBA; price_date (blank) != 2018-03-12; internal_last_trade_date 2016-11-02 != 2018-03-09
+BBG006XVD9G0_2019-11-30: sec_id (not in the run) != BBG006XVD9G0
+BBG00D1WHZD9_2020-11-09: sec_id (not in the run) != BBG00D1WHZD9
+BBG00WYYC600_2017-11-09: sec_id (not in the run) != BBG00WYYC600
+BBG01HLM8W28_2024-09-19: sec_id (not in the run) != BBG01HLM8W28
+CIK1126294-COMMON_2010-12-03: sec_id (not in the run) != BBG000BDB3H1
+CIK1355096-SERIES-A_2011-10-03: shape ending != no_ending
+CIK708819-COMMON_2018-05-08: sec_id (not in the run) != BBG000BNW1S8
+CIK709519-COMMON_2010-02-05: ending (no contract row) != present
+CIK804055-COMMON_2010-10-15: sec_id (not in the run) != CIK804055-COMMON
+CIK944868-COMMON_2009-11-29: exit_kind merger != exchange; continuation false != true; successor_sec_id (blank) != BBG000FL1TC8; value_rule stock != continuation; stock_ratio 1.000000 != (blank); price_ticker DTV != (blank); price_date 2009-11-20 != (blank)
+BBG000QN4GY3_5a-r1: shape ending != no_ending
+BBG000CHWP52_2022-04-18: ending (no contract row) != present
+BBG000BNY0W3_5b-r1: ending (no contract row) != present
+BBG000R3BYX0_5b-r1: ending (no contract row) != present
+BBG000RFD341_5b-r1: ending (no contract row) != present
+BBG008FCJZ83_5c-r1: exit_kind merger != exchange; continuation false != true; successor_sec_id (blank) != BBG00MRHG523; value_rule stock != continuation; stock_ratio 1.000000 != (blank); price_ticker STE != (blank); price_date 2019-03-28 != (blank)
+BBG000BF6F94_wave2-r1: value_rule unknown != cash; cash_per_share (blank) != 81.160000; cash_currency (blank) != USD
+BBG000C4FB79_wave2-r1: price_sec_id (blank) != BBG000BX6BJ3
+===== FULL RUN: golden_failures (0) =====
+===== FULL RUN: diagnosis_failures (3) =====
+BBG000BTMDX4_2012-04-06: value_rule cash != stock; cash_per_share 44.250000 != (blank); cash_currency USD != (blank); stock_ratio (blank) != 1.0; price_ticker (blank) != ETE; price_date (blank) != 2012-03-27
+BBG000FJJW82_2008-12-06: value_rule cash != cash_plus_stock; cash_per_share 38.000000 != 17.10; stock_ratio (blank) != 0.4543; price_sec_id (blank) != BBG000CKJ0P3; price_ticker (blank) != LIFE; price_date (blank) != 2008-11-24
+BBG000BF6F94_wave2-r1: value_rule cash_plus_stock != cash; cash_per_share 7.290000 != 81.160000; stock_ratio 0.216400 != (blank); price_sec_id BBG000BHLYP4 != (blank); price_ticker CME != (blank); price_date 2008-08-22 != (blank)

@@ -1,0 +1,78 @@
+seed               sec same as full b/f1/f12 ending full | base | f1 | f12
+ABI@2008-01-16     nnn        same  merger 2008-11-21 | merger 2008-11-21 | merger 2008-11-21 | merger 2008-11-21
+ACT@2013-06-28     YYY        same  exchange/cont 2013-09-30 | exchange/cont 2013-09-30 | exchange/cont 2013-09-30 | exchange/cont 2013-09-30
+ACT@2014-12-31     nnY        FIXED merger 2020-05-08 | exchange  | exchange  | merger 2020-05-08
+AGN@2008-01-16     YYY        same  merger 2015-03-16 | merger 2015-03-16 | merger 2015-03-16 | merger 2015-03-16
+AGN@2014-06-30     YYY        same  merger 2015-03-16 | merger 2015-03-16 | merger 2015-03-16 | merger 2015-03-16
+ALEX@2008-01-16    YYY        FIXED merger 2026-03-12 | merger  | merger  | merger 2026-03-12
+AMSG@2016-06-30    YYY        still exchange/cont 2016-12-01 | merger 2016-12-01 | merger 2016-12-01 | merger 2016-12-01
+ANAT@2008-01-16    YYY        still exchange/cont 2020-07-01 | merger 2020-07-01 | merger 2020-07-01 | merger 2020-07-01
+ANN@2008-01-16     nYY        BROKE merger 2015-08-21 | merger 2015-08-21 | merger 2011-03-18 | merger 2011-03-18
+APO@2020-06-30     YYY        FIXED exchange/cont 2021-12-31 | merger 2021-12-31 | merger 2021-12-31 | exchange/cont 2021-12-31
+ARRS@2014-06-30    YYY        FIXED exchange/cont 2016-01-04 | merger 2016-01-04 | merger 2016-01-04 | exchange/cont 2016-01-04
+ATVI@2008-01-16    YYY        FIXED merger 2023-10-12 | merger  | merger  | merger 2023-10-12
+AVGO@2012-06-29    YYY        same  exchange/cont 2016-01-29 | exchange/cont 2016-01-29 | exchange/cont 2016-01-29 | exchange/cont 2016-01-29
+AVGO@2016-06-30    YYY        FIXED exchange/cont  | merger  | merger  | exchange/cont 
+AZPN@2018-06-30    YYY        FIXED exchange/cont  | merger  | merger  | exchange/cont 
+BG@2008-01-16      YYY        FIXED exchange/cont 2023-10-31 | merger 2023-10-31 | merger 2023-10-31 | exchange/cont 2023-10-31
+BSC@2008-01-16     YYY        same  merger 2008-05-30 | merger 2008-05-30 | merger 2008-05-30 | merger 2008-05-30
+CCU@2008-01-16     YYY        same  merger 2008-07-30 | merger 2008-07-30 | merger 2008-07-30 | merger 2008-07-30
+CHTR@2012-06-29    YYY        same  merger  | merger  | merger  | merger 
+CI@2008-01-16      YYY        FIXED exchange/cont  | merger  | merger  | exchange/cont 
+CIT@2008-01-16     YYY        FIXED none | dropped  | dropped 2009-11-02 | none
+CLWR@2008-01-16    YYY        FIXED merger 2013-07-09 | merger  | merger  | merger 2013-07-09
+CR@2008-01-16      YYY        same  exchange/cont 2022-05-16 | exchange/cont 2022-05-16 | exchange/cont 2022-05-16 | exchange/cont 2022-05-16
+DISCA@2008-01-16   YYY        still exchange/cont 2022-04-08 | none | none | merger 2022-04-08
+DKNG@2021-06-30    YYY        FIXED exchange/cont  | merger  | merger  | exchange/cont 
+DOW@2008-01-16     YYY        FIXED exchange/cont 2017-08-31 | none | exchange/cont 2017-08-31 | exchange/cont 2017-08-31
+DOW@2019-06-30     YYY        same  none | none | none | none
+DTV@2008-01-16     YYY        FIXED exchange/cont 2009-11-19 | merger 2009-11-19 | merger 2009-11-19 | exchange/cont 2009-11-19
+DWDP@2017-12-31    nnn        still none | exchange 2019-05-31 | exchange 2019-05-31 | exchange 2019-05-31
+ENDP@2008-01-16    YYY        still exchange/cont 2014-02-28 | merger 2014-02-28 | merger 2014-02-28 | merger 2014-02-28
+EVHC@2013-12-31    YYY        BROKE merger 2016-12-01 | merger 2016-12-01 | merger 2016-12-01 | exchange/cont 2016-12-01
+FERG@2023-06-30    YYY        still exchange/cont 2024-07-31 | merger 2024-07-31 | merger 2024-07-31 | merger 2024-07-31
+FOX@2015-06-30     YYY        same  none | none | merger  | none
+FOXA@2013-12-31    YYY        FIXED none | merger  | merger  | none
+FRX@2008-01-16     YYY        same  merger 2014-06-30 | merger 2014-06-30 | merger 2014-06-30 | merger 2014-06-30
+FRX@2012-06-29     YYY        same  merger 2014-06-30 | merger 2014-06-30 | merger 2014-06-30 | merger 2014-06-30
+FWONA@2017-06-30   YYY        FIXED exchange/cont  | merger 2023-07-18 | merger 2023-07-18 | exchange/cont 
+FWONK@2017-06-30   YYY        FIXED exchange/cont  | merger 2023-07-18 | merger 2023-07-18 | exchange/cont 
+GCI@2008-01-16     nnn        still merger 2026-03-19 | exchange  | exchange  | exchange/cont 
+GCI@2014-12-31     nnn        still merger 2026-03-19 | exchange  | exchange  | exchange/cont 
+GEN@2022-12-31     YYY        same  none | none | none | none
+HTZ@2008-01-16     nnn        still none | dropped 2020-10-29 | dropped 2020-10-29 | exchange/cont 
+HTZ@2014-06-30     nnn        still none | dropped 2020-10-29 | dropped 2020-10-29 | exchange/cont 
+HTZ@2022-06-30     YYY        FIXED none | dropped 2020-10-29 | dropped 2020-10-29 | none
+IGT@2008-01-16     YYY        same  merger 2015-04-06 | merger 2015-04-06 | merger 2015-04-06 | merger 2015-04-06
+IVGN@2008-01-16    nnn        still merger 2014-02-03 | merger 2008-11-21 | merger 2008-11-21 | merger 2008-11-21
+LIFE@2012-06-29    YYY        same  merger 2014-02-03 | merger 2014-02-03 | merger 2014-02-03 | merger 2014-02-03
+LVNTA@2012-12-31   YYY        FIXED merger 2018-03-09 | merger  | merger  | merger 2018-03-09
+LVNTA@2016-12-30   YYY        still exchange/cont  | exchange  | exchange  | exchange 
+MIR@2008-01-16     YYY        same  merger 2010-12-03 | merger 2010-12-03 | merger 2010-12-03 | merger 2010-12-03
+MNST@2008-01-16    YYY        same  merger 2016-10-31 | merger 2016-10-31 | merger 2016-10-31 | merger 2016-10-31
+MNST@2012-06-29    YYY        FIXED exchange/cont  | exchange/cont 2015-06-12 | exchange/cont 2015-06-12 | exchange/cont 
+MRK@2008-01-16     YYY        same  none | none | none | none
+MRVL@2008-01-16    YYY        FIXED exchange/cont  | merger  | merger  | exchange/cont 
+MYL@2008-01-16     YYY        still exchange/cont  | merger 2015-02-27 | merger 2015-02-27 | merger 2015-02-27
+NCNO@2020-12-31    YYY        FIXED exchange/cont 2022-01-07 | merger 2022-01-07 | merger 2022-01-07 | exchange/cont 2022-01-07
+NE@2008-01-16      YYY        still exchange/cont 2009-03-26 | exchange/cont 2013-11-19 | exchange/cont 2013-11-19 | merger 2009-03-26
+NE@2015-06-30      YYY        same  dropped 2020-07-30 | dropped 2020-07-30 | dropped 2020-07-30 | dropped 2020-07-30
+NLSN@2012-06-29    YYY        same  exchange/cont 2015-08-28 | exchange/cont 2015-08-28 | exchange/cont 2015-08-28 | exchange/cont 2015-08-28
+NRF@2014-06-30     YYY        same  exchange/cont  | exchange/cont  | exchange/cont  | exchange/cont 
+RRI@2008-01-16     nnn        still merger 2012-12-14 | exchange  | exchange  | exchange 
+SPB@2014-06-30     YYY        FIXED exchange/cont 2018-07-13 | merger 2018-07-13 | merger 2018-07-13 | exchange/cont 2018-07-13
+STE@2017-06-30     YYY        FIXED exchange/cont 2019-03-27 | merger 2019-03-27 | merger 2019-03-27 | exchange/cont 2019-03-27
+TCF@2012-06-29     nnn        still merger 2019-07-31 | none | none | none
+TCF@2017-06-30     YYY        same  merger 2019-07-31 | merger 2019-07-31 | merger 2019-07-31 | merger 2019-07-31
+TEAM@2016-06-30    YYY        FIXED exchange/cont  | merger  | merger  | exchange/cont 
+TMA@2008-01-16     nnn        same  dropped 2008-12-04 | dropped 2008-12-04 | dropped 2008-12-04 | dropped 2008-12-04
+TWC@2008-01-16     YYY        same  merger 2016-05-17 | merger 2016-05-17 | merger 2016-05-17 | merger 2016-05-17
+TWC@2014-06-30     YYY        same  merger 2016-05-17 | merger 2016-05-17 | merger 2016-05-17 | merger 2016-05-17
+VTRS@2020-12-31    YYY        same  none | none | none | none
+WEN@2008-01-16     YYY        same  merger 2008-09-29 | merger 2008-09-29 | merger 2008-09-29 | merger 2008-09-29
+WFT@2008-01-16     YYY        still exchange/cont  | blank 2009-02-25 | blank 2009-02-25 | exchange/cont 2009-02-25
+WFT@2015-06-30     YYY        still dropped 2019-05-10 | dropped  | dropped  | dropped 
+{'base: ending matches full': 30, 'base: issuer matches full': 65, 'base: sec_id matches full': 61, 'f12: ending matches full': 53, 'f12: issuer matches full': 71, 'f12: sec_id matches full': 63, 'f1: ending matches full': 29, 'f1: issuer matches full': 71, 'f1: sec_id matches full': 62, 'n': 73}
+base securities 83 observed 66 | endings 60 | obs_map rows 74 | seed echo rows 74
+f1 securities 83 observed 66 | endings 62 | obs_map rows 74 | seed echo rows 74
+f12 securities 107 observed 99 | endings 71 | obs_map rows 119 | seed echo rows 119
