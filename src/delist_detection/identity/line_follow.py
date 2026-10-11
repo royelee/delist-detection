@@ -739,8 +739,10 @@ def follow_lines(identity: "Identity", clients: LineSources, *, as_of: date,
 
     A round finds each line's next step in the fails rows (`candidate_steps`, over the rows of the tickers the line
     took in an earlier round too, which the index follows when the round begins: a new CUSIP under the line's ticker,
-    or a ticker of the issuer EDGAR lists today or its 8-K text names (`_Reads.text_sources`, read in the first
-    round for a line with no step that stopped more than `TEXT_SOURCE_DAYS` before the run date); or the same CUSIP
+    or a ticker of the issuer EDGAR lists today or its 8-K text names (`_Reads.text_sources`, read for a line with
+    no step that stopped more than `TEXT_SOURCE_DAYS` before the run date: in the first round, and in a later one
+    for a line that took a step in an earlier round and has no further one, once for each end of a line; the
+    renamed-CUSIP scan behind it is read in the first round only); or the same CUSIP
     under a new ticker), has the index follow the new CUSIPs, asks OpenFIGI for their composites in one
     batch, checks each step against the issuer's filings (`corroborate`) and applies R2 (`decide`, then
     `_today_holder_fold`): the same security takes the new CUSIP and ticker; a placeholder folds into the FIGI line

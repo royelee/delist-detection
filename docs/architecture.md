@@ -825,7 +825,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   (a folded placeholder's moved to its FIGI line, its `no_figi` dropped). Behind it: the rounds, the holders, the
   8-K text sources (`_Reads.text_sources`, the filter before the `MAX_TEXTS` cap, read once per line end in the
   round the line first has no step: YRCW's two reverse splits under its own ticker, then Yellow's YELL and CUSIP
-  985510106, which only the rename 8-K names; for a line they name nothing for, in the first round only,
+  985510106, which only the rename 8-K names; Reliant Energy's RRI Energy step, then the 8-K that names GenOn; for
+  a line they name nothing for, in the first round only,
   an issuer EDGAR dates a rename to within `RENAME_DAYS` of the settled row gets `_Reads.renamed_cusips`: one
   `FtdIndex.every_row` pass over the window for a CUSIP, none of its own, whose rows carry a name the issuer held
   then, DeVry's ATGE that EDGAR no longer lists and the 8-K 5.03 does not name), the fold (`_fold`: a fold of a fold

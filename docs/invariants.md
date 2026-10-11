@@ -371,7 +371,8 @@
 
 - **A line is followed past its observations (sub-plan 5a, rulings R1 and R2).** Stage 4b follows each security
   across a reverse split or a rename the fails rows show after the caller's last observation, before the Form 25
-  search: so a later real ending is found instead of a guess anchored on the old ticker's last row. A step needs a
+  search (a line with no step reads its issuer's 8-K text for a new ticker or CUSIP, in the first round and again for a line
+  that moved and then stopped, once per line end: RRI to RRI Energy to GenOn): so a later real ending is found instead of a guess anchored on the old ticker's last row. A step needs a
   filing that states it (an 8-K 5.03/3.03, an own 8-K12B/12G3, an EDGAR rename, or 8-K text) and an old registrant
   that carries on (a periodic report, an operating company's or a registered investment company's, for a period after the step, or its own 8-K12B; listed today for a step
   within 120 days of the run date; no other CIK's 8-K12B/12G3 naming it). R2 decides identity: the same composite

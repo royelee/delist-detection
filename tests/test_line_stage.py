@@ -319,6 +319,53 @@ def test_a_line_whose_later_step_only_an_8k_names_reads_the_texts_in_that_round(
     assert edgar.read.count(f"k-{renamed}") == 1        # each line end's texts are read once
 
 
+def _moved_then_stopped(naming="the CUSIP number changed to 316645100", steps=1):
+    """A line AA that takes `steps` steps from the fails rows (A1 -> A2 ...) and stops; the coded 8-K 19 days after
+    its last CUSIP's settled last row names 316645100 in its text (`naming`), which trades under FNP from the week
+    after. Returns the EDGAR double, the fails rows and the stage's answer."""
+    chain = [f"A{i}" for i in range(1, steps + 2)]
+    stop = _monday(WEEKS * len(chain) - 1)
+    coded = EdgarSubmission("c1", "8-K", (date.fromisoformat(stop) + timedelta(days=19)).isoformat(), "", "5.03",
+                            "d.htm")
+    rows = _line("AA", chain) + [r for r in _line("FNP", ["X"] * len(chain) + ["316645100"]) if r.cusip != "X"]
+    edgar = _Edgar([*_stating(rows), coded], texts={"c1": naming})
+    return edgar, rows
+
+
+def test_a_line_that_moved_and_then_stopped_reads_the_text_sources_for_its_second_step():
+    """RRI 2009-2010: the step to RRI Energy comes from the fails rows in round 1, the later one to GenOn only from
+    an 8-K's text, which is read for the line's new end in round 2."""
+    edgar, rows = _moved_then_stopped()
+    lines = _follow([_Spec("BBGA", 1, "AA", ["A1"])], rows, edgar=edgar)
+    assert lines.cusips == {"BBGA": ["A1", "A2", "316645100"]}
+    assert lines.securities["BBGA"].line_tickers == {"FNP"}
+    assert [f for _, f in _flags(lines)] == ["line_followed", "line_followed"]
+
+
+def test_a_line_that_moved_and_then_stopped_with_no_text_source_behaves_as_before():
+    edgar, rows = _moved_then_stopped(naming="nothing to see here")
+    lines = _follow([_Spec("BBGA", 1, "AA", ["A1"])], rows, edgar=edgar)
+    assert lines.cusips == {"BBGA": ["A1", "A2"]} and lines.securities["BBGA"].line_tickers == frozenset()
+    assert [f for _, f in _flags(lines)] == ["line_followed"]
+
+
+def test_the_text_of_a_lines_end_is_read_once_however_many_rounds_follow(monkeypatch):
+    """Two steps from the fails rows, then the text of the third round's end: read once, and not in the rounds in
+    which the line still had a step."""
+    from delist_detection.identity import line_follow
+    reads, original = [], line_follow._Reads.text_sources
+
+    def counting(self, s, end):
+        reads.append((s.sec_id, end.settled))
+        return original(self, s, end)
+
+    monkeypatch.setattr(line_follow._Reads, "text_sources", counting)
+    edgar, rows = _moved_then_stopped(steps=2)
+    lines = _follow([_Spec("BBGA", 1, "AA", ["A1"])], rows, edgar=edgar)
+    assert lines.cusips == {"BBGA": ["A1", "A2", "A3", "316645100"]}
+    assert reads == [("BBGA", _monday(WEEKS * 3 - 1))]
+
+
 # --- failures: the ones that stop the run, and the reads that are reported, never cached ---------------------------
 
 def test_openfigi_unavailable_inside_the_stage_stops_the_run():
