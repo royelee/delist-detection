@@ -260,3 +260,10 @@ def test_one_shared_word_still_agrees_only_where_a_side_has_one_word():
     assert names_agree("JETBLUE AIRWAYS CORP", "U S AIRWAYS GROUP INC")
     assert not names_agree("JETBLUE AIRWAYS CORP", "DELTA AIR LINES INC")
     assert not names_agree("AMERICAN AIRWAYS HOLDINGS", "ALASKA AIRWAYS HOLDINGS")   # one shared word of two and two
+
+
+def test_description_name_is_the_issuers_name_without_the_securitys_tail():
+    from delist_detection.vocabulary.names import description_name
+    assert description_name("CYTTA CORP NEW COM STK (NV)") == "CYTTA CORP NEW COM STK"
+    assert description_name("  wendy's/arby's group inc cl a ") == "WENDY'S/ARBY'S GROUP INC CL A"
+    assert description_name("APPLE INC;COM NPV") == "APPLE INC" and description_name("") == ""

@@ -47,7 +47,9 @@ from ..sources.ftd import FTD_START, FtdIndex, FtdRow
 from ..vocabulary.identifiers import is_placeholder, name_class_letter, placeholder_id, share_class_from_name
 from .issuer_record import IssuerRecord
 from ..outputs.manifest import StageMeter
-from ..vocabulary.names import description_matches, description_names, names_agree, names_an_issuer
+from ..vocabulary.names import (
+    description_matches, description_name, description_names, names_agree, names_an_issuer,
+)
 from .observations import (
     ERA_GAP_DAYS, Observation, ObservationError, ObservationIndex, TickerEra, eras_by_key, number_eras,
 )
@@ -164,13 +166,17 @@ def _quiet(*_: Any) -> None:
 
 
 def identify(index: ObservationIndex, clients: Sources, *, as_of: date, limit: int | None = None,
-             log: Callable[[str], None] = _quiet, workers: int = 1, meter: StageMeter | None = None) -> Identity:
+             log: Callable[[str], None] = _quiet, workers: int = 1, meter: StageMeter | None = None,
+             derive: Collection[tuple[str, str]] = (), ftd: FtdIndex | None = None) -> Identity:
     """Stages 1 to 4 over the observations of `index` (its first `limit` eras under `limit`), every window ending on
     the run date `as_of`; `log` takes one line per step, `meter` the SEC traffic of issuer resolution, and `workers`
     > 1 fills the EDGAR caches ahead on that many threads. Raises `ObservationError` when there is no observation;
-    a refusal (`fatal.FATAL`) or an OpenFIGI outage stops it."""
+    a refusal (`fatal.FATAL`) or an OpenFIGI outage stops it.
+
+    `derive` and `ftd`: the derived-line pairs (`derived_lines.identify_with_lines`) and the fails index an earlier call
+    opened, which a repeat reads in place of opening its own (the rows `follow_lines` added to it stay)."""
     meter = meter if meter is not None else StageMeter(log)
-    eras, era_by_key, ftd = _refine(index, clients.ftd_client, as_of, limit, log)                       # 1
+    eras, era_by_key, ftd = _refine(index, clients.ftd_client, as_of, limit, log, derive, ftd)          # 1
     handoffs = cusip_handoffs(eras, ftd)        # the CUSIP links between the eras: the second pass and stage 3 read them
     found = _resolve_issuers(eras, ftd, handoffs, clients, log, workers, meter)                          # 2, 2b
     resolutions, securities, review = _resolve_securities(eras, era_by_key, ftd, handoffs, found, clients, log)  # 3
@@ -181,7 +187,8 @@ def identify(index: ObservationIndex, clients: Sources, *, as_of: date, limit: i
 
 
 def _refine(index: ObservationIndex, ftd_client: Any, as_of: date, limit: int | None,
-            log: Callable[[str], None]) -> tuple[list[TickerEra], dict[str, TickerEra], FtdIndex]:
+            log: Callable[[str], None], derive: Collection[tuple[str, str]] = (),
+            ftd: FtdIndex | None = None) -> tuple[list[TickerEra], dict[str, TickerEra], FtdIndex]:
     """1. The observation eras, refined on SEC fails-to-deliver evidence: the run's
     fails index is opened over `ftd_client` with the eras' tickers' and CUSIPs' rows
     first (they date each era's real last sighting), then each era is split further
@@ -204,9 +211,10 @@ def _refine(index: ObservationIndex, ftd_client: Any, as_of: date, limit: int | 
         first_seen[e.ticker] = min(e.first, first_seen.get(e.ticker, e.first))
         if "-" in e.ticker:
             class_names[e.ticker] += e.names
-    ftd = FtdIndex.opened(ftd_client, lo, hi, through=as_of, symbols={e.ticker for e in eras},
-                          cusips={c for e in eras for c in e.cusips}, names=class_names, first_seen=first_seen)
-    eras = refine_eras(eras, ftd)
+    if ftd is None:
+        ftd = FtdIndex.opened(ftd_client, lo, hi, through=as_of, symbols={e.ticker for e in eras},
+                              cusips={c for e in eras for c in e.cusips}, names=class_names, first_seen=first_seen)
+    eras = refine_eras(eras, ftd, derive)
     era_by_key = eras_by_key(eras)               # raises on a duplicate key: an era is never dropped
     log(f"{len(eras)} eras after the FTD split")
     return eras, era_by_key, ftd
@@ -509,13 +517,34 @@ def _described(cusip: str, rows: Sequence[FtdRow], names: Sequence[str]) -> bool
     return any(names_agree(r.description, n) for r in rows if r.cusip == cusip for n in names)
 
 
-def _split_era(era: TickerEra, rows: list[FtdRow], *, contested: bool) -> list[TickerEra]:
+DERIVED_NAME_DAYS = 30     # a derived era is named by the description its CUSIP's rows carry in their first days
+
+
+def _derived_era(era: TickerEra, part_rows: Sequence[FtdRow], kept: tuple[str, ...]) -> TickerEra:
+    """The era of a line no caller observation names: one derived observation dated at the part's first row and named
+    by the commonest description of its CUSIP's rows in their first `DERIVED_NAME_DAYS` days. No pin: the observation
+    carries none, and the era's own CUSIPs are the part's."""
+    first = part_rows[0].date
+    until = (date.fromisoformat(first) + timedelta(days=DERIVED_NAME_DAYS)).isoformat()
+    seen = Counter(r.description for r in part_rows if r.cusip == kept[0] and r.date <= until)
+    name = description_name(seen.most_common(1)[0][0]) if seen else ""
+    return TickerEra(era.ticker, first, first, [Observation(era.ticker, first, name or None, derived=True)],
+                     ftd_cusips=kept)
+
+
+def _split_era(era: TickerEra, rows: list[FtdRow], *, contested: bool,
+               derive: Collection[str] = ()) -> list[TickerEra]:
     out: list[TickerEra] = []
     for g_obs, g_rows in _cut(era.observations, rows, _gap_cuts(era.observations, rows)):
+        follows = False                   # the part before is an era of this group: a line is derived only after one
         for obs, part_rows in _cut(g_obs, g_rows, _switch_cuts(g_rows)):
-            if not obs:
-                continue                  # an FTD-only side (another holder of the ticker, a tail) is no era
             kept = _kept_cusips(part_rows)
+            if not obs:                   # an FTD-only side (another holder of the ticker, a tail) is no era ...
+                follows = follows and bool(kept) and kept[0] in derive      # ... unless a derived line (`derive`)
+                if follows:
+                    out.append(_derived_era(era, part_rows, kept))
+                continue
+            follows = True
             names = [o.name for o in obs if o.name]
             if contested and names:
                 # Another era of this ticker has observations on the same dates
@@ -527,7 +556,8 @@ def _split_era(era: TickerEra, rows: list[FtdRow], *, contested: bool) -> list[T
     return out
 
 
-def refine_eras(eras: Sequence[TickerEra], ftd: FtdIndex) -> list[TickerEra]:
+def refine_eras(eras: Sequence[TickerEra], ftd: FtdIndex,
+                derive: Collection[tuple[str, str]] = ()) -> list[TickerEra]:
     """Stage 2 of era building (stage 1 is `observations.split_eras`): split each
     observation era further on SEC fails-to-deliver evidence under its ticker.
 
@@ -563,6 +593,10 @@ def refine_eras(eras: Sequence[TickerEra], ftd: FtdIndex) -> list[TickerEra]:
     Every era is kept, under a unique key (`observations.number_eras`).
     Over-splitting is cheap: `build_securities` merges eras that resolve to the
     same FIGI.
+
+    `derive`: (ticker, CUSIP) pairs the caller approved (`derived_lines.derivable`): a part of the ticker's rows with
+    no observation whose kept CUSIP is approved, that follows an era of its gap group and whose CUSIP the ticker's
+    next era does not trade, is an era with one derived observation (`_derived_era`).
     """
     spans: dict[str, list[tuple[str, str]]] = defaultdict(list)
     seen_on: Counter[tuple[str, str]] = Counter()
@@ -576,7 +610,9 @@ def refine_eras(eras: Sequence[TickerEra], ftd: FtdIndex) -> list[TickerEra]:
         lo = (date.fromisoformat(prev) + timedelta(days=1)).isoformat() if prev else None
         hi = (date.fromisoformat(nxt) - timedelta(days=1)).isoformat() if nxt else None
         contested = any(seen_on[(e.ticker, o.as_of)] > 1 for o in e.observations)
-        out += _split_era(e, ftd.by_symbol(e.ticker, lo, hi), contested=contested)
+        later = {r.cusip for r in ftd.by_symbol(e.ticker, nxt)} if nxt and derive else set()   # the next era's own
+        approved = {c for t, c in derive if t == e.ticker and c not in later}
+        out += _split_era(e, ftd.by_symbol(e.ticker, lo, hi), contested=contested, derive=approved)
     return number_eras(out)
 
 

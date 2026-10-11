@@ -622,9 +622,12 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   and former). The era-level passes, which read the run's other eras and its fails rows and are never saved,
   are `identity.EraIssuers`.
 - `identity/identity.py` — architecture step 6: a security's identity, stages 1 to 4 behind one interface.
-  `identify(index, clients, as_of=, limit=, log=, workers=, meter=)` gives `Identity`: the refined eras
+  `identify(index, clients, as_of=, limit=, log=, workers=, meter=, derive=, ftd=)` gives `Identity`: the refined eras
   (`refine_eras`, the second split after `observations.split_eras`: a CUSIP switch under the ticker, or a gap over
-  `ERA_GAP_DAYS` no fails row bridges) and the run's fails index, opened by stage 1 over the fails files (`ftd`;
+  `ERA_GAP_DAYS` no fails row bridges; its `derive` pairs (ticker, CUSIP) keep a part with no observation as an era
+  of one derived observation, `_derived_era`, when it follows an era of its gap group and the ticker's next era does
+  not trade its CUSIP; `identify`'s `derive` is the same set and its `ftd` an index an earlier call opened, read in
+  place of a new one) and the run's fails index, opened by stage 1 over the fails files (`ftd`;
   `ftd_lo`, its `opened_from`; later stages ask it for more rows), each era's issuer (`issuers`, by era key, the one source of an era's CIK: asked at its capped date and at its last sighting,
   `era_capped_seen` and `era_last_seen`, with its own pin, name and first sighting; `choose_first_pass` takes one answer), each era's FIGI resolution, the securities, each
   security's CUSIPs over its whole life (`cusips`, their rows followed to the run date), the identity review items, and the

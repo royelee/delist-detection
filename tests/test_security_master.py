@@ -1593,3 +1593,69 @@ def test_a_derived_observation_is_no_conflict():
     res[other.key] = EraResolution(other.key, "BBGY", "cusip", None, ())
     (item,) = observation_conflict_review([caller, other, derived], res)        # two caller names do conflict
     assert "X CO NEW" not in item.reason and "OTHER CO" in item.reason and "2 names" in item.reason
+
+
+X_OBS = (("2020-01-15", "X CO"), ("2020-06-30", "X CO"), ("2020-12-31", "X CO"))
+
+
+def _x_rows():
+    return (_rows("X", "AAA", ["2020-01-02", "2020-02-03", "2020-03-02", "2020-04-01"])
+            + _rows("X", "BBB", ["2020-09-01", "2020-10-01", "2020-11-02", "2021-01-04"], "X CO NEW")
+            + _rows("X", "CCC", ["2021-03-01", "2021-04-01", "2021-05-03"], "X CO NEWER, INC (DE)"))
+
+
+def test_a_derived_part_is_an_era_with_one_derived_observation_and_no_pin():
+    era = _era("X", *X_OBS)
+    [a, b, c] = refine_eras([era], FtdIndex(_x_rows()), {("X", "CCC")})
+    assert (c.key, c.first, c.last, c.derived, c.ftd_cusips) == ("X@2021-03-01", "2021-03-01", "2021-03-01", True,
+                                                                 ("CCC",))
+    assert c.observations == [Observation("X", "2021-03-01", "X CO NEWER, INC", derived=True)]
+    assert (c.cik_pin, c.sec_id_pin, c.cusips) == (None, None, [])
+    assert not a.derived and not b.derived
+
+
+def test_a_part_nobody_approved_or_approved_for_another_ticker_is_dropped_as_before():
+    era = _era("X", *X_OBS)
+    assert len(refine_eras([era], FtdIndex(_x_rows()))) == 2
+    assert len(refine_eras([era], FtdIndex(_x_rows()), {("Y", "CCC"), ("X", "ZZZ")})) == 2
+
+
+def test_a_chain_of_derived_parts_is_followed_and_a_dropped_part_breaks_it():
+    rows = _x_rows() + _rows("X", "DDD", ["2021-07-01", "2021-08-02", "2021-09-01"], "X CO NEWEST")
+    era = _era("X", *X_OBS)
+    got = refine_eras([era], FtdIndex(rows), {("X", "CCC"), ("X", "DDD")})
+    assert [(e.first, e.derived) for e in got] == [("2020-01-15", False), ("2020-12-31", False), ("2021-03-01", True),
+                                                   ("2021-07-01", True)]
+    broken = refine_eras([era], FtdIndex(rows), {("X", "DDD")})            # CCC is not approved: DDD follows no era
+    assert [e.first for e in broken] == ["2020-01-15", "2020-12-31"]
+
+
+def test_a_part_before_the_first_observation_or_after_a_hole_is_no_derived_line():
+    late = _era("X", ("2020-09-15", "X CO"), ("2020-12-31", "X CO"))
+    assert all(not e.derived for e in refine_eras([late], FtdIndex(_x_rows()), {("X", "AAA")}))   # AAA precedes it
+    hole = _rows("X", "EEE", ["2023-03-01", "2023-04-03", "2023-05-01"])         # more than 400 days after the last row
+    got = refine_eras([_era("X", *X_OBS)], FtdIndex(_x_rows() + hole), {("X", "EEE")})
+    assert all(not e.derived for e in got)
+
+
+def test_refine_reads_the_fails_index_it_is_given_and_derives_from_it():
+    from delist_detection.identity.identity import _refine
+
+    class _NoClient:
+        def __getattr__(self, name):
+            raise AssertionError("the fails index was opened again")
+
+    index = ObservationIndex([Observation("X", d, n) for d, n in X_OBS])
+    eras, by_key, got = _refine(index, _NoClient(), date(2022, 1, 1), None, lambda _: None, {("X", "CCC")},
+                                FtdIndex(_x_rows()))
+    assert [e.derived for e in eras] == [False, False, True] and "X@2021-03-01" in by_key
+
+
+def test_a_cusip_the_next_era_of_the_ticker_trades_is_that_eras_not_a_derived_line():
+    first = _era("X", ("2020-01-15", "X CO"), ("2020-12-31", "X CO"))
+    second = _era("X", ("2023-06-30", "Y CORP"), ("2023-12-31", "Y CORP"))      # the name stopped agreeing: a second era
+    rows = (_rows("X", "AAA", ["2020-01-02", "2020-02-03", "2020-03-02"])
+            + _rows("X", "BBB", ["2021-03-01", "2021-04-01", "2021-05-03", "2023-07-03", "2023-08-01", "2023-09-01"],
+                    "Y CORP"))
+    got = refine_eras([first, second], FtdIndex(rows), {("X", "BBB")})
+    assert [(e.first, e.derived) for e in got] == [("2020-01-15", False), ("2023-06-30", False)]

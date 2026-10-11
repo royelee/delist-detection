@@ -130,6 +130,12 @@ def _name_part(description: str) -> str:
     return re.split(r"[;(]", (description or "").upper(), maxsplit=1)[0]
 
 
+def description_name(description: str) -> str:
+    """The issuer's name in a fails-to-deliver description: it without its security tail ("CYTTA CORP NEW COM STK
+    (NV)" is "CYTTA CORP NEW COM STK"), upper case, single-spaced; empty for a description with none."""
+    return " ".join(_name_part(description).split())
+
+
 def _issuer_words(text: str) -> list[set[str]]:
     """`_words` minus security words, each word also without a plural S
     (HANESBRANDS and HANESBRAND are one word)."""
