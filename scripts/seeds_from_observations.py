@@ -26,6 +26,13 @@ arguments after `--`; the last run is the seeds-only run on the file written to 
     PYTHONPATH=src python scripts/seeds_from_observations.py --observations data/observations.csv --out seeds.csv
     PYTHONPATH=src python scripts/seeds_from_observations.py --observations data/observations.csv --out seeds.csv \\
         --fixed-point fp -- --as-of 2026-09-25 --cache-dir cache-seeds --extract-merger-terms-llm
+
+--warm-start SEEDS.csv (with --fixed-point) is for development checks: pass 1 starts from the seeds without a history
+together with every row of an earlier fixed point's seed file, so a check usually needs one run instead of four. Every
+row of that file must be a row of --observations on all columns (a row that is not exits 2, one stderr line naming the
+file and the line). The loop is otherwise the same: a seed once chosen stays, and it stops when a pass adds none. A
+warm start can keep a seed the code under test would not add, so the file it writes is not an acceptance file:
+passes.csv has a warm_start column and the closing line names the file. Acceptance uses the cold start (no option).
 """
 from __future__ import annotations
 
@@ -105,12 +112,14 @@ class NoFixedPoint(Exception):
 
 def fixed_point(rows: list[dict[str, str]], run: Callable[[list[dict[str, str]], int], list[dict[str, str]]],
                 max_passes: int = 8, on_pass: Callable[[dict[str, int]], None] | None = None,
+                warm: list[dict[str, str]] | None = None,
                 ) -> tuple[list[dict[str, str]], list[dict[str, int]]]:
     """Seeds no run's history adds to: pass k runs on the seeds so far and adds the seeds its history calls for.
     run(seed_rows, k) returns that run's security history rows. Returns the seeds (in seeds()' order, the caller's
     own row objects) and one {pass, seeds, added} per pass, each also given to on_pass as it is made; raises
-    NoFixedPoint if pass max_passes still added."""
-    chosen = {id(r) for r in seeds(rows)}
+    NoFixedPoint if pass max_passes still added. warm: rows of `rows` (the caller's own row objects) that are seeds
+    from the start, in addition to the seeds without a history."""
+    chosen = {id(r) for r in seeds(rows)} | {id(r) for r in warm or ()}
     passes = []
     for k in range(1, max_passes + 1):
         current = [r for _, rs in _by_ticker(rows) for r in rs if id(r) in chosen]
@@ -159,14 +168,38 @@ def _write(path, fields: list[str], rows: list[dict[str, str]]) -> None:
         w.writerows(rows)
 
 
-def _run_passes(rows, fields, work: Path, run_args: list[str], max_passes: int):
+def read_warm_start(path: str, fields: list[str], rows: list[dict[str, str]]) -> list[dict[str, str]] | None:
+    """The observation rows (the caller's own objects) a warm-start seed file names, or None after one stderr line
+    naming the file and the first line whose row is not a row of the observations on all columns."""
+    by_key = {tuple(r.get(c, "") for c in fields): r for r in reversed(rows)}
+    with open(path, newline="", encoding="utf-8-sig") as fh:
+        reader = csv.DictReader(fh)
+        if list(reader.fieldnames or []) != list(fields):
+            print(f"{path}:1: header is not the observations' header", file=sys.stderr)
+            return None
+        out = []
+        for r in reader:
+            row = by_key.get(tuple(r.get(c) or "" for c in fields))
+            if row is None:
+                print(f"{path}:{reader.line_num}: not a row of the observations", file=sys.stderr)
+                return None
+            out.append(row)
+    return out
+
+
+def _run_passes(rows, fields, work: Path, run_args: list[str], max_passes: int, warm=None,
+                warm_path: str | None = None):
     work.mkdir(parents=True, exist_ok=True)
     exits: list[int] = []
     done: list[dict] = []
 
     def on_pass(record):
         done.append({**record, "exit": exits[-1]})
-        _write(work / "passes.csv", ["pass", "seeds", "added", "exit"], done)
+        if warm_path:
+            _write(work / "passes.csv", ["pass", "seeds", "added", "exit", "warm_start"],
+                   [{**d, "warm_start": warm_path} for d in done])
+        else:
+            _write(work / "passes.csv", ["pass", "seeds", "added", "exit"], done)
         print(f"pass {record['pass']}: {record['added']} seeds added", flush=True)
 
     def run(seed_rows, k):
@@ -182,7 +215,7 @@ def _run_passes(rows, fields, work: Path, run_args: list[str], max_passes: int):
             raise _RunFailed(2, f"pass {k}: run-{k} wrote no readable security history")
         return history
 
-    return fixed_point(rows, run, max_passes, on_pass)
+    return fixed_point(rows, run, max_passes, on_pass, warm)
 
 
 def main() -> int:
@@ -198,10 +231,17 @@ def main() -> int:
     p.add_argument("--fixed-point", type=Path, default=None, metavar="DIR",
                    help="run classify_universe.py on the seeds pass by pass (arguments after --), adding the "
                         "seeds each run's history calls for, until a pass adds none")
+    p.add_argument("--warm-start", default=None, metavar="SEEDS.csv",
+                   help="with --fixed-point, for development checks: pass 1 also starts with every row of this "
+                        "earlier fixed point's seed file (each must be a row of --observations); acceptance uses "
+                        "the cold start")
     p.add_argument("--max-passes", type=int, default=8)
     args = p.parse_args(argv)
     if args.fixed_point and args.security_history:
         print("--fixed-point starts from no history; drop --security-history", file=sys.stderr)
+        return 2
+    if args.warm_start and not args.fixed_point:
+        print("--warm-start needs --fixed-point", file=sys.stderr)
         return 2
     owned = [a for a in run_args if a.split("=")[0] in RUN_OWNS]
     if owned:
@@ -216,15 +256,22 @@ def main() -> int:
         reader = csv.DictReader(fh)
         fields, rows = reader.fieldnames or [], list(reader)
     if args.fixed_point:
+        warm = None
+        if args.warm_start:
+            warm = read_warm_start(args.warm_start, fields, rows)
+            if warm is None:
+                return 2
         try:
-            out, passes = _run_passes(rows, fields, args.fixed_point, run_args, args.max_passes)
+            out, passes = _run_passes(rows, fields, args.fixed_point, run_args, args.max_passes, warm,
+                                      args.warm_start)
         except _RunFailed as exc:
             print(exc, file=sys.stderr)
             return exc.code
         except NoFixedPoint as exc:
             print(exc, file=sys.stderr)
             return 1
-        print(f"fixed point after {len(passes)} passes; the seeds-only run on it is {args.fixed_point / f'run-{len(passes)}'}")
+        note = f" (WARM-STARTED from {args.warm_start}: a development file, not an acceptance one)" if warm is not None else ""
+        print(f"fixed point after {len(passes)} passes{note}; the seeds-only run on it is {args.fixed_point / f'run-{len(passes)}'}")
     else:
         out = seeds(rows, history)
     _write(args.out, fields, out)
