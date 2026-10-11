@@ -163,3 +163,126 @@ def test_a_name_cut_inside_its_class_words_reads_as_common_stock_and_the_full_cl
             _o("FOXA", "2018-12-31", "TWENTY FIRST CENTURY FOX INC CLASS"),
             _o("FOXA", "2019-06-30", "FOX CORP CLASS A"), _o("FOXA", "2019-12-31", "FOX CORP CLASS A")]
     assert _keys(mod.seeds(rows)) == [("FOXA", "2018-06-30"), ("FOXA", "2019-06-30")]
+
+
+# The fixed point: seeds without a history, a run, then seeds again with each run's history, adding seeds until a
+# pass adds none. Here the run is a function; the CLI's run is classify_universe.py.
+
+SWITCH = [_h("BBGOLD", "FOXA", "2013-07-03", "2019-03-19"), _h("BBGNEW", "FOXA", "2019-03-20")]
+ONE = [_h("BBGOLD", "FOXA", "2013-07-03")]
+
+
+def test_the_fixed_point_adds_holder_seeds_until_a_pass_adds_none():
+    seen = []
+
+    def run(seed_rows, k):
+        seen.append((k, _keys(seed_rows)))
+        return SWITCH
+    out, passes = mod.fixed_point(FOXA, run)
+    assert _keys(out) == [("FOXA", "2018-06-30"), ("FOXA", "2019-06-30")]
+    assert seen == [(1, [("FOXA", "2018-06-30")]), (2, [("FOXA", "2018-06-30"), ("FOXA", "2019-06-30")])]
+    assert passes == [{"pass": 1, "seeds": 1, "added": 1}, {"pass": 2, "seeds": 2, "added": 0}]
+
+
+def test_a_seed_a_pass_added_stays_when_a_later_history_no_longer_calls_for_it():
+    histories = {1: SWITCH, 2: ONE}
+    out, passes = mod.fixed_point(FOXA, lambda seed_rows, k: histories[k])
+    assert _keys(out) == [("FOXA", "2018-06-30"), ("FOXA", "2019-06-30")]
+    assert [p["added"] for p in passes] == [1, 0]
+
+
+def test_no_holder_change_means_one_run_and_the_plain_seeds():
+    out, passes = mod.fixed_point(FOXA, lambda seed_rows, k: ONE)
+    assert _keys(out) == _keys(mod.seeds(FOXA))
+    assert passes == [{"pass": 1, "seeds": 1, "added": 0}]
+
+
+def test_the_fixed_point_keeps_the_seed_order_and_the_callers_rows():
+    rows = FOXA + [_o("BBB", "2010-06-30", "BETA INC")]
+    out, _ = mod.fixed_point(rows, lambda seed_rows, k: SWITCH)
+    assert _keys(out) == [("BBB", "2010-06-30"), ("FOXA", "2018-06-30"), ("FOXA", "2019-06-30")]
+    assert all(any(r is o for o in rows) for r in out)
+
+
+def _one_more_each_pass(seed_rows, k):
+    """Each seed held for its own day only, and a new holder from the day after the last seed: the run after a pass
+    always finds the next row's holder changed."""
+    from datetime import date, timedelta
+    last = date.fromisoformat(seed_rows[-1]["as_of"]) + timedelta(days=1)
+    return ([_h(f"BBG{i}", "AAA", r["as_of"], r["as_of"]) for i, r in enumerate(seed_rows)]
+            + [_h("BBGNEXT", "AAA", last.isoformat())])
+
+
+def test_a_loop_still_adding_at_the_cap_raises_and_one_given_room_ends():
+    rows = [_o("AAA", d, "ALPHA CORP") for d in ("2010-06-30", "2010-12-31", "2011-06-30", "2011-12-31")]
+    try:
+        mod.fixed_point(rows, _one_more_each_pass, max_passes=2)
+    except mod.NoFixedPoint as exc:
+        assert "2 passes" in str(exc)
+    else:
+        raise AssertionError("expected NoFixedPoint")
+    out, passes = mod.fixed_point(rows, _one_more_each_pass, max_passes=4)
+    assert _keys(out) == _keys(rows)
+    assert [p["added"] for p in passes] == [1, 1, 1, 0]
+
+
+def _fake_classify(histories, calls):
+    """A stand-in for classify_universe.py: writes the pass's history where a run writes it."""
+    def run_classify(seed_path, out_dir, run_args, log_path):
+        import csv
+        calls.append((Path(seed_path).name, Path(out_dir).name, list(run_args)))
+        k = len(calls)
+        (Path(out_dir) / "contract").mkdir(parents=True, exist_ok=True)
+        with (Path(out_dir) / "contract" / "security_history.csv").open("w", newline="") as fh:
+            w = csv.DictWriter(fh, fieldnames=list(_h("x", "x", "x")))
+            w.writeheader()
+            w.writerows(histories[k])
+        Path(log_path).write_text("ok\n")
+        return 3 if k == 1 else 0                       # a completed run with review rows counts as a run
+    return run_classify
+
+
+def test_the_cli_fixed_point_runs_each_pass_and_writes_the_last_seed_file(tmp_path, monkeypatch, capsys):
+    import csv
+    obs, out, work = tmp_path / "obs.csv", tmp_path / "seeds.csv", tmp_path / "fp"
+    _write_obs(obs)
+    calls = []
+    monkeypatch.setattr(mod, "run_classify", _fake_classify({1: SWITCH, 2: SWITCH}, calls))
+    monkeypatch.setattr("sys.argv", ["seeds_from_observations.py", "--observations", str(obs), "--out", str(out),
+                                     "--fixed-point", str(work), "--", "--as-of", "2026-09-25", "--sec-workers", "1"])
+    assert mod.main() == 0
+    assert calls == [("seeds-1.csv", "run-1", ["--as-of", "2026-09-25", "--sec-workers", "1"]),
+                     ("seeds-2.csv", "run-2", ["--as-of", "2026-09-25", "--sec-workers", "1"])]
+    with out.open(newline="") as fh:
+        assert _keys(list(csv.DictReader(fh))) == [("FOXA", "2018-06-30"), ("FOXA", "2019-06-30")]
+    assert out.read_text() == (work / "seeds-2.csv").read_text()
+    with (work / "passes.csv").open(newline="") as fh:
+        assert list(csv.DictReader(fh)) == [{"pass": "1", "seeds": "1", "added": "1", "exit": "3"},
+                                            {"pass": "2", "seeds": "2", "added": "0", "exit": "0"}]
+    assert "run-2" in capsys.readouterr().out          # the last run is the seeds run on the fixed point
+
+
+def test_the_cli_stops_at_a_failed_run_and_writes_no_seed_file(tmp_path, monkeypatch, capsys):
+    obs, out, work = tmp_path / "obs.csv", tmp_path / "seeds.csv", tmp_path / "fp"
+    _write_obs(obs)
+    monkeypatch.setattr(mod, "run_classify", lambda seed_path, out_dir, run_args, log_path: 4)
+    monkeypatch.setattr("sys.argv", ["seeds_from_observations.py", "--observations", str(obs), "--out", str(out),
+                                     "--fixed-point", str(work)])
+    assert mod.main() == 4
+    assert not out.exists()
+    assert "run-1" in capsys.readouterr().err
+
+
+def test_the_cli_refuses_a_fixed_point_with_a_history_or_with_the_runs_own_paths(tmp_path, monkeypatch):
+    obs, out, work = tmp_path / "obs.csv", tmp_path / "seeds.csv", tmp_path / "fp"
+    _write_obs(obs)
+
+    def no_run(*args):
+        raise AssertionError("no run expected")
+    monkeypatch.setattr(mod, "run_classify", no_run)
+    base = ["seeds_from_observations.py", "--observations", str(obs), "--out", str(out), "--fixed-point", str(work)]
+    for argv in (base + ["--security-history", str(obs)], base + ["--", "--output-dir", "x"],
+                 base + ["--", "--observations", "x"]):
+        monkeypatch.setattr("sys.argv", argv)
+        assert mod.main() == 2
+    assert not out.exists()
