@@ -2,11 +2,16 @@
 seeds.csv): one row per introduction of a ticker -- its first snapshot, a return
 after a snapshot it was missing from, or a new name (names.names_agree fails
 against the name it had in its previous snapshot). The snapshot calendar is the
-set of as_of dates in the file. Two more reasons make a row a seed: an identifier
+set of as_of dates in the file. More reasons make a row a seed: an identifier
 column (cusip, cik, sec_id) whose non-blank value differs from the last non-blank one the
-ticker carried; and, with --security-history (a previous run's
-contract/security_history.csv), a change in the set of securities holding the ticker
-between the ticker's previous snapshot and this one (not both empty). The second needs
+ticker carried; the share class its name states (identifiers.share_class_from_name) differing
+from the class its previous row's name stated, both names non-blank ("DISCOVERY HOLDING CO"
+to "DISCOVERY INC SERIES A", which names_agree calls one name); and, with --security-history
+(a previous run's contract/security_history.csv), a change in the set of securities holding
+the ticker between the ticker's previous snapshot and this one (not both empty), and the row
+after a row that was a seed by that rule while nobody held the ticker on its date (the first
+snapshot after a ticker changed hands can fall in the days nobody holds it, GCI 2015-06-30;
+one extra seed per run of unheld snapshots). The history rules need
 two passes for a first run: seeds, a run, seeds again with that run's history. Reset-3 runs classify_universe.py on this file to
 measure what passing seeds only would cost (roadmap: "Risk to measure first").
 
@@ -19,7 +24,7 @@ import csv
 import sys
 from collections import defaultdict
 
-from delist_detection.vocabulary.identifiers import normalize_ticker
+from delist_detection.vocabulary.identifiers import normalize_ticker, share_class_from_name
 from delist_detection.vocabulary.names import names_agree
 
 
@@ -54,6 +59,7 @@ def seeds(rows: list[dict[str, str]], history: list[dict[str, str]] | None = Non
         seen = {r["as_of"] for r in rs}
         prev = None
         last_pin: dict[str, str] = {}
+        prev_by_holders = False         # the previous row became a seed by the holder rule
         for r in rs:
             renamed = prev is not None and r["name"] and prev["name"] and not names_agree(r["name"], prev["name"])
             pin_changed = False
@@ -62,13 +68,17 @@ def seeds(rows: list[dict[str, str]], history: list[dict[str, str]] | None = Non
                 if v:
                     pin_changed = pin_changed or (col in last_pin and last_pin[col] != v)
                     last_pin[col] = v
-            held_changed = False
+            reclassed = (prev is not None and bool(r["name"]) and bool(prev["name"])
+                         and share_class_from_name(r["name"]) != share_class_from_name(prev["name"]))
+            held_changed = after_unheld = False
             if spans is not None and prev is not None:
                 now, then = holders(spans, ticker, r["as_of"]), holders(spans, ticker, prev["as_of"])
                 held_changed = now != then
-            if prev is None or before.get(r["as_of"]) not in seen or renamed or pin_changed or held_changed:
+                after_unheld = prev_by_holders and not then
+            if (prev is None or before.get(r["as_of"]) not in seen or renamed or pin_changed or held_changed
+                    or reclassed or after_unheld):
                 out.append(r)
-            prev = r
+            prev, prev_by_holders = r, held_changed
     return out
 
 

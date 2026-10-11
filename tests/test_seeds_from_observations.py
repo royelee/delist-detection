@@ -29,8 +29,8 @@ def _keys(rows):
     return [(r["ticker"], r["as_of"]) for r in rows]
 
 
-FOXA = [_o("FOXA", "2018-06-30", "TWENTY FIRST CENTURY FOX INC CLASS"),
-        _o("FOXA", "2018-12-31", "TWENTY FIRST CENTURY FOX INC CLASS"),
+FOXA = [_o("FOXA", "2018-06-30", "TWENTY FIRST CENTURY FOX INC CLASS A"),      # the same class on both sides:
+        _o("FOXA", "2018-12-31", "TWENTY FIRST CENTURY FOX INC CLASS A"),      # only the holder rule is under test
         _o("FOXA", "2019-06-30", "FOX CORP CLASS A"), _o("FOXA", "2019-12-31", "FOX CORP CLASS A")]
 
 
@@ -46,10 +46,14 @@ def test_a_row_is_a_seed_when_another_security_holds_its_ticker_than_on_the_prev
 
 
 def test_a_row_after_its_tickers_line_ended_is_a_seed_once():
-    """The previous run ended the line and has no line after it: the first snapshot past the end is a seed, the
-    next is not (no holder before, no holder now)."""
+    """The previous run ended the line and has no line after it: the first snapshot past the end is a seed, and
+    so is the next (nobody held the ticker on the first one: it cannot tell the two lines apart), but only
+    that one (rule 4 is not triggered by its own seed)."""
     history = [_h("BBGOLD", "FOXA", "2013-07-03", "2019-03-19")]
-    assert _keys(mod.seeds(FOXA, history=history)) == [("FOXA", "2018-06-30"), ("FOXA", "2019-06-30")]
+    assert _keys(mod.seeds(FOXA, history=history)) == [("FOXA", "2018-06-30"), ("FOXA", "2019-06-30"),
+                                                       ("FOXA", "2019-12-31")]
+    longer = [*FOXA, _o("FOXA", "2020-06-30", "FOX CORP CLASS A")]
+    assert _keys(mod.seeds(longer, history=history))[-2:] == [("FOXA", "2019-06-30"), ("FOXA", "2019-12-31")]
 
 
 def test_one_security_under_the_ticker_all_along_gives_no_extra_seed():
@@ -128,3 +132,24 @@ def test_two_rows_on_one_date_and_overlapping_spans_of_one_security():
     rows = [_o("AAA", "2010-06-30", "ALPHA"), _o("AAA", "2010-12-31", "ALPHA"), _o("AAA", "2010-12-31", "ALPHA")]
     history = [_h("S1", "AAA", "2010-01-04", "2010-12-31"), _h("S1", "AAA", "2010-06-01")]
     assert _keys(mod.seeds(rows, history=history)) == [("AAA", "2010-06-30")]
+
+
+def test_a_row_whose_name_changes_only_its_class_words_is_a_seed():
+    rows = [_o("DISCA", "2008-12-31", "DISCOVERY HOLDING CO"), _o("DISCA", "2009-06-30", "DISCOVERY HOLDING CO"),
+            _o("DISCA", "2009-12-31", "DISCOVERY INC SERIES A"), _o("DISCA", "2010-06-30", "DISCOVERY INC SERIES A")]
+    assert mod.names_agree(rows[1]["name"], rows[2]["name"])            # the name rule alone does not cut here
+    assert _keys(mod.seeds(rows)) == [("DISCA", "2008-12-31"), ("DISCA", "2009-12-31")]
+    blank = [_o("AAA", "2010-06-30", "ALPHA CORP CLASS A"), _o("AAA", "2010-12-31", ""),
+             _o("AAA", "2011-06-30", "ALPHA CORP CLASS A")]
+    assert _keys(mod.seeds(blank)) == [("AAA", "2010-06-30")]            # a blank name is no class change
+
+
+def test_the_row_after_an_unheld_seed_is_a_seed_once():
+    """GCI 2015: old Gannett held the ticker to 2015-06-26 and the previous run has no line after it."""
+    rows = [_o("GCI", d, "GANNETT CO INC") for d in ("2014-12-31", "2015-06-30", "2015-12-31", "2016-06-30")]
+    history = [_h("BBGOLD", "GCI", "2008-01-02", "2015-06-26")]
+    assert _keys(mod.seeds(rows, history=history)) == [("GCI", "2014-12-31"), ("GCI", "2015-06-30"),
+                                                       ("GCI", "2015-12-31")]
+    held = [_h("BBGOLD", "GCI", "2008-01-02", "2015-06-26"), _h("BBGNEW", "GCI", "2015-06-29")]
+    assert _keys(mod.seeds(rows, history=held)) == [("GCI", "2014-12-31"), ("GCI", "2015-06-30")]
+    assert _keys(mod.seeds(rows)) == [("GCI", "2014-12-31")]             # no history: rule 4 is off
