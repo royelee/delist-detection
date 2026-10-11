@@ -592,19 +592,30 @@ class LineSources(Protocol):
     figi: Any                 # OpenFIGI: `map(jobs)`, the new CUSIPs' composites
 
 
+@dataclass(frozen=True)
+class RefusedStep:
+    """A step `follow_lines` did not follow: the security whose line it was, the step and why (`corroborate`'s or
+    R2's refusal word: "merged_out", "name", ...)."""
+    sec_id: str
+    step: LineStep
+    why: str
+
+
 @dataclass
 class Lines:
     """`follow_lines`' answer: the securities, each era's resolution and each security's CUSIPs after the line
     follow; the placeholders folded into a FIGI line (old sec_id -> the FIGI; a fold of a fold points at the last
     FIGI); the FIGI lines another composite continues (sec_id -> `LineSuccessor`, linked by stage 9); and the review
     items of stages 1 to 4b, the identity stage's first, a folded placeholder's moved to its FIGI line (its `no_figi`
-    item dropped: it holds a FIGI after all)."""
+    item dropped: it holds a FIGI after all); the steps it refused (`refused`: stage 5-onward readers of the line, and
+    `derived_lines`)."""
     securities: dict[str, Security]
     resolutions: dict[str, EraResolution]
     cusips: dict[str, list[str]]
     renames: dict[str, str] = field(default_factory=dict)
     successors: dict[str, LineSuccessor] = field(default_factory=dict)
     review: list[ReviewItem] = field(default_factory=list)
+    refused: list[RefusedStep] = field(default_factory=list)
 
 
 class _Reads:
@@ -748,6 +759,7 @@ def follow_lines(identity: "Identity", clients: LineSources, *, as_of: date,
     out = Lines(dict(identity.securities), dict(identity.resolutions),
                 {k: list(v) for k, v in identity.cusips.items()})
     items: list[ReviewItem] = []
+    refusals: list[RefusedStep] = []
     tickers: dict[str, set[str]] = {sid: set(s.line_tickers) for sid, s in identity.securities.items()}
 
     def own(sid: str) -> set[str]:
@@ -841,6 +853,7 @@ def follow_lines(identity: "Identity", clients: LineSources, *, as_of: date,
                                            "; run again once SEC answers", last_seen=step.old_last))
             if refused:
                 counts[f"refused:{refused}"] += 1
+                refusals.append(RefusedStep(sid, step, refused))
                 log(f"line follow refused: {sid} {what} ({refused})")
                 items.append(ReviewItem(sid, step.symbol, cik, f"{LINE_REFUSED}:{refused}",
                                         f"{what}: not followed ({refused})", last_seen=step.old_last))
@@ -875,6 +888,7 @@ def follow_lines(identity: "Identity", clients: LineSources, *, as_of: date,
             items.append(degraded_item(sid, min(own(sid), default=""), s.issuer_cik, "the line follow",
                                        "; run again once SEC answers"))
     # a folded placeholder's review items follow it to its FIGI line, where it holds a FIGI after all
+    out.refused = [replace(r, sec_id=out.renames.get(r.sec_id, r.sec_id)) for r in refusals]
     out.review = [replace(r, sec_id=out.renames.get(r.sec_id, r.sec_id)) for r in [*identity.review, *items]
                   if not (r.flag == "no_figi" and r.sec_id in out.renames)]
     log(f"line follow: {dict(sorted(counts.items()))}; {len(out.renames)} placeholders folded, "

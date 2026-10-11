@@ -192,6 +192,21 @@ def _without_holding(words: list[set[str]]) -> list[set[str]]:
     return kept or words
 
 
+def description_names_issuer(description: str, name: str) -> bool:
+    """Whether a fails-to-deliver `description` is the stock of the company `name`, for a line the library derives:
+    `description_names`, and not on words written short alone. At least one issuer word of the description is a word
+    of the name as spelled (a plural S aside); the words matched are two when both sides have two or more, else the
+    only word the shorter side has. SEA LTD is not SPECTRA ENERGY (SEA is SPECTRA with letters left out), a one-word
+    overlap on GLOBAL is not LIBERTY GLOBAL naming TELEWEST GLOBAL, while AMERICAN NATL GROUP is AMERICAN NATIONAL
+    INSURANCE (AMERICAN as spelled, NATL written short). With nothing to compare it names nothing."""
+    d_words = _without_holding(_issuer_words(_name_part(description)))
+    n_words = _without_holding(_issuer_words(name))
+    if not d_words or not n_words:
+        return False
+    exact, short = _word_matches(d_words, n_words, _name_part(description), name, either=False)
+    return exact >= 1 and exact + short >= min(2, len(d_words), len(n_words))
+
+
 def names_an_issuer(description: str) -> bool:
     """Whether a fails-to-deliver description leaves a word to compare once its
     security words go (2U INC COM STK and F5,INC. COMMON STOCK leave none)."""

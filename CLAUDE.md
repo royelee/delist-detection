@@ -92,7 +92,7 @@ The entries below say what each subpackage holds. Each module's full description
   once), `payout_rule`, `price_requests`, `reconstruction`. Detail: `docs/architecture.md`, "outputs/".
 - `identity/`: a security's identity, stages 1 to 4c: `observations`, `figi_resolution`, `security_master`,
   `ticker_resolver`, `issuer_record`, `issuer_in_force`, `identity`, `history`, `added_securities`, `ticker_evidence`,
-  `line_follow`. Detail: `docs/architecture.md`, "identity/".
+  `line_follow`, `derived_lines`. Detail: `docs/architecture.md`, "identity/".
 - `endings/`: every delisting, found, dated and classified, stages 5 to 9g: `delistings` (`DelistingFinder.find()`),
   `trading_record`, `classifier`, `end_of_era`, `distress`, `exchange_terms`, `own_shares`, `continuation_evidence`,
   `last_trade` (the last trade date as one module), `rewrites` (the one owner of a delisting's kind and successor after

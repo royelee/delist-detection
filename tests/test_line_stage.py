@@ -643,3 +643,12 @@ def _holders_of(lines):
         for c in cusips:
             held.setdefault(c, set()).add(sid)
     return held
+
+
+def test_a_refused_step_is_returned_with_its_security_and_why():
+    """A registrant that merged out (no periodic report after the step) refuses the step; the stage hands it back."""
+    rows = _line("AA", ["A1", "A2"])
+    lines = _follow([_Spec("BBGA", 1, "AA", ["A1"])], rows, edgar=_Edgar([f for f in _stating(rows) if f is not LATER_10Q]))
+    [r] = lines.refused
+    assert (r.sec_id, r.why, r.step.old_cusip, r.step.new_cusip, r.step.symbol) == ("BBGA", "merged_out", "A1", "A2", "AA")
+    assert _flags(lines) == [("BBGA", "line_follow_refused:merged_out")]

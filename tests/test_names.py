@@ -267,3 +267,23 @@ def test_description_name_is_the_issuers_name_without_the_securitys_tail():
     assert description_name("CYTTA CORP NEW COM STK (NV)") == "CYTTA CORP NEW COM STK"
     assert description_name("  wendy's/arby's group inc cl a ") == "WENDY'S/ARBY'S GROUP INC CL A"
     assert description_name("APPLE INC;COM NPV") == "APPLE INC" and description_name("") == ""
+
+
+@pytest.mark.parametrize("description,name,expected", [
+    ("AMERICAN NATL GROUP INC", "AMERICAN NATIONAL INSURANCE CO", True),      # ANAT 2020
+    ("CIGNA CORP NEW COM STK", "CIGNA CORP", True),                            # CI 2018
+    ("MYLAN N V SHS EURO", "MYLAN INC.", True),                                # MYL 2015
+    ("ENDO INTL PLC ORD SHS", "ENDO PHARMACEUTICALS", True),                   # ENDP 2014
+    ("ARRIS INTL LTD ORD SHS", "ARRIS INTERNATIONAL INC", True),               # ARRS 2016
+    ("BUNGE GLOBAL SA SHS", "BUNGE LIMITED", True),                            # BG 2023
+    ("STERIS PLC ORD SHS", "STERIS", True),                                    # STE 2019
+    ("DIRECTV CL A COM STK", "DIRECTV GROUP INC", True),                       # DTV 2009
+    ("FERGUSON ENTERPRISES INC COM", "FERGUSON PLC", True),                    # FERG 2024
+    ("SEA LTD ADR (CYM)", "SPECTRA ENERGY CORP", False),                       # SE 2017: SEA is SPECTRA with letters left out
+    ("LIBERTY GLOBAL PLC SHS CL A", "TELEWEST GLOBAL INC", False),             # VMED 2013: one word, GLOBAL
+    ("BRISTOL MYERS SQUIBB CO CONTIN", "CELGENE CORP", False),                 # CELG 2019
+    ("WW INTL INC COM", "WEIGHT WATCHERS INTL INC", False),                    # no issuer word left: names nothing
+])
+def test_a_description_names_the_issuer_by_a_word_as_spelled(description, name, expected):
+    from delist_detection.vocabulary.names import description_names_issuer
+    assert description_names_issuer(description, name) is expected

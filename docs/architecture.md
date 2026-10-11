@@ -18,7 +18,7 @@ src/delist_detection/
                 contract, dlret, payout_rule, price_requests, reconstruction
   identity/     a security's identity, stages 1 to 4c: observations, figi_resolution, security_master,
                 ticker_resolver, issuer_record, issuer_in_force, identity, history, added_securities,
-                ticker_evidence, line_follow
+                ticker_evidence, line_follow, derived_lines
   endings/      every delisting, found, dated and classified, stages 5 to 9g: delistings, trading_record, classifier,
                 end_of_era, distress, exchange_terms, own_shares, continuation_evidence, last_trade, rewrites,
                 registrants, successors, handoffs
@@ -849,7 +849,18 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   <old CUSIP> -> <new CUSIP> under <symbol> from <day> (<why>)`). Stage 9's own-registration link reads `is_line_symbol`, `text_cusips` and
   `composites` too (the same R2 reading of a same-CIK 8-K12B's new CUSIP). Its real cases replay offline from
   `tests/fixtures/lines/` (`scripts/build_line_fixtures.py`), through the rules and through `follow_lines`; the
-  stage's own rules are tested at `follow_lines` with doubles (tests/test_line_stage.py).
+  stage's own rules are tested at `follow_lines` with doubles (tests/test_line_stage.py). It also returns the steps
+  it refused (`Lines.refused`, a `RefusedStep(sec_id, step, why)` each; its `sec_id` follows a fold, like the review
+  items'), which `derived_lines` reads.
+- `identity/derived_lines.py` — seeds-only parity S2: which refused steps are lines of the run. `derivable(refused,
+  securities, profile)` gives the `(ticker, new CUSIP)` pairs (the ticker as the security's eras spell it, `BF-B`
+  not the fails files' `BFB`; one pair per ticker the old line traded under) of the refused SWITCH steps whose
+  reason is in `DERIVABLE` (`merged_out`, `other_registrant`, `name`) and whose new rows' descriptions name the old
+  line's issuer: `names.description_names_issuer` against `old_line_names` (the line's observed names and every
+  EDGAR name its issuer carried until the day before the step). `description_names_issuer` is `description_names`
+  with at least one word as spelled: SEA LTD is not SPECTRA ENERGY (SE 2017), one word of GLOBAL is not LIBERTY
+  GLOBAL naming TELEWEST GLOBAL. On the seeds input it accepts 42 `merged_out` steps, 3 `other_registrant` and 10
+  `name`; on the full input 13, 0 and 0. The rounds that use the pairs come with `identify_with_lines`.
 - `identity/ticker_evidence.py` — decision 1: what ties a placeholder's ticker to its
   CIK. A resolver tier that names the ticker (`TICKER_TIERS`), else one
   EDGAR full-text search of the CIK's own filings (`full_text_search(...,
