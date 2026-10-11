@@ -4395,3 +4395,65 @@ except the first, which the ledger keeps at its end).
 36. the middle part between two seeds (XRX, ALEX; the traced rule adds 76 eras) is not built in this plan's run — it is the largest change left for two securities, it moved ESV in the subset, and it needs its own checkpoint — if wrong, XRX's old line and ALEX's four seeds stay as known differences; the rule, the clone that tried it (E/s4/identity/code3, switches MIDDLE and INHERIT) and the counts are in Checkpoint 5.
 37. S5 items 1 and 3 (rebuild the resolver memo, commit the rebuilt outputs, apply the flip rule) are not done in this run and go to the user — the committed `output/` and `data/scorecard.json` were built on gpt-5.4 answers and every run of this plan uses claude-sonnet-5-5, so a rebuilt output fails `scorecard.py --check` against the committed floor for a reason this plan did not cause (D.mismatches 121 in the committed scorecard against 148 to 150 in every run here), and lowering that floor by hand is a decision about the published tables — if wrong, the published output stays behind the code until the user says which answers it is built on; the scratch run with the memo rebuilt from empty (pout-full10) gives the evidence decision B asks for.
 38. Task 3 does not write the floor and S1 goes back into Task 2 — the plan's Step 4 says a regression goes back into Task 2 and decision E accepts S1 only if nothing moves away from the truth sets; two golden cases fail and 19 or 20 issuers got worse — if wrong, the cost is one more round on Task 2 before S2 starts.
+
+## Toward decision D (2026-10-11)
+
+Head `3fdea4f`, then four commits (suite 4,152 passed, 43 xfailed). Every run: run date 2026-09-25, `--sec-workers 1`,
+`claude-sonnet-5-5`, each on its own APFS clone of `cache/` with `ticker_resolution.json` deleted from the clone only. No
+run asked the LLM for a new answer (`run_manifest.json` `merger_terms.asked` 0 in both runs of the last pair).
+
+**What was changed.**
+
+- *The resolver memo (decision B, step 2).* From an empty memo, Northwest Airlines (NWA 2008) lost its issuer because the
+  snapshot spells NORTHWEST AIRLS CORP and the name index holds NORTHWEST AIRLINES CORP, no character prefix of the first
+  (the name tier now cuts the last word to four letters when no spelling found a company); WestRock (WRK 2015 to 2024)
+  because the only company the name tier offers at the 2024 date, CIK 1732845, was formed in 2018 and the era-began-by
+  rule refuses it (an era no lookup answers is now asked once more at its first sighting, where CIK 1636023 answers).
+  Five more securities had lost their issuers from an empty memo and were hidden behind it (`R1.2.figi_without_cik` 0 to 5:
+  US Bancorp, XP, C3.ai, Nu, On): `names_agree` for a name with no word to compare did not drop CLASS A or the state tag
+  `\DE\`. A full run from an empty memo now has `D.mismatches` 134 (committed 135), no golden or `pass` case failing, and
+  11 floored numbers below the committed floor, all of them this branch's own (the list under "After the rebase" less
+  the review-row count).
+- *An unobserved CUSIP part between observations.* XRX (2017 reverse split), ITT (2011) and ALEX (2012's three weeks as a
+  holding company) are in a seeds run the same securities and endings as in the full run. The part's CUSIP joins the
+  `ftd_cusips` of the era before it when its description agrees with the era's names and an observation or another era
+  of the ticker follows. It made no new era, so it did not add the 76 eras the earlier rule did. `FigiResolver` now keeps
+  an era's own unmappable fails CUSIP for every source; without that, Alcoa, Arch Coal and Chesapeake lost their first
+  fails CUSIP and their start dates (`A.census.distress.errors` 0 to 2). The full run's delistings are unchanged by both;
+  Sanmina gains its SANMD interval.
+
+**Measured, the five numbers of decision D** (floor of the plan at the start of today: 0, 5, 3, 10, 5):
+
+| Seeds file | endings_lost | kind_changed | securities_lost | seeds_placed_differently | truth_cases_failing_only_in_seeds |
+| --- | --- | --- | --- | --- | --- |
+| at `3fdea4f`, pass 2 from a seeds run, memo rebuilt | 0 | 5 | 4 | 15 | 7 |
+| after the four commits, history of the full run (2,884 seeds) | 0 | 6 | 1 | 4 | 5 |
+| after the four commits, two passes (2,910 seeds) | 0 | 5 | 3 | 11 | 6 |
+
+The other numbers move with the file too (endings_gained 0 to 2, securities_gained 2 to 3). The seed builder's holder rule
+reads a previous run's `contract/security_history.csv`, so which seeds exist (MEL, GM, LVNTA, ITT, WPO, HTZ, Z, UAG) depends
+on which run made that history; the numbers wobble by 5 to 10 between two honest files. The floor in
+`data/seeds_parity.json` was not changed: no file lowers every number, and a floor only goes down.
+
+**What is left, by name** (the five lists of the two-pass file and the full-history file together):
+
+| Case | Sort | Why |
+| --- | --- | --- |
+| SUNW 2010, MEL 2007, UAG 2008, ANN 2011 | d, decision C | the ticker had no fails rows on the seed date (a stale or backfilled snapshot; UBS took the symbol UAG): the lookup date is the seed's own and a nearer Form 25 of another company answers first |
+| PARAA/VIACA 2025, LVNTA 2018 | b | the Form 25 comes after the security's last fails row by more than 400 days; a bounded late rule (a security not listed today with no other ending takes the one Form 25 that names it alone, at most 1,100 days late) fixed these and broke the ABBI 2009 guard, the SXCI 2012 case and the UAL 2006 bankruptcy test, so it was not kept |
+| ATVI 2008, CFFN 2010, DDR 2018 | b | a CUSIP part after the last observation with nothing after it; the same rule as above for a tail breaks the reverse-split and bankruptcy tests, so it stays stage 4b's, which does not follow these three |
+| SPB 2018, MTCH 2020 | a | the handoff test reads the same step as a continuation by timing in one run and as paid holders in the other |
+| CEG 2012, GM 2009, WLL 2017, MRK 2020 | d | not traced to a rule |
+
+**Ruling: the seeds file for a check is built in two passes from a seeds run, not from the full run's history** — the plan's
+checkpoints did so, and a caller sending seeds has no full run's history — the full-history file has 26 fewer seeds and
+different numbers; if wrong, the numbers above read 6, 1, 4, 5 instead.
+**Ruling: the resolver memo is measured on clones with the file deleted, never in the worktree's `cache/`** — the brief —
+if wrong, nothing.
+**Ruling: the late-Form-25 rule and the tail rule are reverted** — each broke tests that state behaviour the owner chose
+(ABBI 2009, SXCI 2012, UAL 2006, the reverse-split pair) — if wrong, SUNW, PARAA/VIACA and LVNTA, and ATVI, CFFN and DDR,
+stay as named differences.
+**Ruling: `figi_without_cik` was fixed in the same step as NWA and WRK** — it is the same dependence on old memo entries —
+if wrong, five names lose a class word's tolerance in `names_agree`'s no-word path only.
+**Ruling: checks ran one at a time** — the coordinator's permission to run two together arrived after the last pair; the
+ledger holds each run's start and end — if wrong, nothing.
