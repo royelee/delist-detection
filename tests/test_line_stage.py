@@ -652,3 +652,16 @@ def test_a_refused_step_is_returned_with_its_security_and_why():
     [r] = lines.refused
     assert (r.sec_id, r.why, r.step.old_cusip, r.step.new_cusip, r.step.symbol) == ("BBGA", "merged_out", "A1", "A2", "AA")
     assert _flags(lines) == [("BBGA", "line_follow_refused:merged_out")]
+
+
+def test_a_refused_step_of_a_folded_placeholder_carries_its_figi_line():
+    """A placeholder folds into a FIGI line at its first switch; the next switch has no filing and is refused: the
+    refused step names the FIGI line, as the review items do."""
+    rows = _line("PP", ["P1", "N1", "N2"])
+    stated = [f for f in _stating(rows) if f.filing_date != _firsts(rows)["N2"]]
+    lines = _follow([_Spec("CIK5-COMMON", 5, "PP", ["P1"])], rows, edgar=_Edgar(stated),
+                    figi=_Figi({"N1": _answer("BBGX1")}))
+    assert lines.renames == {"CIK5-COMMON": "BBGX1"}
+    [r] = lines.refused
+    assert (r.sec_id, r.why, r.step.new_cusip) == ("BBGX1", "no_filing", "N2")
+    assert ("BBGX1", "line_follow_refused:no_filing") in _flags(lines)

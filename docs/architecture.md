@@ -854,7 +854,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   items'), which `derived_lines` reads.
 - `identity/derived_lines.py` — seeds-only parity S2: which refused steps are lines of the run. `derivable(refused,
   securities, profile)` gives the `(ticker, new CUSIP)` pairs (the ticker as the security's eras spell it, `BF-B`
-  not the fails files' `BFB`; one pair per ticker the old line traded under) of the refused SWITCH steps whose
+  not the fails files' `BFB`; one pair per ticker of its eras, never a line ticker learned from the fails rows) of the refused SWITCH steps whose
   reason is in `DERIVABLE` (`merged_out`, `other_registrant`, `name`) and whose new rows' descriptions name the old
   line's issuer: `names.description_names_issuer` against `old_line_names` (the line's observed names and every
   EDGAR name its issuer carried until the day before the step). `description_names_issuer` is `description_names`

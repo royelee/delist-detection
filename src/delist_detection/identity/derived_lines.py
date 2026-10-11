@@ -36,7 +36,8 @@ def derivable(refused: Sequence[RefusedStep], securities: Mapping[str, Security]
               profile: Callable[[int], Mapping | None]) -> set[tuple[str, str]]:
     """The (ticker, new CUSIP) pairs of the refused steps whose line is derived: a switch refused for one of
     `DERIVABLE` whose new rows' descriptions name the old line's issuer (`description_names_issuer` against
-    `old_line_names`), for each ticker the old line traded under."""
+    `old_line_names`), for each ticker of the security's eras (spelled as the eras spell it, `BF-B`; a ticker the line
+    follow learned from the fails files is in their spelling and names no era)."""
     out: set[tuple[str, str]] = set()
     for r in refused:
         s = securities.get(r.sec_id)
@@ -44,5 +45,5 @@ def derivable(refused: Sequence[RefusedStep], securities: Mapping[str, Security]
             continue
         names = old_line_names(s, profile(s.issuer_cik) if s.issuer_cik is not None else None, r.step.first)
         if any(description_names_issuer(d, n) for d in r.step.descriptions for n in names):
-            out |= {(t, r.step.new_cusip) for t in s.own_tickers()}
+            out |= {(t, r.step.new_cusip) for t in {e.ticker for e in s.eras}}
     return out

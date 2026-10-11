@@ -607,8 +607,7 @@ class Lines:
     follow; the placeholders folded into a FIGI line (old sec_id -> the FIGI; a fold of a fold points at the last
     FIGI); the FIGI lines another composite continues (sec_id -> `LineSuccessor`, linked by stage 9); and the review
     items of stages 1 to 4b, the identity stage's first, a folded placeholder's moved to its FIGI line (its `no_figi`
-    item dropped: it holds a FIGI after all); the steps it refused (`refused`: stage 5-onward readers of the line, and
-    `derived_lines`)."""
+    item dropped: it holds a FIGI after all); the steps it refused (`refused`, read by `derived_lines.derivable`)."""
     securities: dict[str, Security]
     resolutions: dict[str, EraResolution]
     cusips: dict[str, list[str]]

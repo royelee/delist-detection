@@ -49,3 +49,22 @@ def test_the_old_lines_names_are_its_observed_names_and_its_issuers_names_until_
         {"name": "OLD NAME INC", "from": "2001-01-01T00:00:00.000Z", "to": "2018-12-22T00:00:00.000Z"}]}
     names = old_line_names(_security(eras_name="OBSERVED CO"), sub, "2018-12-21")
     assert names == ["OBSERVED CO", "OLD NAME INC"]            # NEW NAME INC began after the step: the new line's
+
+
+def test_a_security_gets_a_pair_for_the_tickers_of_its_eras_only():
+    """A ticker the line follow learned from the fails files (their spelling, `BFB`) is not an era's: no pair."""
+    s = _security(tickers=("BF-B",))
+    s.line_tickers = frozenset({"BFB"})
+    got = derivable([RefusedStep("BBGOLD", _step(["CIGNA CORP NEW COM STK"]), "merged_out")], {"BBGOLD": s}, NO_PROFILE)
+    assert got == {("BF-B", "NEWCUSIP1")}
+
+
+def test_a_profile_decides_which_issuer_names_count_through_derivable():
+    """The issuer's former name ended on the step's first day, where its current name began: a description naming
+    the former name is the old line's, one naming only the current name is the new line's."""
+    profile = {"name": "QUARTZ TOOLS INC", "formerNames": [
+        {"name": "ZENITH PAINT INC", "from": "2001-01-01T00:00:00.000Z", "to": "2018-12-21T00:00:00.000Z"}]}
+    s = {"BBGOLD": _security(eras_name="SOMETHING ELSE CO")}
+    got = lambda desc: derivable([RefusedStep("BBGOLD", _step([desc]), "merged_out")], s, lambda cik: profile)
+    assert got("QUARTZ TOOLS INC COM") == set()
+    assert got("ZENITH PAINT INC COM") == {("CI", "NEWCUSIP1")}
