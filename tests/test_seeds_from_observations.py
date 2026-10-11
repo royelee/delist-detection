@@ -113,3 +113,18 @@ def test_a_history_file_missing_a_column_exits_2_naming_file_and_column(tmp_path
     err = capsys.readouterr().err
     assert str(hist) in err and "ticker" in err
     assert not out.exists()
+
+
+def test_the_history_is_read_through_the_tickers_normal_spelling():
+    rows = [_o("BF.B", "2010-06-30", "BROWN FORMAN"), _o("BF.B", "2010-12-31", "BROWN FORMAN"),
+            _o("BF.B", "2011-06-30", "BROWN FORMAN")]
+    history = [_h("S1", "BF-B", "2010-01-04", "2010-12-31"), _h("S2", "BF-B", "2011-01-03")]
+    assert _keys(mod.seeds(rows, history=history)) == [("BF.B", "2010-06-30"), ("BF.B", "2011-06-30")]
+    lower = [{**r, "ticker": "bf b"} for r in rows]
+    assert _keys(mod.seeds(lower, history=history)) == [("bf b", "2010-06-30"), ("bf b", "2011-06-30")]
+
+
+def test_two_rows_on_one_date_and_overlapping_spans_of_one_security():
+    rows = [_o("AAA", "2010-06-30", "ALPHA"), _o("AAA", "2010-12-31", "ALPHA"), _o("AAA", "2010-12-31", "ALPHA")]
+    history = [_h("S1", "AAA", "2010-01-04", "2010-12-31"), _h("S1", "AAA", "2010-06-01")]
+    assert _keys(mod.seeds(rows, history=history)) == [("AAA", "2010-06-30")]

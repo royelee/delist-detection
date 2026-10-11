@@ -19,6 +19,7 @@ import csv
 import sys
 from collections import defaultdict
 
+from delist_detection.vocabulary.identifiers import normalize_ticker
 from delist_detection.vocabulary.names import names_agree
 
 
@@ -30,14 +31,14 @@ def index_history(history: list[dict[str, str]]) -> dict[str, list[tuple[str, st
     """ticker -> [(sec_id, start_date, end_date)], built once."""
     spans: dict[str, list[tuple[str, str, str]]] = defaultdict(list)
     for h in history:
-        spans[h["ticker"]].append((h["sec_id"], h["start_date"], h["end_date"]))
+        spans[normalize_ticker(h["ticker"])].append((h["sec_id"], h["start_date"], h["end_date"]))
     return spans
 
 
 def holders(history: list[dict[str, str]] | dict, ticker: str, day: str) -> frozenset[str]:
     """The sec_ids whose history row has this ticker and a span containing the day (end blank = open)."""
     spans = history if isinstance(history, dict) else index_history(history)
-    return frozenset(s for s, start, end in spans.get(ticker, ()) if start <= day and (not end or end >= day))
+    return frozenset(s for s, start, end in spans.get(normalize_ticker(ticker), ()) if start <= day and (not end or end >= day))
 
 
 def seeds(rows: list[dict[str, str]], history: list[dict[str, str]] | None = None) -> list[dict[str, str]]:
