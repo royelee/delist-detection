@@ -1494,6 +1494,1484 @@ ARRS, STE, CR, BG, AVGO, CI, MRVL, APO, DKNG, NCNO, TEAM, AZPN, FWONA, FWONK, DT
 ALEX, SPB, CIT, DOW, MRK, FOXA (the new line exists), ANN, EVHC, AMSG, ANAT, MYL, ENDP, FERG,
 WFT, MNST, NE, NRF, NLSN, TCF, WEN, MIR, TWC, LVNTA. The full run must still pass its own gate.
 
+## S2, step by step: Tasks 7 to 15
+
+**The controller's rulings on this section (2026-10-10).**
+
+- *Decision (e), run time.* The loop is built as written here (repeat the identity stage and stage 4b until a
+  round derives nothing). Its measured cost is one more stage 4b pass per round: about 100 s on the full input and
+  180 s on the seeds input. That is accepted for the checkpoint, so that what the derived lines change is measured
+  on the simplest code. After Task 15 a further task makes stage 4b ask again only about the securities a round
+  touched (a derived era joined them, or the new CUSIP of one of their steps is now a derived line's), checked by
+  the tables being byte-identical to the simple loop's. The hoist in `renamed_cusips` goes into that task too.
+- *Decision (b) against the test marked "Must not change (WCN, AAN)".* The test is rewritten as Task 7 says. WCN and
+  AAN are refused `merged_out` by stage 4b and have no line successor, so the ruling that a real merger takes no
+  line successor still holds for them; a merger whose payout the gate reconciled also stands.
+- *The warm fails index (open point 2).* Accepted for the checkpoint: IAC@2012-06-29 and IACI@2008-01-16 move from
+  the placeholder to the FIGI line stage 4b folds it into anyway. Task 15 checks that the published ids are the same.
+- *The review rows of a derived step (open point 6).* No new flag: the run log names the derived pairs, and
+  `securities.csv` shows the line with `observed=false`.
+- Task 6 is committed (`0ec338f`), so Task 10 may start when its turn comes.
+
+
+Written on 2026-10-10 against commit `043f01d` plus Task 6 as the other agent had it in the worktree (uncommitted: `EraIssuers.rows_fit`
+and the fallback loop of `_resolve_issuers`; Task 10 below edits other functions of `identity.py`, so it starts after Task 6 is
+committed). Every function, field and line named here was opened in the code. Every test below was run on a prototype of the
+tasks (a copy of the code at `26eefdb` with these changes, in the session's scratch folder) and passes there; the
+prototype's whole suite (with the committed `output/`) failed in exactly the four tests the tasks name (and three
+`test_loop_round.py` tests that read the repo's `.claude` workflow files, which the copy lacks); the golden replay, the
+diagnosis-truth cases, the import closure and the committed-output tests stayed green.
+Line numbers are not given: find each function by name.
+
+| Task | Title |
+| --- | --- |
+| 7 | A merger row takes the followed line's successor (decision b) |
+| 8 | The endings of added successors are valued (C5, decision c) |
+| 9 | A derived observation, and the readers of an era's observations that skip it |
+| 10 | The identity stage keeps an approved part of the fails rows as a derived era |
+| 11 | Stage 4b says which refused steps are lines; the test of a name |
+| 12 | The run asks again with the derived lines |
+| 13 | A derived line that begins as another security ends: takeover or continuation (WEN, TCF) |
+| 14 | The parity script counts securities whose `observed` flag differs |
+| 15 | Parity checkpoint after S2 (network) |
+
+### Decision (e): how the derived line is made
+
+**Chosen: (1), repeat the identity stage with the refused steps passed in.** It reuses every stage unchanged, so a derived
+line is an ordinary era-born security by construction, and the prototype shows it on both inputs. The measurement does not
+meet the brief's bar as stated, and the reason is not the identity stage; both facts follow.
+
+Measured offline with the replay harness (code at `26eefdb` plus the prototype, caches cloned, `--sec-workers 1`, no
+network; 3 rounds on the seeds input, 2 on the full):
+
+| Run | Round | Identity stage (1 to 4) | Stage 4b | Round total |
+| --- | --- | --- | --- | --- |
+| seeds | 0 (as today) | 47.5 s (of which opening the index 12.9) | 63.5 s | 111 s |
+| seeds | 1 (50 pairs derive 49 eras) | **15.7 s** | 72.0 s | 87.7 s |
+| seeds | 2 (CCE's second step; nothing new) | **15.3 s** | 76.0 s | 91.3 s |
+| full | 0 | 62.4 s | 80.3 s | 142.7 s |
+| full | 1 (8 eras; nothing new) | **20.0 s** | 77.7 s | 97.7 s |
+
+- **The repeat of the identity stage, with the fails index built once and reused, costs 15 to 20 s**: under the bar. What
+  it needs is `identify(..., derive=, ftd=)` (Task 10): `_refine` opens the index only when none is given
+  (1.8 s instead of 12.9), the issuer lookups hit the resolver's memo (7.7 s instead of 21.1) and `_security_cusips` finds every CUSIP's rows held.
+- **A round must also run stage 4b**, because the refusals that earn the next pairs are 4b's, and 4b costs 72 to 78 s warm, as much as
+  cold (its work is per security, not per fails file: 768 lines that stopped each scan the fails rows around their end,
+  `line_follow.renamed_cusips`, and every issuer's record is read). A profile of a warm pass put most of its time in that
+  scan's `_first_word` regex (28 million calls); hoisting the names' first words out of the row loop (below) is an
+  equal-result change that measured only 10 s per pass (round 0: 63.5 to 55.6 s, round 1: 72.0 to 61.3 s), so 4b's warm cost is
+  not one loop.
+- Total offline cost of (1) as the tasks build it: seeds 290 s against 111 s (+179 s for two repeat rounds), full 242 s against 143 s (+99 s for one
+  repeat round). A live run adds the requests of the derived eras' lookups: 98 SEC and up to 4 OpenFIGI requests (seeds), 27 SEC and 2 OpenFIGI (full) in
+  the harness's count of misses, about 12 s at 8 requests a second.
+- The brief's bar (a repeat of stages 1b to 4c under about 60 s) is therefore met by the identity stage (15 to 20 s) and missed by the
+  whole round (88 to 98 s), because of 4b. (2), adding the era after stage 4b to the identity stage's outputs in place, would
+  have to resolve its issuer and FIGI outside `identify` (a second path through `_resolve_issuers`, `_resolve_securities`,
+  `build_securities` and `_security_cusips`) and would still need a stage 4b pass over the derived lines for chains. I judged that worse than the
+  cost; the controller can overrule, and Tasks 9, 10, 11 and 13 serve either design (only Task 12, the loop, differs).
+
+*Equal-result hoist in `renamed_cusips`* (`line_follow.py`; optional, not a task): replace the generator inside the loop by a lookup of the row's
+first word in a dict of the names by first word, built once:
+
+```python
+    by_first: dict[str, list[str]] = defaultdict(list)        # the names by their first word, computed once
+    for n in names:
+        by_first[_first_word(n)].append(n)
+    rows: dict[str, list[str]] = defaultdict(list)
+    for r in ftd.every_row(date.fromisoformat(lo), date.fromisoformat(hi) + timedelta(days=NAME_DAYS)):
+        if r.cusip not in cusips and is_line_symbol(r.symbol) \
+                and any(description_names(r.description, n) for n in by_first.get(_first_word(r.description), ())):
+            rows[r.cusip].append(r.date)
+```
+
+With the hoist the seeds rounds measured 104.6 s (round 0) and 77.0 s (round 1: identity stage 15.7 s, stage 4b 61.3 s); the
+third round is as the second, so the seeds input costs about 260 s against 105 s, and the full input about 220 s against 135 s. The
+whole round stays above the brief's 60 s; the identity stage alone is a quarter of it.
+
+### Condition 2 and the test of a name (decision g)
+
+The brief's four conditions are three structural ones (Task 10: follows an era of its gap group; not before the era's first
+observation; not the next era's CUSIP) and condition 2, which Task 11 decides with `names.description_names_issuer`
+against `derived_lines.old_line_names` (the old line's observed names and every EDGAR name its issuer carried until the day
+before the step). The test is `description_names` (as many issuer words as the shorter side has, up to two) **and at least one of
+them a word as spelled**: `description_names` and `description_matches(empty=False)` both read SEA as SPECTRA written short.
+
+| Pair (description / old name) | `description_matches(empty=False)` | `description_names` | `description_names_issuer` |
+| --- | --- | --- | --- |
+| CIGNA CORP NEW / CIGNA CORP (CI) | yes | yes | yes |
+| AMERICAN NATL GROUP / AMERICAN NATIONAL INSURANCE (ANAT) | yes | yes | yes |
+| MYLAN N V / MYLAN INC. (MYL); ENDO INTL PLC / ENDO PHARMACEUTICALS (ENDP); ARRIS INTL / ARRIS INTERNATIONAL (ARRS) | yes | yes | yes |
+| BUNGE GLOBAL / BUNGE LIMITED (BG); STERIS PLC / STERIS (STE); DIRECTV / DIRECTV GROUP (DTV); FERGUSON ENTERPRISES / FERGUSON PLC (FERG) | yes | yes | yes |
+| **SEA LTD ADR / SPECTRA ENERGY CORP (SE 2017, a reused ticker)** | **yes** | **yes** | **no** |
+| LIBERTY GLOBAL / TELEWEST GLOBAL (VMED 2013, one generic word) | yes | no | no |
+
+On every refused `merged_out`, `other_registrant` and `name` switch step of both inputs (`Lines.refused` of round 0; the old
+line's names are the observed ones plus the issuer's EDGAR names, all of them for the first three columns and those until the step for the last):
+
+| Refusal | Steps (seeds / full) | `description_matches` accepts | `description_names` accepts | `description_names_issuer`, all names | chosen: names until the step |
+| --- | --- | --- | --- | --- | --- |
+| `merged_out` | 42 / 13 | 42 / 13 | 42 / 13 | 42 / 13 | 42 / 13 |
+| `other_registrant` | 5 / 2 | 5 / 2 | 5 / 2 | 5 / 2 | 3 / 0 |
+| `name` | 23 / 5 | 13 / 1 | 11 / 0 | 10 / 0 | 10 / 0 |
+
+- **Refused by the chosen test** (seeds unless marked): `name`: CELG (Bristol-Myers CVR), NYX (ICE), ESRX (Cigna), XL (XL-Group: no issuer word), VMED (Liberty Global), COV (Medtronic), TWC (Charter), IPHI (Marvell), TWOU ("2U INC COM STK NEW": no issuer word), GRUB (Just Eat), WW ("WW INTL INC COM": none), ABI ("BIOSSYSTEMS" misspelt), ANN (University Bancorp, a wrong issuer); `other_registrant`: LGFA, LGFB (STARZ ENTMT CORP: the issuer's name until the step was Lions Gate; both inputs). Of these, CELG, NYX, ESRX, COV, TWC, IPHI, GRUB, VMED are the acquirer's line (a takeover: not this line's successor), and XL, TWOU, WW, ABI, LGFA, LGFB are real continuations the test cannot see; they stay as today (Open point 7).
+- **Accepted** (seeds): all 42 `merged_out`, `other_registrant` WEC, CHTR, APO, `name` IAC (twice), BLK, IR, ENR, VNOM, FERG, LLYVA, LLYVK, ALEX. Whether a pair is derived also needs the three structural conditions: of the 55 accepted seeds steps, 57 `(ticker, CUSIP)` pairs (one per ticker of the line) earned 49 eras in round 1, one more (CCE's second step) in round 2; of the full run's 13 accepted `merged_out` steps, eight have a part with no observation, and they are the brief's eight (AAN, BXS, CCE 2016, GCI, SDRL, UNIT, WCN, WE).
+- **Derived lines the rule gives**: seeds input **50 derived eras forming 34 securities of their own** (16 eras resolve to the FIGI of an era already in the run, among them ACN, CB twice, CFFN, CLWR, ENR, ICE, IR, MDT, MYL, PRGO, UNIT, WE, WEC, IAC); securities 2,153 to 2,187. Full input **8 derived eras, 5 securities of their own** (UNIT and WE join the old line's FIGI); securities 2,201 to 2,206.
+
+### Every reader of an era's observations and of a security's `observed` flag
+
+Decision per reader: **skip** (a derived observation is not the caller's), **honour** (the derived era is an ordinary era to it), **unaffected**.
+
+| Reader | Reads | Decision | Why, and the test |
+| --- | --- | --- | --- |
+| `TickerEra.names`, `name`, `cusips`, `cik_pin`, `sec_id_pin` (`observations.py`) | every observation | honour | the derived observation carries a name (its fails description), no CUSIP, no pin: the era is looked up under its own name and never takes the old line's pin (Task 9 step 1; Task 10) |
+| `_split_era`, `refine_eras` (`seen_on`, `contested`) | the caller's input eras | unaffected | a derived era is made by `_split_era`, never given to it |
+| `capped_sightings`, `last_sightings`, `era_rows`, `_own_rows` | `era.first`, `last`, `ftd_cusips`, `names` | honour | the derived era follows its own CUSIP's rows to their end, as a seed does |
+| `_resolve_issuers`, `EraIssuers`, stage 2b | `e.name`, `e.cik_pin`, `e.first` | honour | one lookup under its own description and its CUSIP's rows; Task 6's row check holds a weak answer |
+| `cusip_handoffs`, `FigiResolver`, `candidate_cusips`, `unconfirmed_eras`, `foreign_ticker_eras` | era CUSIPs, names, span | honour | an ordinary era resolved by its own CUSIP (the whole-run test of Task 12) |
+| `build_securities` | the eras | **changed** | `Security.observed` is True when any of its eras is not derived (Task 9) |
+| `observation_conflict_review`, the `observation_conflicts` calls in `pipeline._observation_map` and `_other_issuers` | observations of all eras | skip | a conflict is about two names the caller gave one ticker on one day (Task 9) |
+| `history.ticker_sightings`, `cusip_sightings` | observations as sightings | skip | else the derived line's ticker range would claim an observation, and a lone sighting (Task 9; the whole-run test: its range's source is `ftd`) |
+| `history.observation_map_rows` | observations | skip | `observation_map.csv` is the caller's join surface (invariants), and `contract/seeds.csv` and stage 10c3's issuers-in-force are built from it |
+| `pipeline._dead_before_sighting` | the first observation of a dead security | skip | a derived line has no caller sighting to be "dead before" (Task 9, the 5b test) |
+| `pipeline._other_issuers` (4c, R5) | sightings with their era's CIK | skip | its one observation is named by the fails description the issuer was found under: it would confirm itself (Task 9) |
+| `pipeline._issuers_in_force` (10c3) | `observation_map` rows | unaffected | reads the echo table, so a derived line has no timeline and `contract.security_history_rows` takes `securities.csv`'s CIK for it |
+| `TradingRecord.observed`, `SecurityContexts.observed` | `eras[-1].ticker`, `name`, `first`, `last` | honour | like a seed (`known_from` is its first fails row); its expected name is its fails description |
+| `handoffs.find_handoffs` (via `ticker_sightings`) | sightings | honour | the derived line's sightings are fails rows, so it pairs with the line before it (Task 13) |
+| `Security.row()` (securities.csv), `measurement/scorecard` R1.2, `measurement/lifecycle.observed()`, `outputs/verdict` rules F and the security reason | `observed` | honour (False) | a derived line leaves the "observed" counts, the lifecycle set and rule F (closed with no ending) and the "FIGI without CIK" security reason, and gets its verdicts from its endings; the added successors and acquirers are already `observed=false` in these |
+| `Histories` (ticker_history, cusip_history) | all `securities` | honour | the derived line has rows (source `ftd`) |
+
+### Pre-flight: tasks that share a file or an interface
+
+| Pair | One produces | The other consumes |
+| --- | --- | --- |
+| 7 and 8 (`pipeline.py`, `_run`) | 7: `_find_successors(..., values)`, `_link_successors(..., payouts)` | 8: `values` after the 9d absorb; independent blocks of `_run` (stage 9 call, 9d block) |
+| 8 and 12 (`tests/test_pipeline.py`) | 8: `_line_run(..., llm=None)` | 12: the same helper in the whole-run tests |
+| 6 and 10 (`identity.py`) | 6: `rows_fit`, the fallback loop in `_resolve_issuers` | 10: `identify`, `_refine`, `_split_era`, `refine_eras`; other functions, but the same file: 10 starts after 6 is committed |
+| 9 and 10 | 9: `Observation.derived`, `TickerEra.derived` | 10: builds eras with derived observations |
+| 10 and 11 | 10: `identify(derive=, ftd=)`, `refine_eras(derive=)` (pairs `(ticker, cusip)`) | 11: `derivable(...) -> set[tuple[str, str]]` (the same pairs) |
+| 11 and 12 | 11: `Lines.refused`, `derivable` | 12: `identify_with_lines` reads both |
+| 7, 12 and `tests/test_pipeline.py` | 7 rewrites two tests; 12 rewrites four | each leaves the suite green on its own; both edit different tests |
+| 12 and 13 | 12: derived securities in `_run` | 13: tests of the handoff stage on the shapes a derived line gives; no code |
+| 9 and 14 | 9: `observed` false on a derived line | 14: reads `securities.csv`'s `observed` column |
+| 11 and 12 (`derived_lines.py`) | 11 creates the file with `derivable`; 12 adds `identify_with_lines` | the imports of 12 are listed in its Step 2 |
+
+### Existing tests the tasks change (found by running the prototype's whole suite)
+
+- Task 7: `test_distress_expiration_and_merger_endings_at_the_switch_take_no_line_successor[merger-231]` (its merger case moves out), `test_a_line_successor_is_never_added_for_an_ending_that_does_not_need_it` (replaced by the continuation test).
+- Task 12: `test_a_registrant_that_merged_out_at_the_switch_is_not_followed` (UNIT 2025; the new CUSIP's rows are now a derived security), `test_a_same_ticker_acquirer_is_never_the_target_itself` (Ashland; its delistings are now two), and the fixture `_same_ticker_acquirer_run` (the SEC ticker map's holder needs a filing history to have "existed" when the derived era began; this serves `test_a_same_ticker_acquirer_takes_the_sec_ticker_maps_holder_not_the_targets_cik`).
+- `test_refine_eras_ignores_short_cusip_runs_and_obs_less_sides` does **not** change (the older text under "Existing test that changes under design B" does not apply to the design chosen: with no approved pair the CCC part is dropped as before).
+
+---
+### Task 7: A merger row takes the followed line's successor (decision b)
+
+TEAM, LSXMA, LSXMK, FWONA and FWONK: stage 4b followed the step (the old registrant carries on) to a CUSIP with its
+own composite, so `follow_lines` made a `LineSuccessor`, but the classifier called the Form 25 at the switch a merger,
+and `_line_successor_links` only takes a row that awaits a successor or is `unknown`. The full run reads the five as
+continuations. After this task the link also takes a merger row, as a rewrite (`rewrites.continuation`, which needs the
+run's `MergerValues` to drop the merger's value). A merger whose payout the gate reconciled stands, as it stands against
+a handoff by timing (`handoffs.apply_handoffs`' `reconciled`). The mergers stage 4b refuses (WCN, AAN: `merged_out`)
+have no line successor, so they are untouched.
+
+**Files:**
+- Modify: `src/delist_detection/pipeline.py` (`_line_successor_links`, `_find_successors`, `_link_successors`, the
+  `_find_successors` call in `_run`)
+- Modify: `tests/test_pipeline.py`
+- Modify: `docs/architecture.md` (the stage 9 entry in "The run: pipeline.py"), `docs/invariants.md` ("A line is followed
+  past its observations")
+
+**Interfaces:**
+- Consumes: `LineSuccessor` (stage 4b), `MergerValues.reconciled(key) -> bool`, `rewrites.continuation(..., payouts=)`.
+- Produces: `_line_successor_links(delistings, securities, acquirers, line_successors, ftd, found, payouts: MergerValues | None = None) -> None`,
+  `_find_successors(..., sec_cusips=None, values: MergerValues | None = None) -> _Successors`,
+  `_link_successors(delistings, successors, payouts: MergerValues | None = None) -> None`.
+
+- [ ] **Step 1: Write the failing tests**
+
+In `tests/test_pipeline.py`, replace the parametrization of the test that pins the old behaviour (its merger case is the
+one that changes):
+
+```python
+@pytest.mark.parametrize("bucket,code", [(CrspBucket.LIQUIDATION, 450), (CrspBucket.COMPLIANCE_FAILURE, 560),
+                                         (CrspBucket.EXPIRATION, 600)])
+def test_distress_and_expiration_endings_at_the_switch_take_no_line_successor(bucket, code):
+```
+
+(the body is unchanged). Directly below it add:
+
+```python
+def _switch_securities():
+    return {"BBGRS01": Security("BBGRS01", 4242, "COMMON", "REVERSE SPLIT CO", "", True, "cusip")}
+
+
+def test_a_merger_at_the_switch_takes_the_line_successor_as_a_continuation():
+    """TEAM, LSXMA, LSXMK, FWONA, FWONK (seeds-only parity S2): a Form 25 the classifier read as a merger, at a switch
+    stage 4b followed to a CUSIP with its own composite, links to that composite."""
+    from delist_detection.sources.ftd import FtdIndex
+    d = _unit_delisting("BBGRS01", CrspBucket.MERGER, 231, [])
+    found = pipeline._Successors()
+    pipeline._line_successor_links([d], _switch_securities(), {}, {"BBGRS01": _line_successor("BBGRS01")},
+                                   FtdIndex(), found)
+    assert found.links == {d.key: ("BBGRSNEW1", "line_follow")}
+    assert d.key in found.rebucketed and "BBGRSNEW1" in found.added
+
+
+def test_a_merger_made_a_continuation_by_the_line_link_loses_its_value_and_payout_flags():
+    from delist_detection.terms.merger_value import MergerValue, MergerValues
+    from delist_detection.vocabulary.crsp_codes import CONTINUATION_CODE
+    d = _unit_delisting("BBGRS01", CrspBucket.MERGER, 231, ["merger_at_par"])
+    values = MergerValues({d.key: MergerValue(d.key)})
+    found = pipeline._Successors(links={d.key: ("BBGRSNEW1", "line_follow")},
+                                 rebucketed={d.key: "line follow, 8-K 2012-09-24: x"})
+    pipeline._link_successors([d], found, values)
+    assert (d.record.bucket, d.record.crsp_code, d.record.successor_sec_id) == (
+        CrspBucket.EXCHANGE_TRANSFER, CONTINUATION_CODE, "BBGRSNEW1")
+    assert "merger_at_par" not in d.flags and "line_continuation" in d.flags
+    assert values.get(d.key) is None
+
+
+def test_a_merger_whose_payout_reconciled_takes_no_line_successor():
+    from delist_detection.sources.ftd import FtdIndex
+    from delist_detection.terms.merger_value import MergerValue, MergerValues
+    d = _unit_delisting("BBGRS01", CrspBucket.MERGER, 231, [])
+    values = MergerValues({d.key: MergerValue(d.key, payout=10.0)})
+    found = pipeline._Successors()
+    pipeline._line_successor_links([d], _switch_securities(), {}, {"BBGRS01": _line_successor("BBGRS01")},
+                                   FtdIndex(), found, values)
+    assert found.links == {} and found.added == {} and found.rebucketed == {}
+```
+
+Then replace the whole-run test `test_a_line_successor_is_never_added_for_an_ending_that_does_not_need_it` (its docstring
+says a merger at the switch keeps its kind; the new rule says it does when 4b refuses the step, not when 4b follows it):
+
+```python
+def test_a_merger_at_the_switch_whose_registrant_carries_on_is_the_continuation_to_the_line_successor(
+        fake_edgar, tmp_path):
+    """TEAM, LSXMA, FWONA (seeds-only parity S2): a Form 25 the classifier read as a merger, at a switch stage 4b
+    followed (a 10-Q follows it) to a CUSIP with its own composite, is the exchange transfer to that composite. The
+    mergers 4b refuses (WCN, AAN: `merged_out`) keep their kind: the same-ticker acquirer tests below."""
+    merger_8k = EdgarSubmission("0000004242-12-000040", "8-K", "2012-09-24", "2012-09-24", "2.01,3.01,5.01,9.01",
+                                "m.htm")
+    merger_f25 = EdgarSubmission("0000876661-12-000300", "25-NSE", "2012-09-24", "", "", "primary_doc.xml")
+    fake_edgar.raws["0000876661-12-000300"] = LINE_F25
+    t = _line_run(fake_edgar, tmp_path, filings=[SPLIT_8K, merger_8k, merger_f25, LATER_10Q],
+                  figi={("ID_CUSIP", RS_NEW): _figi_answer("BBGRSNEW1", "RS", "REVERSE SPLIT CO")},
+                  new_rows=_rs_new_rows())
+    [d] = t["delistings"]
+    assert (d["bucket"], d["successor_sec_id"]) == ("exchange_transfer", "BBGRSNEW1")
+    assert "line_continuation" in d["review_flags"].split(";")
+    assert {r["sec_id"]: r["observed"] for r in t["securities"]} == {"BBGRS01": "true", "BBGRSNEW1": "false"}
+```
+
+Run: `PYTHONPATH=src ~/miniconda3/envs/rdagent4qlib/bin/python -m pytest tests/test_pipeline.py -q -o addopts="" -k "switch"`
+Expected: the three unit tests fail (the first on `found.links == {}`, the other two with a `TypeError`: the functions
+take no `payouts` yet) and the whole-run test fails on `('merger', '')`.
+
+- [ ] **Step 2: Change the three functions**
+
+In `pipeline.py`, `_line_successor_links`: change the signature and the gate, and the `unknown`-only rewrite:
+
+```python
+def _line_successor_links(delistings: list[Delisting], securities: dict[str, Security],
+                          acquirers: dict[str, AddedSecurity], line_successors: Mapping[str, LineSuccessor],
+                          ftd: FtdIndex, found: _Successors, payouts: MergerValues | None = None) -> None:
+```
+
+```python
+        ls = line_successors.get(e.sec_id)
+        if ls is None or not (awaits_successor(e) or e.record.bucket in (CrspBucket.UNKNOWN, CrspBucket.MERGER)):
+            continue
+        if e.record.bucket is CrspBucket.MERGER and payouts is not None and payouts.reconciled(e.key):
+            continue                # a payout the gate reconciled with the last close stands against a timing link
+```
+
+```python
+        if e.record.bucket in (CrspBucket.UNKNOWN, CrspBucket.MERGER):
+            found.rebucketed[e.key] = (
+```
+
+and in its docstring replace "(`unknown`: GTES 2026's Form 25 at its redomicile)" by "(`unknown`: GTES 2026's Form 25 at
+its redomicile; a merger: TEAM, LSXMA, FWONA, whose registrant carries on, unless its payout reconciled)" and "an
+`unknown` row becomes the continuation" by "an `unknown` or merger row becomes the continuation".
+
+`_find_successors`: add the last parameter and pass it on:
+
+```python
+                     sec_cusips: dict[str, list[str]] | None = None,
+                     values: MergerValues | None = None) -> _Successors:
+```
+
+```python
+        _line_successor_links(delistings, securities, acquirers, line_successors, ftd or FtdIndex(), found, values)
+```
+
+```python
+    _link_successors(delistings, found, values)
+    return found
+```
+
+`_link_successors`: take the payouts and pass them to the rewrite:
+
+```python
+def _link_successors(delistings: list[Delisting], successors: _Successors,
+                     payouts: MergerValues | None = None) -> None:
+```
+
+```python
+                continuation(d, sid, rule, reason=reason + note, confidence="medium", flag=LINE_CONTINUATION,
+                             how=how or "", payouts=payouts)
+```
+
+In `_run`, the stage 9 call gains the values (they exist since stage 8):
+
+```python
+    successors = _find_successors(ctx, delistings, securities, search.sightings, {**values.added, **r1.added},
+                                  lines.successors, ftd, sec_cusips, values)                        # 9
+```
+
+Run: `PYTHONPATH=src ~/miniconda3/envs/rdagent4qlib/bin/python -m pytest tests/test_pipeline.py -q -o addopts=""`
+Expected: all pass (prototype: 136 passed).
+
+- [ ] **Step 3: Run everything**
+
+Run: `PYTHONPATH=src ~/miniconda3/envs/rdagent4qlib/bin/python -m pytest -q -o addopts=""`
+Expected: the suite's count before this task plus 2 (three new tests; the parametrization loses its merger case),
+44 xfailed, golden replay green (a golden case that changes stops the task).
+
+- [ ] **Step 4: Docs and commit**
+
+`docs/invariants.md`, "A line is followed past its observations", last sentence: after "(an `unknown` row at the switch is
+rewritten, `line_continuation`: it drops `no_evidence_default` and gets medium confidence)" add "; so is a merger row at
+the switch when stage 4b followed the step (the old registrant carries on: TEAM, LSXMA, FWONA), unless its payout
+reconciled with the last close". `docs/architecture.md`, stage 9 in "The run: pipeline.py": the same clause.
+
+```bash
+git add src/delist_detection/pipeline.py tests/test_pipeline.py docs/architecture.md docs/invariants.md
+git commit -m "A merger row at a followed switch takes the line successor as its continuation"
+```
+
+---
+
+### Task 8: The endings of added successors are valued (C5, decision c)
+
+NLSN, NRF and XL in the seeds run: `_successor_endings` (stage 9d) finds the Form 25 of a successor the run added after
+`_merger_values` (stage 8) ran, so its merger ending gets a close and no value, and reads `confirmed` at an assumed par:
+a silent error. After this task the endings stage 9d adds go through `_merger_values` like any ending.
+
+**Files:**
+- Modify: `src/delist_detection/terms/merger_value.py` (`MergerValues.absorb`)
+- Modify: `src/delist_detection/pipeline.py` (`_run`, the 9d block)
+- Modify: `tests/test_merger_value.py`, `tests/test_pipeline.py` (`_line_run` gains `llm=None`)
+- Modify: `docs/architecture.md` (stage 9d entry)
+
+**Interfaces:**
+- Consumes: `_successor_endings(...) -> _SuccessorEndings` (`.delistings`, `.securities`, `.cusips`),
+  `_last_trade_closes(...) -> _Closes`, `_merger_values(ctx, delistings, securities, sec_cusips, ftd, closes: _Closes, overrides, answers, tol, sightings, ftd_lo) -> MergerValues`.
+- Produces: `MergerValues.absorb(other: MergerValues) -> None` (takes `other`'s `records` and `added`; its review items stay the caller's).
+
+- [ ] **Step 1: Write the failing tests**
+
+In `tests/test_merger_value.py` (it imports `MergerValue`, `MergerValues`; add `from delist_detection.outputs.store import DelistingKey` if absent):
+
+```python
+def test_absorb_takes_the_records_and_acquirers_of_another_valuation_and_not_its_review_items():
+    from delist_detection.outputs.review_triage import ReviewItem
+    k1, k2 = DelistingKey("A", "2020-01-02"), DelistingKey("B", "2021-01-02")
+    first = MergerValues({k1: MergerValue(k1, payout=1.0)}, review=[ReviewItem("A", "A", 1, "x", "y")])
+    second = MergerValues({k2: MergerValue(k2, payout=2.0)}, added={"BBGACQ": object()},
+                          review=[ReviewItem("B", "B", 2, "x", "y")])
+    first.absorb(second)
+    assert set(first.records) == {k1, k2} and set(first.added) == {"BBGACQ"}
+    assert [r.sec_id for r in first.review] == ["A"]
+```
+
+In `tests/test_pipeline.py`, let `_line_run` carry an LLM double: add `llm=None` to its signature (after
+`extra_obs=()`) and, directly after `index, clients = _index_clients(fake_edgar, [*obs, *extra_obs], rows, answers)`, add
+`clients.llm_extractor = llm`. Then add (after `test_a_figi_line_whose_new_cusip_has_its_own_figi_ends_as_a_continuation_to_it`):
+
+```python
+class _CashLLM:
+    """The LLM extractor double: every merger it is asked about was paid $40.90 in cash."""
+
+    def __init__(self):
+        self.asked = []
+
+    def extract(self, record, security_name=""):
+        self.asked.append((record.ticker, record.sec_id))
+        return MergerTerms("cash", 40.9, None, "ACQUIRER CO", None, "high", "8-K:0000004242-14-000020", "")
+
+
+def test_the_ending_of_a_line_successor_the_run_added_is_valued(fake_edgar, tmp_path):
+    """C5 (NLSN, NRF, XL): the reverse split gives the line a CUSIP with its own composite (an added line successor);
+    its 2014 merger is found by stage 9d, after the mergers were valued. It is valued all the same: the LLM is asked
+    for it and the row carries the cash, not an assumed par."""
+    switch_f25 = EdgarSubmission("0000876661-12-000300", "25-NSE", "2012-09-24", "", "", "primary_doc.xml")
+    fake_edgar.raws["0000876661-12-000300"] = LINE_F25
+    llm = _CashLLM()
+    t = _line_run(fake_edgar, tmp_path, filings=[SPLIT_8K, switch_f25, LATER_10Q, MERGER_8K, MERGER_F25],
+                  figi={("ID_CUSIP", RS_NEW): _figi_answer("BBGRSNEW1", "RS", "REVERSE SPLIT CO")},
+                  new_rows=_rs_new_rows(), llm=llm)
+    row = next(r for r in t["delistings"] if r["sec_id"] == "BBGRSNEW1")
+    assert (row["bucket"], row["delist_date"]) == ("merger", "2014-06-20")
+    assert llm.asked == [("RS", "BBGRSNEW1")]
+    assert (row["payout_per_share"], row["payout_source"]) == ("40.900000", "llm")
+    assert "merger_at_par" not in row["review_flags"].split(";")
+```
+
+Run: `PYTHONPATH=src ~/miniconda3/envs/rdagent4qlib/bin/python -m pytest tests/test_merger_value.py tests/test_pipeline.py -q -o addopts="" -k "absorb or line_successor_the_run_added"`
+Expected: both fail (`AttributeError: ... 'absorb'`; `llm.asked == []`).
+
+- [ ] **Step 2: `MergerValues.absorb`**
+
+In `terms/merger_value.py`, in `MergerValues`, directly above `get`:
+
+```python
+    def absorb(self, other: MergerValues) -> None:
+        """Take `other`'s records and acquirers (the valuation of endings found after this stage ran: stage 9d's added
+        successors); its review items stay the caller's."""
+        self.records.update(other.records)
+        self.added.update(other.added)
+```
+
+- [ ] **Step 3: Value the 9d endings**
+
+In `pipeline._run`, replace
+
+```python
+    if ends.delistings:
+        delistings += ends.delistings
+        closes.update(_last_trade_closes(ctx, ends.delistings, {**securities, **ends.securities},
+                                         {**sec_cusips, **ends.cusips}, ftd, ftd_lo, overrides, prices).closes)
+```
+
+with
+
+```python
+    if ends.delistings:
+        delistings += ends.delistings
+        run_securities, run_cusips = {**securities, **ends.securities}, {**sec_cusips, **ends.cusips}
+        ends_closes = _last_trade_closes(ctx, ends.delistings, run_securities, run_cusips, ftd, ftd_lo, overrides,
+                                         prices)
+        closes.update(ends_closes.closes)
+        ends_values = _merger_values(ctx, ends.delistings, run_securities, run_cusips, ftd, ends_closes, overrides,
+                                     prices, tol, search.sightings, ftd_lo)                     # 9d: C5
+        values.absorb(ends_values)
+        review += ends_values.review
+        added.update(ends_values.added)
+```
+
+Update the `_run` comment/docstring of `_successor_endings` ("an 8-K12B successor ...") by one sentence: "Its endings are valued
+with every other ending (`_run`)."
+
+Run: `PYTHONPATH=src ~/miniconda3/envs/rdagent4qlib/bin/python -m pytest tests/test_merger_value.py tests/test_pipeline.py tests/test_successor_endings.py -q -o addopts=""`
+Expected: all pass (the `_successor_endings` tests call the stage directly and are untouched).
+
+- [ ] **Step 4: Run everything, docs, commit**
+
+Run the whole suite: expected previous count plus 2, golden replay green. `docs/architecture.md`, stage 9d: add "its mergers
+are valued by `_merger_values` like any ending (C5)".
+
+```bash
+git add src/delist_detection/terms/merger_value.py src/delist_detection/pipeline.py tests/test_merger_value.py tests/test_pipeline.py docs/architecture.md
+git commit -m "The endings of added successors are valued like any ending (C5)"
+```
+
+---
+### Task 9: A derived observation, and the readers of an era's observations that skip it (decision d, the marker)
+
+A line the library derives (Task 10) is an era with one observation that no caller made. This task adds the marker and
+makes every reader in the table above decide. Nothing creates a derived era yet, so the suite does not move; the tests
+build the eras by hand.
+
+**Files:**
+- Modify: `src/delist_detection/identity/observations.py` (`Observation.derived`, `TickerEra.caller_observations`, `TickerEra.derived`)
+- Modify: `src/delist_detection/identity/security_master.py` (`build_securities`, `observation_conflict_review`)
+- Modify: `src/delist_detection/identity/history.py` (`ticker_sightings`, `cusip_sightings`, `observation_map_rows`)
+- Modify: `src/delist_detection/pipeline.py` (`_dead_before_sighting`, `_observation_map`, `_other_issuers`)
+- Modify: `tests/test_observations.py`, `tests/test_security_master.py`, `tests/test_history.py`, `tests/test_pipeline.py`
+- Modify: `docs/architecture.md` (`identity/observations.py`, `identity/security_master.py`, `identity/history.py`), `CONTEXT.md` ("Observation", new "Derived line"), `docs/invariants.md` ("`observation_map.csv` is the caller's join surface")
+
+**Interfaces:**
+- Produces: `Observation(..., sec_id=None, derived: bool = False)`; `TickerEra.caller_observations -> list[Observation]` (those not derived); `TickerEra.derived -> bool` (it has observations and every one is derived); `Security.observed` is True when any of the security's eras is not derived.
+- Consumes: nothing new.
+
+- [ ] **Step 1: Write the failing tests of the marker**
+
+In `tests/test_observations.py`:
+
+```python
+def test_an_era_of_derived_observations_is_derived_and_has_no_caller_observation():
+    d = TickerEra("X", "2020-09-01", "2020-09-01", [Observation("X", "2020-09-01", "X CO NEW", derived=True)])
+    c = TickerEra("X", "2020-01-15", "2020-06-30", [Observation("X", "2020-01-15", "X CO"),
+                                                    Observation("X", "2020-06-30", "X CO")])
+    assert (d.derived, c.derived) == (True, False)
+    assert d.caller_observations == [] and c.caller_observations == c.observations
+    assert d.name == "X CO NEW" and d.cusips == [] and d.cik_pin is None and d.sec_id_pin is None
+    assert TickerEra("X", "2020-01-01", "2020-01-01").derived is False          # no observation at all: not derived
+```
+
+Run: `PYTHONPATH=src ~/miniconda3/envs/rdagent4qlib/bin/python -m pytest tests/test_observations.py -q -o addopts="" -k derived`
+Expected: `TypeError: Observation.__init__() got an unexpected keyword argument 'derived'`.
+
+- [ ] **Step 2: The marker**
+
+In `observations.py`, `Observation`: after `sec_id`
+
+```python
+    derived: bool = False     # made by the library from the fails rows (`identity.refine_eras`), not observed by the caller
+```
+
+and in `TickerEra`, above `names`:
+
+```python
+    @property
+    def caller_observations(self) -> list[Observation]:
+        """The observations the caller made: those not derived."""
+        return [o for o in self.observations if not o.derived]
+
+    @property
+    def derived(self) -> bool:
+        """Whether the library made the era from the fails rows (a line after a CUSIP change no caller observation
+        names): it has observations and every one is derived."""
+        return bool(self.observations) and not self.caller_observations
+```
+
+Run the same command. Expected: pass.
+
+- [ ] **Step 3: Write the failing tests of the readers**
+
+`tests/test_security_master.py` (add `TickerEra` to the `observations` import and `observation_conflict_review` to the
+`security_master` import):
+
+```python
+def _derived_era(ticker="X", first="2020-09-01", name="X CO NEW"):
+    return TickerEra(ticker, first, first, [Observation(ticker, first, name, derived=True)])
+
+
+def test_a_security_is_observed_when_any_of_its_eras_is_the_callers():
+    caller = TickerEra("X", "2020-01-15", "2020-06-30", [Observation("X", "2020-01-15", "X CO")])
+    derived = _derived_era()
+    res = {e.key: EraResolution(e.key, "BBGX", "cusip", None, ()) for e in (caller, derived)}
+    eras = {e.key: e for e in (caller, derived)}
+    assert build_securities(res, eras, {})["BBGX"].observed is True
+    assert build_securities({derived.key: res[derived.key]}, {derived.key: derived}, {})["BBGX"].observed is False
+
+
+def test_a_derived_observation_is_no_conflict():
+    caller = TickerEra("X", "2020-09-01", "2020-09-01", [Observation("X", "2020-09-01", "OTHER CO")])
+    derived = _derived_era(first="2020-09-01")                                  # the same ticker and day, another name
+    res = {e.key: EraResolution(e.key, "BBGX", "cusip", None, ()) for e in (caller, derived)}
+    assert observation_conflict_review([caller, derived], res) == []
+```
+
+`tests/test_history.py`:
+
+```python
+def test_a_derived_observation_is_no_sighting_and_no_row_of_the_observation_map():
+    from delist_detection.identity.security_master import Security
+    caller = TickerEra("X", "2020-09-01", "2020-09-01", [Observation("X", "2020-09-01", "X CO")])
+    derived = TickerEra("X", "2020-09-01", "2020-09-01", [Observation("X", "2020-09-01", "X CO NEW", derived=True)])
+    sec = Security("BBGX", 1, "COMMON", "X", "Common Stock", True, "cusip", eras=[caller, derived])
+    assert ticker_sightings(sec, FtdIndex(), []) == [Sighting("2020-09-01", "X", "observation")]
+    history = _plain_history({"BBGX": [Sighting("2020-09-01", "X", "ftd")]})
+    assert observation_map_rows([derived], {derived.key: "BBGX"}, {derived.key: 1}, history, []) == []
+```
+
+`tests/test_pipeline.py`: let `_stage_5b` take `derived=False` (signature `def _stage_5b(rows, specs, endings, sec_cusips=None, loaded=(), derived=False)`; the era
+line becomes `Observation(ticker, first, "AETNA INC", derived=derived)` and the security's `observed` argument `not derived`), then add
+
+```python
+def test_stage_5b_does_not_back_fill_a_derived_line():
+    """A derived line's one observation is dated at its first fails row: no caller sighting, so no 'died before it was
+    seen' to repair."""
+    loaded = [FtdRow("2018-11-27", "00817Y108", "AET", "AETNA INC COM", 181.0),
+              FtdRow("2018-12-05", "00817Y108", "AET", "AETNA INC COM", 212.0),
+              FtdRow("2018-12-12", "00817Y108", "AET", "AETNA INC COM", 212.0)]
+    kw = dict(sec_cusips={"S1": ["00817Y108"]}, loaded=loaded)
+    fixed, *_ = _stage_5b(_aet_rows(), {"S1": ("AET", "2019-06-28")}, [("S1", "2018-11-28", None)], **kw)
+    assert fixed == ["S1"]
+    fixed, *_ = _stage_5b(_aet_rows(), {"S1": ("AET", "2019-06-28")}, [("S1", "2018-11-28", None)], derived=True, **kw)
+    assert fixed == []
+
+
+def test_the_other_issuer_in_force_reads_no_derived_observation():
+    obs = [Observation("SPB", d, "SPECTRUM BRANDS HOLDINGS INC", derived=True) for d in ("2010-06-30", "2014-06-30")]
+    s, era, resolutions, issuers = _security_with_era("BBG000P4BQM9", 109177, "SPB", obs)
+    ctx = _in_force_run({109177: HRG, 1487730: OLD_SPB}, {"SPECTRUM BRANDS HOLDINGS INC": [109177, 1487730]})
+    assert pipeline._other_issuers(ctx, [era], resolutions, issuers, {s.sec_id: s}) == {}
+```
+
+(`_observation_map`'s conflict list is the same expression as `_other_issuers`'s and is exercised through the whole-run test of Task 12.)
+
+Run: `PYTHONPATH=src ~/miniconda3/envs/rdagent4qlib/bin/python -m pytest tests/test_security_master.py tests/test_history.py tests/test_pipeline.py -q -o addopts="" -k "derived or observed_when"`
+Expected: `test_a_security_is_observed_when_any_of_its_eras_is_the_callers` (`observed` is always True today), the conflict, sighting and map tests, the 5b test and the other-issuer test fail.
+
+- [ ] **Step 4: The readers**
+
+`security_master.py`, `build_securities`: the first-created security takes `not era.derived`, and a later era can only turn it on:
+
+```python
+            sec = Security(res.sec_id, cik_of(issuers, key), _share_class(res, era), name, stype, not era.derived,
+                           res.source, security_kind(stype, name))
+            out[res.sec_id] = sec
+        elif SOURCE_STRENGTH.index(res.source) < SOURCE_STRENGTH.index(sec.figi_source):
+            sec.figi_source, sec.share_class = res.source, _share_class(res, era)
+        sec.observed = sec.observed or not era.derived      # observed when any of its eras is the caller's
+```
+
+(the `elif` is the existing one; the last line is new, before `classes[res.sec_id].append(...)`.) `observation_conflict_review`:
+both `e.observations` become `e.caller_observations`.
+
+`history.py`: `ticker_sightings` (`for o in e.observations` -> `for o in e.caller_observations`), `cusip_sightings` (the same) and
+`observation_map_rows` (`for o in era.observations:` -> `for o in era.caller_observations:`). Update `ticker_sightings`'s docstring:
+"its observations (the caller's: a derived era has none)".
+
+`pipeline.py`: `_dead_before_sighting` (`for o in era.observations` -> `era.caller_observations`), `_observation_map`
+(the `observation_conflicts(...)` generator), `_other_issuers` (the `conflicts` set and the `sightings` comprehension). `total =
+sum(len(e.observations) for e in index.eras())` stays: the index holds the caller's eras only.
+
+Run the command of Step 3, then the whole suite. Expected: all pass, the previous count plus 6, golden replay green.
+
+- [ ] **Step 5: Docs and commit**
+
+`CONTEXT.md`, after **Observation**: "**Derived line**: A line after a CUSIP change that stage 4b refused (another registrant took over) and that no observation names, made an era of its own from the fails rows (`identity/derived_lines.py`). Its one observation is derived (`Observation.derived`): it is not the caller's, so it appears in neither `observation_map.csv` nor `contract/seeds.csv`, and a security all of whose eras are derived is `observed=false`. In a full run the caller has observed the same line." `docs/architecture.md`: in the three module entries, the marker and the readers (a sentence each). `docs/invariants.md`, "`observation_map.csv` is the caller's join surface": "A derived era's observation is no row of it."
+
+```bash
+git add src/delist_detection/identity/observations.py src/delist_detection/identity/security_master.py src/delist_detection/identity/history.py src/delist_detection/pipeline.py tests CONTEXT.md docs/architecture.md docs/invariants.md
+git commit -m "A derived observation: the marker, and the readers that skip it"
+```
+
+---
+
+### Task 10: The identity stage keeps an approved part of the fails rows as a derived era (decision d, the creation)
+
+`_split_era` drops a part of a ticker's fails rows that has no observation. With the pairs `(ticker, new CUSIP)` stage 4b's
+refusals earn (Task 11), it keeps such a part as an era whose one observation is derived. Four conditions hold, three of
+them structural and checked here, the fourth (the new rows name the old issuer) decided by the caller of the stage:
+
+1. the part follows an era of the same gap group (an observed part, or a derived one: a chain), with only CUSIP changes between them;
+2. its kept CUSIP is approved for the ticker (Task 11's `derivable`);
+3. it is not before the era's first observation (a consequence of 1: nothing precedes the first part);
+4. its CUSIP is not one the ticker's next era trades (that era's own rows are its head, not a derived line).
+
+The era is named by the commonest description its CUSIP's rows carry in their first 30 days, has its own CUSIP as
+`ftd_cusips`, and carries no pin. The stage also takes the fails index it is to read (`ftd`), so a second pass does not
+open it again.
+
+**Files:**
+- Modify: `src/delist_detection/vocabulary/names.py` (`description_name`)
+- Modify: `src/delist_detection/identity/identity.py` (`identify`, `_refine`, `_split_era`, `_derived_era`, `refine_eras`)
+- Modify: `tests/test_names.py`, `tests/test_security_master.py`
+- Modify: `docs/architecture.md` (`identity/identity.py`)
+
+**Interfaces:**
+- Consumes: `Observation.derived`, `TickerEra.derived` (Task 9).
+- Produces: `names.description_name(description: str) -> str`; `refine_eras(eras, ftd, derive: Collection[tuple[str, str]] = ()) -> list[TickerEra]`; `identify(index, clients, *, as_of, limit=None, log=..., workers=1, meter=None, derive: Collection[tuple[str, str]] = (), ftd: FtdIndex | None = None) -> Identity`; `_split_era(era, rows, *, contested, derive: Collection[str] = ())`.
+
+- [ ] **Step 1: Write the failing tests**
+
+`tests/test_names.py`:
+
+```python
+def test_description_name_is_the_issuers_name_without_the_securitys_tail():
+    from delist_detection.vocabulary.names import description_name
+    assert description_name("CYTTA CORP NEW COM STK (NV)") == "CYTTA CORP NEW COM STK"
+    assert description_name("  wendy's/arby's group inc cl a ") == "WENDY'S/ARBY'S GROUP INC CL A"
+    assert description_name("APPLE INC;COM NPV") == "APPLE INC" and description_name("") == ""
+```
+
+`tests/test_security_master.py` (it has `_era`, `_rows`, `refine_eras`, `FtdIndex`, `Observation`):
+
+```python
+X_OBS = (("2020-01-15", "X CO"), ("2020-06-30", "X CO"), ("2020-12-31", "X CO"))
+
+
+def _x_rows():
+    return (_rows("X", "AAA", ["2020-01-02", "2020-02-03", "2020-03-02", "2020-04-01"])
+            + _rows("X", "BBB", ["2020-09-01", "2020-10-01", "2020-11-02", "2021-01-04"], "X CO NEW")
+            + _rows("X", "CCC", ["2021-03-01", "2021-04-01", "2021-05-03"], "X CO NEWER, INC (DE)"))
+
+
+def test_a_derived_part_is_an_era_with_one_derived_observation_and_no_pin():
+    era = _era("X", *X_OBS)
+    [a, b, c] = refine_eras([era], FtdIndex(_x_rows()), {("X", "CCC")})
+    assert (c.key, c.first, c.last, c.derived, c.ftd_cusips) == ("X@2021-03-01", "2021-03-01", "2021-03-01", True,
+                                                                 ("CCC",))
+    assert c.observations == [Observation("X", "2021-03-01", "X CO NEWER, INC", derived=True)]
+    assert (c.cik_pin, c.sec_id_pin, c.cusips) == (None, None, [])
+    assert not a.derived and not b.derived
+
+
+def test_a_part_nobody_approved_or_approved_for_another_ticker_is_dropped_as_before():
+    era = _era("X", *X_OBS)
+    assert len(refine_eras([era], FtdIndex(_x_rows()))) == 2
+    assert len(refine_eras([era], FtdIndex(_x_rows()), {("Y", "CCC"), ("X", "ZZZ")})) == 2
+
+
+def test_a_chain_of_derived_parts_is_followed_and_a_dropped_part_breaks_it():
+    rows = _x_rows() + _rows("X", "DDD", ["2021-07-01", "2021-08-02", "2021-09-01"], "X CO NEWEST")
+    era = _era("X", *X_OBS)
+    got = refine_eras([era], FtdIndex(rows), {("X", "CCC"), ("X", "DDD")})
+    assert [(e.first, e.derived) for e in got] == [("2020-01-15", False), ("2020-12-31", False), ("2021-03-01", True),
+                                                   ("2021-07-01", True)]
+    broken = refine_eras([era], FtdIndex(rows), {("X", "DDD")})            # CCC is not approved: DDD follows no era
+    assert [e.first for e in broken] == ["2020-01-15", "2020-12-31"]
+
+
+def test_a_part_before_the_first_observation_or_after_a_hole_is_no_derived_line():
+    late = _era("X", ("2020-09-15", "X CO"), ("2020-12-31", "X CO"))
+    assert all(not e.derived for e in refine_eras([late], FtdIndex(_x_rows()), {("X", "AAA")}))   # AAA precedes it
+    hole = _rows("X", "EEE", ["2023-03-01", "2023-04-03", "2023-05-01"])         # more than 400 days after the last row
+    got = refine_eras([_era("X", *X_OBS)], FtdIndex(_x_rows() + hole), {("X", "EEE")})
+    assert all(not e.derived for e in got)
+
+
+def test_a_cusip_the_next_era_of_the_ticker_trades_is_that_eras_not_a_derived_line():
+    first = _era("X", ("2020-01-15", "X CO"), ("2020-12-31", "X CO"))
+    second = _era("X", ("2023-06-30", "Y CORP"), ("2023-12-31", "Y CORP"))      # the name stopped agreeing: a second era
+    rows = (_rows("X", "AAA", ["2020-01-02", "2020-02-03", "2020-03-02"])
+            + _rows("X", "BBB", ["2021-03-01", "2021-04-01", "2021-05-03", "2023-07-03", "2023-08-01", "2023-09-01"],
+                    "Y CORP"))
+    got = refine_eras([first, second], FtdIndex(rows), {("X", "BBB")})
+    assert [(e.first, e.derived) for e in got] == [("2020-01-15", False), ("2023-06-30", False)]
+```
+
+Run: `PYTHONPATH=src ~/miniconda3/envs/rdagent4qlib/bin/python -m pytest tests/test_names.py tests/test_security_master.py -q -o addopts="" -k "description_name or derived or next_era"`
+Expected: `ImportError` for `description_name`, then (after Step 2) `TypeError: refine_eras() takes 2 positional arguments` for the others.
+
+- [ ] **Step 2: `names.description_name`**
+
+In `vocabulary/names.py`, directly above `_issuer_words`:
+
+```python
+def description_name(description: str) -> str:
+    """The issuer's name in a fails-to-deliver description: it without its security tail ("CYTTA CORP NEW COM STK
+    (NV)" is "CYTTA CORP NEW COM STK"), upper case, single-spaced; empty for a description with none."""
+    return " ".join(_name_part(description).split())
+```
+
+- [ ] **Step 3: The creation**
+
+`identity.py`: add `description_name` to the `names` import. Replace `_split_era` with (the new pieces are `DERIVED_NAME_DAYS`, `_derived_era`, the `derive` parameter and `follows`):
+
+```python
+DERIVED_NAME_DAYS = 30     # a derived era is named by the description its CUSIP's rows carry in their first days
+
+
+def _derived_era(era: TickerEra, part_rows: Sequence[FtdRow], kept: tuple[str, ...]) -> TickerEra:
+    """The era of a line no caller observation names: one derived observation dated at the part's first row and named
+    by the commonest description of its CUSIP's rows in their first `DERIVED_NAME_DAYS` days. No pin: the observation
+    carries none, and the era's own CUSIPs are the part's."""
+    first = part_rows[0].date
+    until = (date.fromisoformat(first) + timedelta(days=DERIVED_NAME_DAYS)).isoformat()
+    seen = Counter(r.description for r in part_rows if r.cusip == kept[0] and r.date <= until)
+    name = description_name(seen.most_common(1)[0][0]) if seen else ""
+    return TickerEra(era.ticker, first, first, [Observation(era.ticker, first, name or None, derived=True)],
+                     ftd_cusips=kept)
+
+
+def _split_era(era: TickerEra, rows: list[FtdRow], *, contested: bool,
+               derive: Collection[str] = ()) -> list[TickerEra]:
+    out: list[TickerEra] = []
+    for g_obs, g_rows in _cut(era.observations, rows, _gap_cuts(era.observations, rows)):
+        follows = False                   # the part before is an era of this group: a line is derived only after one
+        for obs, part_rows in _cut(g_obs, g_rows, _switch_cuts(g_rows)):
+            kept = _kept_cusips(part_rows)
+            if not obs:                   # an FTD-only side (another holder of the ticker, a tail) is no era ...
+                follows = follows and bool(kept) and kept[0] in derive      # ... unless a derived line (`derive`)
+                if follows:
+                    out.append(_derived_era(era, part_rows, kept))
+                continue
+            follows = True
+            names = [o.name for o in obs if o.name]
+            if contested and names:
+                # Another era of this ticker has observations on the same dates
+                # (a backfilled name): the ticker's rows are only this era's when
+                # their description agrees with its names.
+                kept = tuple(c for c in kept if _described(c, part_rows, names))
+            out.append(replace(era, first=obs[0].as_of, last=obs[-1].as_of, observations=list(obs),
+                               ftd_cusips=kept))
+    return out
+```
+
+`refine_eras(eras, ftd, derive=())`: the signature `def refine_eras(eras: Sequence[TickerEra], ftd: FtdIndex, derive: Collection[tuple[str, str]] = ()) -> list[TickerEra]:`, one paragraph added to its docstring ("`derive`: (ticker, CUSIP) pairs the caller approved (`derived_lines.derivable`): a part of the ticker's rows with no observation whose kept CUSIP is approved, that follows an era of its gap group and whose CUSIP the ticker's next era does not trade, is an era with one derived observation (`_derived_era`)") and the loop body's last two lines become:
+
+```python
+        later = {r.cusip for r in ftd.by_symbol(e.ticker, nxt)} if nxt and derive else set()   # the next era's own
+        approved = {c for t, c in derive if t == e.ticker and c not in later}
+        out += _split_era(e, ftd.by_symbol(e.ticker, lo, hi), contested=contested, derive=approved)
+```
+
+`identify` and `_refine` take the pair set and an optional index (the second pass reads the first's, opened once):
+
+```python
+def identify(index: ObservationIndex, clients: Sources, *, as_of: date, limit: int | None = None,
+             log: Callable[[str], None] = _quiet, workers: int = 1, meter: StageMeter | None = None,
+             derive: Collection[tuple[str, str]] = (), ftd: FtdIndex | None = None) -> Identity:
+```
+
+```python
+    eras, era_by_key, ftd = _refine(index, clients.ftd_client, as_of, limit, log, derive, ftd)          # 1
+```
+
+```python
+def _refine(index: ObservationIndex, ftd_client: Any, as_of: date, limit: int | None,
+            log: Callable[[str], None], derive: Collection[tuple[str, str]] = (),
+            ftd: FtdIndex | None = None) -> tuple[list[TickerEra], dict[str, TickerEra], FtdIndex]:
+```
+
+```python
+    if ftd is None:
+        ftd = FtdIndex.opened(ftd_client, lo, hi, through=as_of, symbols={e.ticker for e in eras},
+                              cusips={c for e in eras for c in e.cusips}, names=class_names, first_seen=first_seen)
+    eras = refine_eras(eras, ftd, derive)
+```
+
+Add to `identify`'s docstring: "`derive` and `ftd`: the derived-line pairs (`derived_lines.identify_with_lines`) and the fails index an earlier call opened, which a repeat reads in place of opening its own (the rows `follow_lines` added to it stay)."
+
+Run: `PYTHONPATH=src ~/miniconda3/envs/rdagent4qlib/bin/python -m pytest tests/test_names.py tests/test_security_master.py tests/test_resolver_renamed.py tests/test_identity_cases.py -q -o addopts=""`
+Expected: all pass (prototype: the five derived tests pass in 0.12 s). `test_refine_eras_ignores_short_cusip_runs_and_obs_less_sides` is unchanged: with no approved pair the CCC part is still dropped.
+
+- [ ] **Step 4: Run everything, docs, commit**
+
+Whole suite: previous count plus 6, golden green. `docs/architecture.md`, `identity/identity.py` entry: `refine_eras`' `derive`, `identify`'s `derive` and `ftd`. 
+
+```bash
+git add src/delist_detection/vocabulary/names.py src/delist_detection/identity/identity.py tests/test_names.py tests/test_security_master.py docs/architecture.md
+git commit -m "The identity stage keeps an approved part of the fails rows as a derived era"
+```
+
+---
+
+### Task 11: Stage 4b says which refused steps are lines; the test of a name (decision d, g)
+
+`follow_lines` keeps the steps it refuses only as review items. This task returns them (`Lines.refused`) and adds the pure
+function that picks the ones whose line is derived: a switch refused `merged_out`, `other_registrant` or `name` whose new
+rows' descriptions name the old line's issuer. "Name" is `names.description_names_issuer`: `description_names` (as many
+issuer words as the shorter side has, up to two) and at least one of them a word as spelled, not only a word written
+short. The table under "Condition 2 and the test of a name" is its measurement.
+
+**Files:**
+- Modify: `src/delist_detection/vocabulary/names.py` (`description_names_issuer`)
+- Modify: `src/delist_detection/identity/line_follow.py` (`RefusedStep`, `Lines.refused`, `follow_lines`)
+- Create: `src/delist_detection/identity/derived_lines.py` (`DERIVABLE`, `old_line_names`, `derivable`; the loop comes in Task 12)
+- Modify: `tests/test_names.py`, `tests/test_line_stage.py`; Create: `tests/test_derived_lines.py`
+- Modify: `docs/architecture.md` (`identity/line_follow.py`, new `identity/derived_lines.py`), `CLAUDE.md` (the `identity/` list)
+
+**Interfaces:**
+- Produces: `RefusedStep(sec_id: str, step: LineStep, why: str)`; `Lines.refused: list[RefusedStep]` (its `sec_id` follows a fold, like the review items'); `names.description_names_issuer(description: str, name: str) -> bool`; `derived_lines.derivable(refused: Sequence[RefusedStep], securities: Mapping[str, Security], profile: Callable[[int], Mapping | None]) -> set[tuple[str, str]]` (the `(ticker, new CUSIP)` pairs Task 10's `derive` takes).
+
+- [ ] **Step 1: Write the failing tests**
+
+`tests/test_names.py`:
+
+```python
+@pytest.mark.parametrize("description,name,expected", [
+    ("AMERICAN NATL GROUP INC", "AMERICAN NATIONAL INSURANCE CO", True),      # ANAT 2020
+    ("CIGNA CORP NEW COM STK", "CIGNA CORP", True),                            # CI 2018
+    ("MYLAN N V SHS EURO", "MYLAN INC.", True),                                # MYL 2015
+    ("ENDO INTL PLC ORD SHS", "ENDO PHARMACEUTICALS", True),                   # ENDP 2014
+    ("ARRIS INTL LTD ORD SHS", "ARRIS INTERNATIONAL INC", True),               # ARRS 2016
+    ("BUNGE GLOBAL SA SHS", "BUNGE LIMITED", True),                            # BG 2023
+    ("STERIS PLC ORD SHS", "STERIS", True),                                    # STE 2019
+    ("DIRECTV CL A COM STK", "DIRECTV GROUP INC", True),                       # DTV 2009
+    ("FERGUSON ENTERPRISES INC COM", "FERGUSON PLC", True),                    # FERG 2024
+    ("SEA LTD ADR (CYM)", "SPECTRA ENERGY CORP", False),                       # SE 2017: SEA is SPECTRA with letters left out
+    ("LIBERTY GLOBAL PLC SHS CL A", "TELEWEST GLOBAL INC", False),             # VMED 2013: one word, GLOBAL
+    ("BRISTOL MYERS SQUIBB CO CONTIN", "CELGENE CORP", False),                 # CELG 2019
+    ("WW INTL INC COM", "WEIGHT WATCHERS INTL INC", False),                    # no issuer word left: names nothing
+])
+def test_a_description_names_the_issuer_by_a_word_as_spelled(description, name, expected):
+    from delist_detection.vocabulary.names import description_names_issuer
+    assert description_names_issuer(description, name) is expected
+```
+
+(`tests/test_names.py` imports `pytest`; add it if it does not.)
+
+`tests/test_line_stage.py`:
+
+```python
+def test_a_refused_step_is_returned_with_its_security_and_why():
+    """A registrant that merged out (no periodic report after the step) refuses the step; the stage hands it back."""
+    rows = _line("AA", ["A1", "A2"])
+    lines = _follow([_Spec("BBGA", 1, "AA", ["A1"])], rows, edgar=_Edgar([f for f in _stating(rows) if f is not LATER_10Q]))
+    [r] = lines.refused
+    assert (r.sec_id, r.why, r.step.old_cusip, r.step.new_cusip, r.step.symbol) == ("BBGA", "merged_out", "A1", "A2", "AA")
+    assert _flags(lines) == [("BBGA", "line_follow_refused:merged_out")]
+```
+
+(`_stating(rows)` ends with the module's `LATER_10Q`; filtering it out removes the periodic report.)
+
+`tests/test_derived_lines.py` (new):
+
+```python
+"""Which refused steps of stage 4b are lines of the run (`derived_lines.derivable`), and the rounds that give the run
+those lines (`identify_with_lines`)."""
+from datetime import date
+from types import SimpleNamespace
+
+import delist_detection.identity.derived_lines as derived_lines
+from delist_detection.identity.derived_lines import derivable, old_line_names
+from delist_detection.identity.line_follow import NEW_SYMBOL, SWITCH, LineStep, RefusedStep
+from delist_detection.identity.observations import Observation, TickerEra
+from delist_detection.identity.security_master import Security
+
+
+def _security(sid="BBGOLD", cik=1, eras_name="CIGNA CORP", tickers=("CI",)):
+    eras = [TickerEra(t, "2008-01-16", "2008-01-16", [Observation(t, "2008-01-16", eras_name)]) for t in tickers]
+    return Security(sid, cik, "COMMON", eras_name, "Common Stock", True, "cusip", eras=eras)
+
+
+def _step(descs, kind=SWITCH, sid="BBGOLD", new="NEWCUSIP1"):
+    return LineStep(sid, kind, "OLDCUSIP1", new, "CI", "2018-12-10", "2018-12-21", tuple(descs))
+
+
+NO_PROFILE = lambda cik: None
+
+
+def test_a_refused_switch_whose_new_rows_name_the_old_issuer_is_derived_for_each_of_its_tickers():
+    s = _security(tickers=("CI", "CIGNA"))
+    got = derivable([RefusedStep("BBGOLD", _step(["CIGNA CORP NEW COM STK"]), "merged_out")], {"BBGOLD": s}, NO_PROFILE)
+    assert got == {("CI", "NEWCUSIP1"), ("CIGNA", "NEWCUSIP1")}
+
+
+def test_each_refusal_of_another_registrant_or_a_name_is_derivable_and_no_other_is():
+    s = {"BBGOLD": _security()}
+    for why, derived in [("merged_out", True), ("other_registrant", True), ("name", True), ("no_filing", False),
+                         ("bankruptcy", False), ("unsettled", False), ("otc_move", False), ("taken", False)]:
+        got = derivable([RefusedStep("BBGOLD", _step(["CIGNA CORP NEW COM STK"]), why)], s, NO_PROFILE)
+        assert bool(got) is derived, why
+
+
+def test_a_new_symbol_a_reused_ticker_and_an_unknown_security_are_no_derived_line():
+    s = {"BBGOLD": _security(eras_name="SPECTRA ENERGY CORP", tickers=("SE",))}
+    assert derivable([RefusedStep("BBGOLD", _step(["SEA LTD ADR (CYM)"]), "name")], s, NO_PROFILE) == set()   # SE 2017
+    assert derivable([RefusedStep("BBGOLD", _step(["CIGNA CORP"], kind=NEW_SYMBOL), "merged_out")],
+                     {"BBGOLD": _security()}, NO_PROFILE) == set()
+    assert derivable([RefusedStep("BBGOLD", _step(["CIGNA CORP"]), "merged_out")], {}, NO_PROFILE) == set()
+
+
+def test_the_old_lines_names_are_its_observed_names_and_its_issuers_names_until_the_step():
+    sub = {"name": "NEW NAME INC", "formerNames": [
+        {"name": "OLD NAME INC", "from": "2001-01-01T00:00:00.000Z", "to": "2018-12-22T00:00:00.000Z"}]}
+    names = old_line_names(_security(eras_name="OBSERVED CO"), sub, "2018-12-21")
+    assert names == ["OBSERVED CO", "OLD NAME INC"]            # NEW NAME INC began after the step: the new line's
+```
+
+Run: `PYTHONPATH=src ~/miniconda3/envs/rdagent4qlib/bin/python -m pytest tests/test_names.py tests/test_line_stage.py tests/test_derived_lines.py -q -o addopts="" -k "issuer_by_a_word or refused or derived or old_lines"`
+Expected: `ImportError` (names, `RefusedStep`, `derived_lines`).
+
+- [ ] **Step 2: `description_names_issuer`**
+
+In `vocabulary/names.py`, directly above `names_an_issuer`:
+
+```python
+def description_names_issuer(description: str, name: str) -> bool:
+    """Whether a fails-to-deliver `description` is the stock of the company `name`, for a line the library derives:
+    `description_names`, and not on words written short alone. At least one issuer word of the description is a word
+    of the name as spelled (a plural S aside); the words matched are two when both sides have two or more, else the
+    only word the shorter side has. SEA LTD is not SPECTRA ENERGY (SEA is SPECTRA with letters left out), a one-word
+    overlap on GLOBAL is not LIBERTY GLOBAL naming TELEWEST GLOBAL, while AMERICAN NATL GROUP is AMERICAN NATIONAL
+    INSURANCE (AMERICAN as spelled, NATL written short). With nothing to compare it names nothing."""
+    d_words = _without_holding(_issuer_words(_name_part(description)))
+    n_words = _without_holding(_issuer_words(name))
+    if not d_words or not n_words:
+        return False
+    exact, short = _word_matches(d_words, n_words, _name_part(description), name, either=False)
+    return exact >= 1 and exact + short >= min(2, len(d_words), len(n_words))
+```
+
+- [ ] **Step 3: `Lines.refused`**
+
+`line_follow.py`: above `Lines`:
+
+```python
+@dataclass(frozen=True)
+class RefusedStep:
+    """A step `follow_lines` did not follow: the security whose line it was, the step and why (`corroborate`'s or
+    R2's refusal word: "merged_out", "name", ...)."""
+    sec_id: str
+    step: LineStep
+    why: str
+```
+
+`Lines` gains `refused: list[RefusedStep] = field(default_factory=list)` after `review`, and its docstring "the steps it refused (`refused`: stage 5-onward readers of the line, and `derived_lines`)". In `follow_lines`: `refusals: list[RefusedStep] = []` beside `items`; in the refusal branch, after `counts[f"refused:{refused}"] += 1`: `refusals.append(RefusedStep(sid, step, refused))`; after `out.renames` is final (just before `out.review = ...`): `out.refused = [replace(r, sec_id=out.renames.get(r.sec_id, r.sec_id)) for r in refusals]`.
+
+- [ ] **Step 4: `derived_lines.py` (the pure part)**
+
+Create `src/delist_detection/identity/derived_lines.py` with the module docstring, imports, `MAX_DERIVE_ROUNDS`, `DERIVABLE`, `old_line_names` and `derivable` exactly as in the file of Task 12, Step 3 (this task creates the file with those four names and the imports they use; Task 12 adds `identify_with_lines`):
+
+```python
+"""The line after a CUSIP change that stage 4b refuses is a line of the run (seeds-only parity, S2).
+
+Stage 4b (`line_follow.follow_lines`) follows a security past its observations across a CUSIP change when the old
+registrant carries on. When another registrant took over (`merged_out`, `other_registrant`), or the new rows do not
+name the issuer's name in force after the step (`name`), it refuses the step, and the line after it belongs to
+nobody: a full run has it because the caller kept observing it, a seeds-only run has no observation in it.
+`identify_with_lines` gives the line to the run as an era of its own: it asks the identity stage again with the
+refused steps whose new rows still name the old line's issuer (`derivable`), so `identity.refine_eras` keeps those
+parts as eras whose one observation is derived (`Observation.derived`), until a round refuses no further step.
+Everything after the stage sees an ordinary era-born security.
+"""
+from __future__ import annotations
+
+from collections.abc import Mapping, Sequence
+from datetime import date, timedelta
+from typing import Callable
+
+from ..filings.evidence import names_until
+from ..vocabulary.names import description_names_issuer
+from .line_follow import SWITCH, RefusedStep
+from .security_master import Security
+
+MAX_DERIVE_ROUNDS = 3        # rounds that add derived lines: a derived line whose own next step is refused too is a round
+DERIVABLE = frozenset({"merged_out", "other_registrant", "name"})     # the refusals a derived line may follow
+
+
+def old_line_names(security: Security, profile: Mapping | None, step_first: str) -> list[str]:
+    """The names the refused step's old line was known by: its eras' observed names, and every EDGAR name its issuer
+    carried until the day before the step (`evidence.names_until`: a name it took after the step is the new line's)."""
+    day = date.fromisoformat(step_first) - timedelta(days=1)
+    edgar = names_until(profile, day) if isinstance(profile, Mapping) else []
+    return list(dict.fromkeys([*(n for e in security.eras for n in e.names), *edgar]))
+
+
+def derivable(refused: Sequence[RefusedStep], securities: Mapping[str, Security],
+              profile: Callable[[int], Mapping | None]) -> set[tuple[str, str]]:
+    """The (ticker, new CUSIP) pairs of the refused steps whose line is derived: a switch refused for one of
+    `DERIVABLE` whose new rows' descriptions name the old line's issuer (`description_names_issuer` against
+    `old_line_names`), for each ticker the old line traded under."""
+    out: set[tuple[str, str]] = set()
+    for r in refused:
+        s = securities.get(r.sec_id)
+        if s is None or r.why not in DERIVABLE or r.step.kind != SWITCH:
+            continue
+        names = old_line_names(s, profile(s.issuer_cik) if s.issuer_cik is not None else None, r.step.first)
+        if any(description_names_issuer(d, n) for d in r.step.descriptions for n in names):
+            out |= {(t, r.step.new_cusip) for t in s.own_tickers()}
+    return out
+```
+
+Run: `PYTHONPATH=src ~/miniconda3/envs/rdagent4qlib/bin/python -m pytest tests/test_names.py tests/test_line_stage.py tests/test_derived_lines.py tests/test_line_follow.py tests/test_line_follow_cases.py tests/test_import_closure.py -q -o addopts=""`
+Expected: all pass. (`import_closure` reads the new module's imports: `identity` imports `filings`, `vocabulary` and its own modules only.)
+
+- [ ] **Step 5: Run everything, docs, commit**
+
+Whole suite: previous count plus 18, golden green. `docs/architecture.md`: `line_follow.py` (`RefusedStep`, `Lines.refused`), a new `identity/derived_lines.py` entry (what it does, `derivable`'s definition and the table's result); `CLAUDE.md` identity list: add `derived_lines`.
+
+```bash
+git add src/delist_detection/vocabulary/names.py src/delist_detection/identity/line_follow.py src/delist_detection/identity/derived_lines.py tests docs/architecture.md CLAUDE.md
+git commit -m "Stage 4b returns its refused steps; which of them are lines of the run"
+```
+
+---
+### Task 12: The run asks again with the derived lines (decision d, e)
+
+`identify_with_lines` runs the identity stage (1 to 4) and stage 4b, takes the pairs `derivable` earns from 4b's
+refusals, runs both again with those pairs and the same fails index, and so on until a round earns no new pair or
+`MAX_DERIVE_ROUNDS` rounds have added one. `_run` calls it in place of `identify` and `follow_lines`. From then on a
+derived line is a security of the run like any other: the FIGI stage resolves it by its own CUSIP, the issuer lookup asks
+under its own fails description (Task 6's row check holds a weak answer to the era's rows), the handoff stage pairs it
+with the line before it, the finder searches its Form 25, stage 8 values its ending. The line stage 4b refused is held by
+the derived security in the next round, so the step is no longer asked and its `line_follow_refused:<why>` item is gone
+(as in a full run, where the observed second line holds the CUSIP).
+
+**Files:**
+- Modify: `src/delist_detection/identity/derived_lines.py` (`identify_with_lines`)
+- Modify: `src/delist_detection/pipeline.py` (`_run`, two imports)
+- Modify: `tests/test_derived_lines.py`, `tests/test_pipeline.py`
+- Modify: `docs/architecture.md` ("The run: pipeline.py", `identity/derived_lines.py`), `docs/invariants.md` ("A line is followed past its observations"), `CONTEXT.md`
+
+**Interfaces:**
+- Consumes: `identify(..., derive=, ftd=)` (Task 10), `follow_lines(...) -> Lines` with `.refused` (Task 11), `derivable`.
+- Produces: `identify_with_lines(index: ObservationIndex, clients, *, as_of: date, limit: int | None = None, log=..., workers: int = 1, meter=None) -> tuple[Identity, Lines]`.
+
+- [ ] **Step 1: Write the failing tests**
+
+`tests/test_derived_lines.py` (append; it imports `date`, `SimpleNamespace` and `derived_lines`):
+
+```python
+def _loop(monkeypatch, answers):
+    """`identify_with_lines` over scripted stages: round n's `derivable` answer is answers[n]."""
+    calls, logs = [], []
+    ftd = object()
+
+    def identify(index, clients, **kw):
+        calls.append((kw["derive"], kw["ftd"]))
+        return SimpleNamespace(ftd=ftd, round=len(calls))
+
+    monkeypatch.setattr(derived_lines, "identify", identify)
+    monkeypatch.setattr(derived_lines, "follow_lines",
+                        lambda identity, clients, **kw: SimpleNamespace(refused=[], securities={}))
+    monkeypatch.setattr(derived_lines, "derivable",
+                        lambda refused, securities, profile: answers[min(len(calls), len(answers)) - 1])
+    clients = SimpleNamespace(issuers=SimpleNamespace(profile=lambda cik: None))
+    identity, lines = derived_lines.identify_with_lines(None, clients, as_of=date(2026, 9, 25), log=logs.append)
+    return calls, logs, identity, ftd
+
+
+def test_the_loop_asks_again_until_a_round_derives_nothing_new_over_one_fails_index(monkeypatch):
+    both = {("X", "AAA"), ("X", "BBB")}
+    calls, logs, identity, ftd = _loop(monkeypatch, [{("X", "AAA")}, both, both])
+    assert [c[0] for c in calls] == [frozenset(), frozenset({("X", "AAA")}), frozenset(both)]
+    assert calls[0][1] is None and calls[1][1] is ftd and calls[2][1] is ftd      # the index is opened once
+    assert identity.round == 3 and not any("not derived" in line for line in logs)
+
+
+def test_the_loop_stops_at_the_bound_and_says_so(monkeypatch):
+    calls, logs, identity, ftd = _loop(monkeypatch, [{("X", f"C{i}")} for i in range(10)])
+    assert len(calls) == derived_lines.MAX_DERIVE_ROUNDS + 1
+    assert any("not derived" in line for line in logs)
+
+
+def test_a_run_with_no_derivable_step_asks_once(monkeypatch):
+    calls, logs, identity, ftd = _loop(monkeypatch, [set()])
+    assert len(calls) == 1
+```
+
+`tests/test_pipeline.py` (new whole-run test beside `test_a_registrant_that_merged_out_at_the_switch_is_not_followed`):
+
+```python
+def test_the_line_after_a_registrant_that_merged_out_is_a_derived_security(fake_edgar, tmp_path):
+    """S2 (seeds-only parity): RS's observations stop in 2009 and its registrant merged out at the 2012 switch (no 10-Q
+    after it), so stage 4b refuses the step; the new CUSIP's rows, named for RS, are a line of the run. It is an
+    ordinary security to every later stage -- the old line hands over to it, its own merger is found -- and the
+    caller's tables hold the caller's rows only."""
+    t = _line_run(fake_edgar, tmp_path, filings=[SPLIT_8K, MERGER_8K, MERGER_F25],
+                  figi={("ID_CUSIP", RS_NEW): _figi_answer("BBGRSNEW1", "RS", "REVERSE SPLIT CO")},
+                  new_rows=_rs_new_rows())
+    secs = {r["sec_id"]: r for r in t["securities"]}
+    assert {k: (v["observed"], v["issuer_cik"]) for k, v in secs.items()} == {
+        "BBGRS01": ("true", "4242"), "BBGRSNEW1": ("false", "4242")}
+    assert secs["BBGRSNEW1"]["name"] == "REVERSE SPLIT CO NEW"            # named by its own fails description
+    assert {r["sec_id"]: r["cusip"] for r in t["cusip_history"]} == {"BBGRS01": RS_OLD, "BBGRSNEW1": RS_NEW}
+    assert ("BBGRSNEW1", "2012-10-01", "ftd") in {(r["sec_id"], r["valid_from"], r["source"])
+                                                  for r in t["ticker_history"]}     # no observation range: a fails row
+    caller = [("RS", d, "BBGRS01") for d in ("2008-01-16", "2008-06-30", "2009-06-08")]
+    om = read_table("observation_map", table_path(tmp_path, "observation_map"))
+    assert sorted((r["ticker"], r["as_of"], r["sec_id"]) for r in om) == caller
+    seeds = read_table("seeds", table_path(tmp_path, "seeds"))
+    assert sorted((r["ticker"], r["as_of"], r["sec_id"]) for r in seeds) == caller
+    assert {(r["sec_id"], r["bucket"], r["successor_sec_id"]) for r in t["delistings"]} == {
+        ("BBGRS01", "exchange_transfer", "BBGRSNEW1"), ("BBGRSNEW1", "merger", "")}
+```
+
+Then change the four existing tests this task moves (each was run on a prototype; no other test of the suite moves):
+
+1. `test_a_registrant_that_merged_out_at_the_switch_is_not_followed` (UNIT 2025): the new CUSIP's FIGI answer is another
+   composite, and the line is now a security of its own. Replace its `figi=` and the two assertions after `t = ...`:
+
+```python
+    t = _line_run(fake_edgar, tmp_path, filings=[SPLIT_8K, MERGER_8K, MERGER_F25],
+                  figi={("ID_CUSIP", RS_NEW): _figi_answer("BBGRSNEW1", "RS", "REVERSE SPLIT CO")},
+                  new_rows=_rs_new_rows())
+    # the old security keeps its one CUSIP; the line after the switch is a security of its own, derived from the fails rows
+    assert {r["sec_id"]: r["cusip"] for r in t["cusip_history"]} == {"BBGRS01": RS_OLD, "BBGRSNEW1": RS_NEW}
+    assert {r["sec_id"]: r["observed"] for r in t["securities"]} == {"BBGRS01": "true", "BBGRSNEW1": "false"}
+    assert _flag_count(t, "line_follow_refused") == "0"     # the derived line holds the new CUSIP: no step to refuse
+```
+
+2. `_same_ticker_acquirer_run`: the acquirer line is now looked up as an era, and a CIK the SEC ticker map proposes must
+   have existed when the era began (`TickerResolver.resolve`'s `since`), so the holder needs a filing history. Replace
+   `fake_edgar.submissions_by_cik[holder] = []` by
+   `fake_edgar.submissions_by_cik[holder] = [EdgarSubmission("h1", "10-K", "2010-03-01", "2009-12-31", "", "k.htm")]`.
+   (This is rough-version point 1, "issuer": `test_a_same_ticker_acquirer_takes_the_sec_ticker_maps_holder_not_the_targets_cik`
+   asserts the derived line's CIK is the holder's 1318220, not the target's 1057058, and `..._without_a_ticker_map_holder_has_no_cik` that it has none.)
+3. `test_a_same_ticker_acquirer_is_never_the_target_itself` (Ashland): the acquirer line is a security that stops at
+   2016-06-09 and is not listed in the fixture, so it has an `unexplained_ending` row of its own. Replace
+   `(d,) = read_table(...)` and the two `assert d[...]` lines after it (the `issuer_cik` assertion stays) by
+
+```python
+    d = next(r for r in read_table("delistings", table_path(tmp_path, "delistings")) if r["sec_id"] == "BBGWCNOLD01")
+    assert d["acquirer_sec_id"] == "BBGWCNNEW01" and d["bucket"] == "merger"      # a merger across two issuers stands
+```
+
+Run: `PYTHONPATH=src ~/miniconda3/envs/rdagent4qlib/bin/python -m pytest tests/test_derived_lines.py tests/test_pipeline.py -q -o addopts=""`
+Expected: the three loop tests fail with `AttributeError: ... has no attribute 'identify'`, the new whole-run test and the four amended ones fail.
+
+- [ ] **Step 2: The loop**
+
+Append to `derived_lines.py`; add `from typing import Any, Callable` (replacing the `Callable` import), `from .identity import Identity, identify`, `from .line_follow import SWITCH, Lines, RefusedStep, follow_lines` and `from .observations import ObservationIndex` to its imports:
+
+```python
+def identify_with_lines(index: ObservationIndex, clients: Any, *, as_of: date, limit: int | None = None,
+                        log: Callable[[str], None] = lambda *_: None, workers: int = 1,
+                        meter: Any = None) -> tuple[Identity, Lines]:
+    """Stages 1 to 4b with the derived lines: `identify` and `follow_lines`, again with the lines the last round
+    refused that `derivable` gives, over the same fails index (`Identity.ftd`, opened once), until a round adds no
+    line or `MAX_DERIVE_ROUNDS` rounds have added one. Returns the last round's identity and lines."""
+    derive: set[tuple[str, str]] = set()
+    ftd = None
+    for round_no in range(MAX_DERIVE_ROUNDS + 1):
+        identity = identify(index, clients, as_of=as_of, limit=limit, log=log, workers=workers, meter=meter,
+                            derive=frozenset(derive), ftd=ftd)
+        lines = follow_lines(identity, clients, as_of=as_of, log=log, meter=meter)
+        ftd = identity.ftd
+        new = derivable(lines.refused, lines.securities, clients.issuers.profile) - derive
+        if not new:
+            break
+        if round_no == MAX_DERIVE_ROUNDS:
+            log(f"derived lines: {len(new)} more steps refused after {MAX_DERIVE_ROUNDS} rounds, not derived")
+            break
+        derive |= new
+        log(f"derived lines: round {round_no + 1} derives {len(new)} (ticker, CUSIP) pairs")
+    return identity, lines
+```
+
+- [ ] **Step 3: Call it from the run**
+
+In `pipeline.py`: replace `from .identity.identity import identify` by `from .identity.derived_lines import identify_with_lines`
+and drop `follow_lines` from the `line_follow` import; in `_run` replace the `identify` call, the `eras, ftd, ftd_lo` line
+and the `follow_lines` call by
+
+```python
+    identity, lines = identify_with_lines(index, clients, as_of=ctx.as_of, limit=limit, log=log,
+                                          workers=sec_workers, meter=ctx.meter)                      # 1-4b
+    eras, ftd, ftd_lo = identity.eras, identity.ftd, identity.ftd_lo
+```
+
+Run: `PYTHONPATH=src ~/miniconda3/envs/rdagent4qlib/bin/python -m pytest tests/test_derived_lines.py tests/test_pipeline.py -q -o addopts=""`
+Expected: all pass (prototype: 136 passed in `test_pipeline.py`).
+
+- [ ] **Step 4: Run everything**
+
+Run: `PYTHONPATH=src ~/miniconda3/envs/rdagent4qlib/bin/python -m pytest -q -o addopts=""`
+Expected: the previous count plus 4 new tests, 44 xfailed. On the prototype exactly the four tests above moved, and the golden
+replay, `test_diagnosis_truth_cases.py`, `test_import_closure.py` and the committed-output tests stayed green. A test that
+moves and is not one of the four is reported with its old and new value, not edited to pass.
+
+- [ ] **Step 5: Docs and commit**
+
+`docs/architecture.md`, "The run: pipeline.py": stages 1 to 4b are one call, `derived_lines.identify_with_lines` (the
+rounds, the bound, the index opened once); the `identity/derived_lines.py` entry gains the loop. `docs/invariants.md`,
+"A line is followed past its observations": "A step stage 4b refuses because another registrant took over (`merged_out`,
+`other_registrant`), or whose new rows do not name the issuer's name after the step (`name`) but name the old line's, is
+a line of the run when it follows an era of the same ticker and its CUSIP is not the ticker's next era's: the identity
+stage keeps those fails rows as an era with one derived observation (`Observation.derived`), named by its fails
+description, looked up under it and its CUSIP, `observed=false`, in no echo table. A chain is followed up to
+`MAX_DERIVE_ROUNDS` rounds." `CONTEXT.md`, **Derived line**: add "(`identify_with_lines`)".
+
+```bash
+git add src/delist_detection/identity/derived_lines.py src/delist_detection/pipeline.py tests docs/architecture.md docs/invariants.md CONTEXT.md
+git commit -m "The line after a refused CUSIP change is a line of the run"
+```
+
+---
+
+### Task 13: A derived line that begins as another security ends: takeover or continuation (decision h)
+
+A derived line begins where the line before it ends, so `find_handoffs` pairs them. `decide_handoff` calls the pair a
+continuation on timing only with the same issuer or a CUSIP switch, a takeover when the new line traded before or its
+issuer is an older company, and `apply_handoffs` keeps a merger row against timing evidence between two issuers (a
+`handoff_conflict` item). The tests below are the real shapes of WEN 2008 (Wendy's International, then Wendy's/Arby's
+under the same ticker; Triarc traded as TRY) and TCF 2019 (TCF, then Chemical Financial, which traded as CHFC). They were
+written against the code before this task and pass: `handoffs.decide_handoff` and `apply_handoffs` do not change.
+If one of them fails when the task is run, the failure is the finding: change `decide_handoff` only for it, and report.
+
+**Files:**
+- Modify: `tests/test_handoffs.py`
+
+**Interfaces:** consumes `find_handoffs`, `decide_handoff`, `apply_handoffs`, the test file's `_sig`, `_sec`, `_delisting`.
+
+- [ ] **Step 1: The tests**
+
+Append to `tests/test_handoffs.py`:
+
+```python
+def test_a_derived_line_after_wendys_international_is_a_timing_continuation_that_the_merger_row_survives():
+    """WEN 2008: Wendy's International's merger into Triarc. The derived line (CUSIP 950587105) has fails rows from
+    2008-09-29 only, so it is a new line right after the old one's last row, across two issuers and a CUSIP switch:
+    `decide_handoff` says continuation by timing, and the merger row stands against it (`handoff_conflict`)."""
+    old = _sig(("2008-03-24", "WEN"), ("2008-09-26", "WEN"))
+    new = _sig(("2008-09-29", "WEN"), ("2008-10-01", "WEN"), ("2011-07-08", "WEN"))
+    (p,) = find_handoffs({"OLD": old, "NEW": new})
+    assert (p.ticker, p.a_last, p.b_first, p.b_first_any) == ("WEN", "2008-09-26", "2008-09-29", "2008-09-29")
+    d = decide_handoff(p, filing=None, same_issuer=False, cusip_switch=True, b_issuer_since="1993-01-04")
+    assert (d.kind, d.evidence) == ("continuation", "timing:cusip")
+    row = _delisting("OLD", "2008-09-29", CrspBucket.MERGER, "2008-09-26", ticker="WEN", cik=105668)
+    out = apply_handoffs([d], [row], {"OLD": _sec("OLD", 105668), "NEW": _sec("NEW", 30697)}, [])
+    assert row.record.bucket is CrspBucket.MERGER and row.record.successor_sec_id is None
+    assert [i.flag for i in out.review] == ["handoff_conflict"]
+
+
+def test_a_derived_line_whose_issuer_traded_before_under_another_ticker_takes_the_ticker_over():
+    """The same pair when the new line's CUSIPs include Triarc's, which traded as TRY until 2008-09-26: B existed."""
+    old = _sig(("2008-03-24", "WEN"), ("2008-09-26", "WEN"))
+    new = _sig(("2007-12-31", "TRY"), ("2008-09-26", "TRY"), ("2008-09-29", "WEN"), ("2011-07-08", "WEN"))
+    (p,) = find_handoffs({"OLD": old, "NEW": new})
+    assert (p.b_first, p.b_first_any) == ("2008-09-29", "2007-12-31")
+    d = decide_handoff(p, filing=None, same_issuer=False, cusip_switch=True, b_issuer_since="1993-01-04")
+    assert (d.kind, d.evidence) == ("takeover", "timing")
+    row = _delisting("OLD", "2008-09-29", CrspBucket.MERGER, "2008-09-26", ticker="WEN", cik=105668)
+    apply_handoffs([d], [row], {"OLD": _sec("OLD", 105668), "NEW": _sec("NEW", 30697)}, [])
+    assert row.record.bucket is CrspBucket.MERGER and row.record.ticker_successor_sec_id == "NEW"
+
+
+def test_a_derived_line_twenty_days_after_the_old_one_of_an_older_issuer_is_a_takeover():
+    """TCF 2019: Chemical Financial (an issuer filing since 1991) took the ticker TCF twenty days after TCF Financial's
+    last fails row: no continuation by timing (past `CONTINUATION_DAYS`), a takeover by the older issuer."""
+    old = _sig(("2017-05-10", "TCF"), ("2019-07-12", "TCF"))
+    new = _sig(("2019-08-01", "TCF"), ("2021-06-11", "TCF"))
+    (p,) = find_handoffs({"OLD": old, "NEW": new})
+    assert (p.a_last, p.b_first, p.gap) == ("2019-07-12", "2019-08-01", 20)
+    d = decide_handoff(p, filing=None, same_issuer=False, cusip_switch=True, b_issuer_since="1991-01-01")
+    assert (d.kind, d.evidence) == ("takeover", "timing:issuer")
+    row = _delisting("OLD", "2019-08-01", CrspBucket.MERGER, "2019-07-31", ticker="TCF", cik=814184)
+    apply_handoffs([d], [row], {"OLD": _sec("OLD", 814184), "NEW": _sec("NEW", 19612)}, [])
+    assert row.record.bucket is CrspBucket.MERGER and row.record.ticker_successor_sec_id == "NEW"
+```
+
+Run: `PYTHONPATH=src ~/miniconda3/envs/rdagent4qlib/bin/python -m pytest tests/test_handoffs.py -q -o addopts=""`
+Expected: all pass. Whole suite, then:
+
+```bash
+git add tests/test_handoffs.py
+git commit -m "WEN and TCF: a derived line that begins as another security ends"
+```
+
+---
+
+### Task 14: The parity script counts securities whose `observed` flag differs (decision i)
+
+A line the seeds-only run derives is `observed=false` there and `observed=true` in a full run, where the caller kept
+observing it. `scripts/seeds_parity.py` gains `observed_flag_differs`: the securities both runs have whose `observed` column
+differs, with its case list. It is reported and printed, never floored: `drops` skips it and `--write-floor` does not
+write it.
+
+**Files:**
+- Modify: `scripts/seeds_parity.py`, `tests/test_seeds_parity.py`
+
+**Interfaces:** consumes each run's `securities.csv` (`sec_id`, `observed`). Produces the ninth number in `parity(...)["numbers"]`.
+
+- [ ] **Step 1: Write the failing test**
+
+In `tests/test_seeds_parity.py`: `_run` writes `securities.csv` with an `observed` column (`"sec_id,observed"`, and each entry of
+`securities` is `"<sec_id>,<observed>"`); `_two_runs` passes `["A,true", "B,true", "C,true", "D,true", "E,true"]` for the full run and
+`["A,true", "B,false", "C,true", "D,true", "F,false"]` for the seeds run (B is derived there); the expected `numbers` gain
+`"observed_flag_differs": 1`, and after it
+
+```python
+    assert got["cases"]["observed_flag_differs"] == [{"sec_id": "B", "full_observed": "true", "seeds_observed": "false"}]
+```
+
+In `test_check_fails_only_above_the_floor`, after `assert json.loads(floor.read_text())["endings_lost"] == 1`:
+
+```python
+    assert "observed_flag_differs" not in json.loads(floor.read_text())          # reported, never floored
+    floor.write_text(json.dumps({"endings_lost": 1, "observed_flag_differs": 0}))
+    assert seeds_parity.main([*args, "--check"]) == 0                             # above a floor it was given: still no drop
+    assert seeds_parity.main([*args, "--write-floor"]) == 0
+```
+
+Run: `PYTHONPATH=src ~/miniconda3/envs/rdagent4qlib/bin/python -m pytest tests/test_seeds_parity.py -q -o addopts=""`
+Expected: fail on the numbers (the key is missing).
+
+- [ ] **Step 2: The number**
+
+In `scripts/seeds_parity.py`: after `SCORE_KEYS`:
+
+```python
+# Reported, never floored: a line the seeds-only run derives from the fails rows is unobserved there and observed in a
+# full run (the caller kept observing it), so the number says how many of the full run's lines are derived.
+NOT_FLOORED = ("observed_flag_differs",)
+```
+
+in `parity`, replace the two `securities.csv` set lines by
+
+```python
+    f_obs = {r["sec_id"]: r.get("observed", "") for r in _rows(full / "securities.csv")}
+    s_obs = {r["sec_id"]: r.get("observed", "") for r in _rows(seeds / "securities.csv")}
+    f_sec, s_sec = set(f_obs), set(s_obs)
+```
+
+add to `cases`, before `"seeds_placed_differently"`:
+
+```python
+        "observed_flag_differs": [{"sec_id": k, "full_observed": f_obs[k], "seeds_observed": s_obs[k]}
+                                  for k in sorted(f_sec & s_sec) if f_obs[k] != s_obs[k]],
+```
+
+and in `drops` and `--write-floor`:
+
+```python
+    return [f"{k}: {floor[k]} -> {v}" for k, v in sorted(numbers.items())
+            if k in floor and k not in NOT_FLOORED and v > floor[k]]
+```
+
+```python
+        new = {k: min(v, floor.get(k, v)) for k, v in result["numbers"].items() if k not in NOT_FLOORED}
+```
+
+Update the module docstring's list of numbers by one line. Run the test file (expected: 3 passed), the whole suite, then:
+
+```bash
+git add scripts/seeds_parity.py tests/test_seeds_parity.py
+git commit -m "The parity script reports securities whose observed flag differs"
+```
+
+---
+
+### Task 15: Parity checkpoint after S2 (network)
+
+The controller runs it, as Tasks 3 and 5, on the head after Task 14. The reference for the full run is Checkpoint 2's
+full run (`pout-full2`, commit `26eefdb`); the reference for the numbers is `data/seeds_parity.json`.
+
+- [ ] **Step 1:** make sure no other SEC client is running (Task 3, Step 1).
+- [ ] **Step 2:** the full input at the head on a copy of the cache the last full run left, then the seeds on a copy of the
+  cache that run leaves (Task 3, Step 3's commands). Expected: both exit 0 with no degraded answer. New SEC requests are
+  expected in both runs: on the prototype a derived era's issuer and FIGI lookups were 29 requests in the full run and 98 in
+  the seeds run (offline misses, `sec` and `figi`).
+- [ ] **Step 3:** judge the full run against Checkpoint 2's: `scripts/seeds_parity.py --full output-of-checkpoint-2 --seeds <new full>`
+  lists what moved; `scripts/scorecard.py --check --base 26eefdb` must pass (a golden or diagnosis `pass` case that fails
+  stops the task). Expected to move: eight derived eras (AAN, BXS, CCE 2016, GCI, SDRL, UNIT, WCN, WE: the last table of
+  "Condition 2 and the test of a name"), five new `observed=false` securities of their own (2,201 to 2,206), and one era whose security changed (IACI@2008-01-16
+  from its placeholder to the IAC FIGI line, which the warm fails index showed: check it against the line follow's own fold).
+  Judge each of the eight against EDGAR and the truth sets: a derived line that merged into the old line's FIGI (UNIT, WE),
+  one with no issuer (AAN), one whose old line became a `handoff_continuation` where the full run had a merger (WCN keeps
+  its merger: `handoff_conflict`), each is a correction or a regression; a regression goes through the diagnosis loop.
+- [ ] **Step 4:** the parity numbers, full against seeds, against the floor: `scripts/seeds_parity.py --full <full> --seeds <seeds> --cases <dir> --check`
+  must exit 0 (no number above `data/seeds_parity.json`). Then the acceptance list below, each ticker looked up in the case
+  lists. `observed_flag_differs` is reported (expected: about as many as the seeds run derived, 34 securities on the prototype),
+  with its case list. Coverage of tickers and securities, `left_view` and `closed_no_event` are compared with Checkpoint 2's.
+- [ ] **Step 5:** SEC requests and wall time against Checkpoint 2 (full 262 s, seeds 376 s): on the prototype the repeat
+  rounds cost 15 to 20 s (the identity stage) plus stage 4b's pass (see "Decision (e)"); report the run manifest's
+  `stages` and request counts for both runs.
+- [ ] **Step 6:** only when 3 to 5 are done: `scripts/seeds_parity.py ... --write-floor`; record the date, the commit, the
+  numbers before and after, the eight steps' verdicts and the acceptance list under "Checkpoints" ("Checkpoint 3: S2");
+  commit `data/seeds_parity.json` with the plan, message "Seeds-only parity after S2: the floor".
+
+Acceptance (S2's list): none of ARRS, STE, CR, BG, AVGO, CI, MRVL, APO, DKNG, NCNO, TEAM, AZPN, FWONA, FWONK, DTV, ATVI,
+CLWR, ALEX, SPB, CIT, DOW, MRK, FOXA (the new line exists), ANN, EVHC, AMSG, ANAT, MYL, ENDP, FERG, WFT, MNST, NE, NRF, NLSN,
+TCF, WEN, MIR, TWC, LVNTA is in the parity case lists. A name that is: report which stage did not produce the line
+(a refusal the rule leaves alone: `no_filing`, `bankruptcy`, `unsettled`; a step stage 4b was not asked about; a new line under another
+ticker: AMSG, DISCA, MYL 2020; a description that names nothing: WW, 2U; LGFA/LGFB: Starz).
+
+---
+
+### Open points of S2
+
+1. **Stage 4b's cost in a repeat round.** See "Decision (e)".
+2. **The warm fails index.** The second pass reads an index stage 4b enlarged (rows by CUSIP and symbol over the whole window).
+   On the prototype it left 2,446 of 2,448 eras (seeds) and 2,614 of 2,615 (full) with the same FIGI and issuer; the others are
+   IAC@2012-06-29 and IACI@2008-01-16 (seeds), IACI@2008-01-16 (full), each from the placeholder CIK891103-COMMON to
+   BBG000BKQG80. What would settle it: the Task 15 comparison of those eras with stage 4b's fold of the placeholder.
+3. **A derived line that merges into the old line's FIGI** (UNIT, WE, and in the seeds run ACN, CB, CFFN, CLWR, ENR, ICE, IR, MDT,
+   MYL, PRGO, WEC): OpenFIGI says one security, so the era joins it and the refused step is, in effect, followed. This is what a
+   full run does with an observed second line. What would settle it: the eight full-run steps' verdicts at Task 15.
+4. **A derived line's issuer.** AAN, ENDP and TMA found none in the prototype's seeds run (their descriptions are abbreviated). Task 6's
+   row check keeps a wrong weak answer out; an answer that is not found leaves the line without an issuer, so without a Form 25
+   search. What would settle it: how many of the 34 derived securities have no CIK at Task 15.
+5. **A derived line the fixture world does not list** gets an `unexplained_ending` row (the Ashland test). In a real run a line
+   listed today has none. What would settle it: `V.uncertain_securities` at Task 15 against Checkpoint 2.
+6. **`line_follow_refused:<why>` items for derived steps are gone** from `review.csv` (the step is held by the derived security in the last
+   round); the run log keeps `derived lines: round n derives k (ticker, CUSIP) pairs`. If the review rows are wanted, a
+   `derived_line` info flag needs an entry in `review_triage.CATALOG`.
+7. **The name test refuses two real continuations**: LGFA/LGFB (Lions Gate to Starz Entertainment: the issuer's name until the step is
+   Lions Gate) and WW, 2U (no issuer word in the description). They stay as today.
+8. **The wording of Review Focus 4.** The WEN pair is called a continuation by timing and the merger row stands; the pair is not
+   called a continuation in any published table. Whether `decide_handoff` should say takeover for it is a change to the handoff
+   stage, left alone by decision (h).
+
 ## S3: A seed at a takeover (needs decision A)
 
 `scripts/seeds_from_observations.py` gains `--security-history PATH` (a previous run's
