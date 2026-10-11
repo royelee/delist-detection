@@ -732,24 +732,27 @@ class _Successors:
 
 def _line_successor_links(delistings: list[Delisting], securities: dict[str, Security],
                           acquirers: dict[str, AddedSecurity], line_successors: Mapping[str, LineSuccessor],
-                          ftd: FtdIndex, found: _Successors) -> None:
+                          ftd: FtdIndex, found: _Successors, payouts: MergerValues | None = None) -> None:
     """A FIGI line another composite continues (stage 4b's `line_successors`, R2): each of its delistings that
-    still needs a successor (`successor_unknown`) or a kind (`unknown`: GTES 2026's Form 25 at its redomicile),
+    still needs a successor (`successor_unknown`) or a kind (`unknown`: GTES 2026's Form 25 at its redomicile; a merger: TEAM, LSXMA, FWONA, whose registrant carries on,
+    unless its payout reconciled),
     whose anchor (`Delisting.anchor`: its last trade, else its Form 25 filing date) lies within [-SUCCESSOR_BEFORE_DAYS,
-    +SUCCESSOR_AFTER_DAYS] days of the step's first row, takes that composite as its successor; an `unknown` row
+    +SUCCESSOR_AFTER_DAYS] days of the step's first row, takes that composite as its successor; an `unknown` or merger row
     becomes the continuation. The composite is added as a security of its own (`AddedLineSuccessor`) when the run
     has none, and only for a delisting that takes it."""
     for e in delistings:
         ls = line_successors.get(e.sec_id)
-        if ls is None or not (awaits_successor(e) or e.record.bucket is CrspBucket.UNKNOWN):
+        if ls is None or not (awaits_successor(e) or e.record.bucket in (CrspBucket.UNKNOWN, CrspBucket.MERGER)):
             continue
+        if e.record.bucket is CrspBucket.MERGER and payouts is not None and payouts.reconciled(e.key):
+            continue                # a payout the gate reconciled with the last close stands against a timing link
         day = e.anchor
         lo = (day - timedelta(days=SUCCESSOR_BEFORE_DAYS)).isoformat()
         hi = (day + timedelta(days=SUCCESSOR_AFTER_DAYS)).isoformat()
         if not lo <= ls.step.first <= hi:
             continue
         found.links[e.key] = (ls.composite, LINE_FOLLOW)
-        if e.record.bucket is CrspBucket.UNKNOWN:
+        if e.record.bucket in (CrspBucket.UNKNOWN, CrspBucket.MERGER):
             found.rebucketed[e.key] = (
                 continuation_reason(f"line follow, {ls.evidence}",
                                     f"{e.ticker}'s new CUSIP {ls.step.new_cusip} traded from {ls.step.first} as "
@@ -838,7 +841,8 @@ def _terms_links(ctx: _RunContext, delistings: list[Delisting], securities: dict
 def _find_successors(ctx: _RunContext, delistings: list[Delisting], securities: dict[str, Security],
                      sightings: dict[str, list[Sighting]], acquirers: dict[str, AddedSecurity],
                      line_successors: Mapping[str, LineSuccessor] = {}, ftd: FtdIndex | None = None,
-                     sec_cusips: dict[str, list[str]] | None = None) -> _Successors:
+                     sec_cusips: dict[str, list[str]] | None = None,
+                     values: MergerValues | None = None) -> _Successors:
     """9. Successors after a FIGI change: first the line successor stage 4b found
     (`_line_successor_links`), then a security of this run (observed,
     or an acquirer the run adds) that starts right after the last trade under the
@@ -852,7 +856,7 @@ def _find_successors(ctx: _RunContext, delistings: list[Delisting], securities: 
     successor_search = clients.full_text_search
     mark = ctx.meter.start()
     if line_successors:
-        _line_successor_links(delistings, securities, acquirers, line_successors, ftd or FtdIndex(), found)
+        _line_successor_links(delistings, securities, acquirers, line_successors, ftd or FtdIndex(), found, values)
     linked = set(found.links)
     starts = _starts(securities, sightings, acquirers)
     for e in delistings:                       # a security of this run
@@ -907,11 +911,12 @@ def _find_successors(ctx: _RunContext, delistings: list[Delisting], securities: 
                     Security(cand.composite, s_cik, share_class_from_name(cand.name), cand.name,
                              cand.security_type, False, "ticker"), cand.ticker, max(fd, not_before))
     ctx.meter.done("successor search", mark)
-    _link_successors(delistings, found)
+    _link_successors(delistings, found, values)
     return found
 
 
-def _link_successors(delistings: list[Delisting], successors: _Successors) -> None:
+def _link_successors(delistings: list[Delisting], successors: _Successors,
+                     payouts: MergerValues | None = None) -> None:
     """Record stage 9's answer on the delistings, each link one rewrite (`rewrites.continuation`: `Rule.LINE_FOLLOW`
     for stage 4b's line successor, `Rule.SUCCESSOR_LINK` for the others): its successor (a security of the run also
     says how it was found, in the reason), an `unknown` row at the line's switch made the continuation
@@ -926,7 +931,7 @@ def _link_successors(delistings: list[Delisting], successors: _Successors) -> No
             reason = successors.rebucketed.get(d.key)
             if reason is not None:                  # an `unknown` row at the line's switch: the continuation
                 continuation(d, sid, rule, reason=reason + note, confidence="medium", flag=LINE_CONTINUATION,
-                             how=how or "")
+                             how=how or "", payouts=payouts)
             else:
                 continuation(d, sid, rule, reason=d.record.reason + note if note else None, how=how or "")
         if d.key in successors.degraded:
@@ -1638,7 +1643,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     r1 = _r1_continuations(ctx, delistings, securities, search.sightings, values, prices)          # 8b
     review += r1.review
     successors = _find_successors(ctx, delistings, securities, search.sightings, {**values.added, **r1.added},
-                                  lines.successors, ftd, sec_cusips)                                # 9
+                                  lines.successors, ftd, sec_cusips, values)                        # 9
     review += successors.review
     added = {**values.added, **r1.added, **successors.added}     # the acquirers and successors the run adds
     handoffs = _handoffs(ctx, delistings, securities, search, sec_cusips, ftd, values, review, added)   # 9b

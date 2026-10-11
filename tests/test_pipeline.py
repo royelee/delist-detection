@@ -2900,13 +2900,54 @@ def _line_successor(sec_id):
 
 
 @pytest.mark.parametrize("bucket,code", [(CrspBucket.LIQUIDATION, 450), (CrspBucket.COMPLIANCE_FAILURE, 560),
-                                         (CrspBucket.EXPIRATION, 600), (CrspBucket.MERGER, 231)])
-def test_distress_expiration_and_merger_endings_at_the_switch_take_no_line_successor(bucket, code):
+                                         (CrspBucket.EXPIRATION, 600)])
+def test_distress_and_expiration_endings_at_the_switch_take_no_line_successor(bucket, code):
     from delist_detection.sources.ftd import FtdIndex
     d = _unit_delisting("BBGRS01", bucket, code, [])
     securities = {"BBGRS01": Security("BBGRS01", 4242, "COMMON", "REVERSE SPLIT CO", "", True, "cusip")}
     found = pipeline._Successors()
     pipeline._line_successor_links([d], securities, {}, {"BBGRS01": _line_successor("BBGRS01")}, FtdIndex(), found)
+    assert found.links == {} and found.added == {} and found.rebucketed == {}
+
+
+def _switch_securities():
+    return {"BBGRS01": Security("BBGRS01", 4242, "COMMON", "REVERSE SPLIT CO", "", True, "cusip")}
+
+
+def test_a_merger_at_the_switch_takes_the_line_successor_as_a_continuation():
+    """TEAM, LSXMA, LSXMK, FWONA, FWONK (seeds-only parity S2): a Form 25 the classifier read as a merger, at a switch
+    stage 4b followed to a CUSIP with its own composite, links to that composite."""
+    from delist_detection.sources.ftd import FtdIndex
+    d = _unit_delisting("BBGRS01", CrspBucket.MERGER, 231, [])
+    found = pipeline._Successors()
+    pipeline._line_successor_links([d], _switch_securities(), {}, {"BBGRS01": _line_successor("BBGRS01")},
+                                   FtdIndex(), found)
+    assert found.links == {d.key: ("BBGRSNEW1", "line_follow")}
+    assert d.key in found.rebucketed and "BBGRSNEW1" in found.added
+
+
+def test_a_merger_made_a_continuation_by_the_line_link_loses_its_value_and_payout_flags():
+    from delist_detection.terms.merger_value import MergerValue, MergerValues
+    from delist_detection.vocabulary.crsp_codes import CONTINUATION_CODE
+    d = _unit_delisting("BBGRS01", CrspBucket.MERGER, 231, ["merger_at_par"])
+    values = MergerValues({d.key: MergerValue(d.key)})
+    found = pipeline._Successors(links={d.key: ("BBGRSNEW1", "line_follow")},
+                                 rebucketed={d.key: "line follow, 8-K 2012-09-24: x"})
+    pipeline._link_successors([d], found, values)
+    assert (d.record.bucket, d.record.crsp_code, d.record.successor_sec_id) == (
+        CrspBucket.EXCHANGE_TRANSFER, CONTINUATION_CODE, "BBGRSNEW1")
+    assert "merger_at_par" not in d.flags and "line_continuation" in d.flags
+    assert values.get(d.key) is None
+
+
+def test_a_merger_whose_payout_reconciled_takes_no_line_successor():
+    from delist_detection.sources.ftd import FtdIndex
+    from delist_detection.terms.merger_value import MergerValue, MergerValues
+    d = _unit_delisting("BBGRS01", CrspBucket.MERGER, 231, [])
+    values = MergerValues({d.key: MergerValue(d.key, payout=10.0)})
+    found = pipeline._Successors()
+    pipeline._line_successor_links([d], _switch_securities(), {}, {"BBGRS01": _line_successor("BBGRS01")},
+                                   FtdIndex(), found, values)
     assert found.links == {} and found.added == {} and found.rebucketed == {}
 
 
@@ -2927,9 +2968,11 @@ def test_a_delisting_without_a_line_link_still_gets_the_in_run_successor_search(
     assert found.links == {on_line.key: ("BBGRSNEW1", "line_follow"), other.key: ("BBGNEW2", "same_issuer")}
 
 
-def test_a_line_successor_is_never_added_for_an_ending_that_does_not_need_it(fake_edgar, tmp_path):
-    """Must not change (WCN, AAN): a merger at the switch keeps its kind and takes no line successor, and the
-    composite is not added to the run."""
+def test_a_merger_at_the_switch_whose_registrant_carries_on_is_the_continuation_to_the_line_successor(
+        fake_edgar, tmp_path):
+    """TEAM, LSXMA, FWONA (seeds-only parity S2): a Form 25 the classifier read as a merger, at a switch stage 4b
+    followed (a 10-Q follows it) to a CUSIP with its own composite, is the exchange transfer to that composite. The
+    mergers 4b refuses (WCN, AAN: `merged_out`) keep their kind: the same-ticker acquirer tests below."""
     merger_8k = EdgarSubmission("0000004242-12-000040", "8-K", "2012-09-24", "2012-09-24", "2.01,3.01,5.01,9.01",
                                 "m.htm")
     merger_f25 = EdgarSubmission("0000876661-12-000300", "25-NSE", "2012-09-24", "", "", "primary_doc.xml")
@@ -2938,8 +2981,9 @@ def test_a_line_successor_is_never_added_for_an_ending_that_does_not_need_it(fak
                   figi={("ID_CUSIP", RS_NEW): _figi_answer("BBGRSNEW1", "RS", "REVERSE SPLIT CO")},
                   new_rows=_rs_new_rows())
     [d] = t["delistings"]
-    assert (d["bucket"], d["successor_sec_id"]) == ("merger", "")
-    assert "BBGRSNEW1" not in {r["sec_id"] for r in t["securities"]}
+    assert (d["bucket"], d["successor_sec_id"]) == ("exchange_transfer", "BBGRSNEW1")
+    assert "line_continuation" in d["review_flags"].split(";")
+    assert {r["sec_id"]: r["observed"] for r in t["securities"]} == {"BBGRS01": "true", "BBGRSNEW1": "false"}
 
 
 def test_a_placeholder_folds_into_the_figi_line_its_new_cusip_names(fake_edgar, tmp_path):

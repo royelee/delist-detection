@@ -377,7 +377,7 @@
   within 120 days of the run date; no other CIK's 8-K12B/12G3 naming it). R2 decides identity: the same composite
   or none is one security; a placeholder folds into the FIGI line its new CUSIP names (contract/id_changes.csv
   names it); another composite is a line successor, linked by stage 9 as a continuation (an `unknown` row at the
-  switch is rewritten, `line_continuation`: it drops `no_evidence_default` and gets medium confidence).
+  switch is rewritten, `line_continuation`: it drops `no_evidence_default` and gets medium confidence); so is a merger row at the switch when stage 4b followed the step (the old registrant carries on: TEAM, LSXMA, FWONA), unless its payout reconciled with the last close.
 
 ## `ticker_history` is clipped only at the delisting that actually ends the security
 
