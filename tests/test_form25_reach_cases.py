@@ -182,6 +182,9 @@ STAY = {
     'BBG000BH13K9': ([], ['ended_without_delisting']),   # DD 2017, no issuer CIK
     'BBG001KS9450': ([], ['ended_without_delisting']),   # TWOU 2024, no issuer CIK
     'BBG009CKXW23': ([], ['ended_without_delisting']),   # PTHN 2017 under the Canadian Patheon Inc.'s CIK 1400431
+    # FB-004 part d: banks that filed with the FDIC; MIDAS dates the drop (CRSP 500, no filing to give a reason)
+    'BBG000M6TR37': ([('2023-03-10', 'compliance_failure', 500, '2023-03-10', False, '', 1288784)], []),   # SBNY 2023
+    'BBG0019LSQ49': ([('2023-04-28', 'compliance_failure', 500, '2023-04-28', False, '', 1132979)], []),   # FRCB 2023
 }
 
 

@@ -61,6 +61,7 @@ class Rule(str, Enum):
     PLAN_BANKRUPTCY = "plan_bankruptcy"    # stage 9e: an `unknown` Form 25 whose notice says new shares, a bankruptcy
     PRICE_DEFICIENCY = "price_deficiency"  # stage 9e: a compliance failure the exchange removed for its price (552)
     MOVED_OTC = "moved_otc"                # stage 5: a Form 25 the class traded on past, its 10-K cover naming no exchange (520)
+    MIDAS_DROP = "midas_drop"              # stage 5: no filing at all, MIDAS's volume ended and the CUSIP traded on OTC (500)
 
 
 @dataclass(frozen=True)

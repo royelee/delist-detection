@@ -136,7 +136,15 @@ CASES = {
                     "(its raw is in no cache)",
     "BBG009CKXW23": "PTHN 2017: Patheon N.V., issuer CIK 1400431 (the Canadian Patheon Inc.) in the run; the Form 25 "
                     "of Thermo Fisher's acquisition is CIK 1643848's (its raw is in no cache)",
+    # FB-004 part d: a bank that filed with the FDIC, so EDGAR holds nothing; MIDAS and the fails rows date its end
+    "BBG000M6TR37": "SBNY 2023: Signature Bank, closed by the FDIC; no EDGAR filing, MIDAS volume to 2023-03-10, the "
+                    "fails rows go on over the counter",
+    "BBG0019LSQ49": "FRCB 2023: First Republic Bank, closed by the FDIC; no EDGAR filing, MIDAS volume (FRC) to "
+                    "2023-04-28, the fails rows go on as FRCB at about $0.40",
 }
+# cases whose MIDAS days are kept over their whole life, not near a Form 25 or the last sighting: the drop rule
+# (FB-004 part d) reads the last day of exchange volume wherever it falls
+WHOLE_LIFE_MIDAS = {"BBG000M6TR37", "BBG0019LSQ49"}
 
 
 # CIKs whose filings are kept though no case reads them: Perrigo Company's (in force for PRGO until 2013), to show
@@ -318,6 +326,8 @@ def main(argv: list[str] | None = None) -> int:
                    + [r.date for c in cusips.get(sid, []) for r in ftd.by_cusip(c) if r.symbol in own])
         windows[sid] = ([(d - timedelta(days=MIDAS_BEFORE), d + timedelta(days=MIDAS_AFTER)) for d in days]
                         + [(_day(last) - timedelta(days=SEEN_BEFORE), _day(last) + timedelta(days=SEEN_AFTER))])
+        if sid in WHOLE_LIFE_MIDAS:
+            windows[sid].append((date(2012, 1, 1), AS_OF))
     midas_dir = repo / "cache/sec_data/midas"
     quarters = sorted(p.name[:7] for p in midas_dir.glob("*_q*.json.gz"))
     midas: dict[str, dict[str, list[str]]] = {}

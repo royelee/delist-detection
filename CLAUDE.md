@@ -28,7 +28,7 @@ editable install.
 
 ```bash
 pip install -e .                         # editable install (Python ≥3.10) — once per env
-pytest   # full suite (3775 passed, 44 xfailed: the known-wrong golden cases and the diagnosis truth set's known_wrong cases, all residual, all strict; offline, no network)
+pytest   # full suite (3787 passed, 44 xfailed: the known-wrong golden cases and the diagnosis truth set's known_wrong cases, all residual, all strict; offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
 pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one test
 
@@ -946,7 +946,11 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   SAVE and its OTC SAVEQ; the halt feed around the text days, else the Form 25 day, PHLY 2008), `of_fallback` (no
   Form 25: the 3.01 8-Ks up to the last sighting + 5 d, VRM 2024, MIDAS anchored on the dating filing; a merger
   left undated ends on the closing day its latest 2.01/5.01 8-K near the last sighting states, FCL, SGP 2009, never
-  after the last sighting; else the last sighting, unsourced and unconfirmed) and `from_notice` (stage 9c: a
+  after the last sighting; else the last sighting, unsourced and unconfirmed), `midas_drop` (FB-004 part d: the last
+  day MIDAS shows exchange volume under any ticker the security carried, `midas_last`, when the issuer has no filing
+  of any form within `MIDAS_DROP_QUIET_DAYS` (180) of it and the security's own CUSIPs go on trading after it at
+  changing prices, `TradingRecord.trades_after`: source `midas`, confirmed, so published; Signature Bank, First
+  Republic Bank, which filed with the FDIC) and `from_notice` (stage 9c: a
   handoff row dated by its last sighting takes its own Form 25 notice's confirmed day, before the successor's first
   sighting and no later than the effective date). MIDAS and the Nasdaq halt feed are its two adapters
   (`last_trade_day`; `deletion_halt`, `failed_days`), each a real client or a fixture-backed double; a halt-feed
@@ -1010,7 +1014,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
 - `endings/rewrites.py` — architecture step 3: the one owner of a delisting's kind and successor after its record is built.
   Every rewrite names its rule (`Rule`, a closed set: `ISSUER_MOVE` the finder's R7, `CONTINUED` the finder's continued
   transfer, `TRADES_ON` the clip check at stage 9b's start, `R1` stage 8b, `LINE_FOLLOW` and `SUCCESSOR_LINK` stage 9,
-  `HANDOFF` stage 9b, `PLAN_BANKRUPTCY` and `PRICE_DEFICIENCY` stage 9e, `MOVED_OTC` the finder's CRSP 520) and is recorded as typed provenance on the
+  `HANDOFF` stage 9b, `PLAN_BANKRUPTCY` and `PRICE_DEFICIENCY` stage 9e, `MOVED_OTC` the finder's CRSP 520, `MIDAS_DROP` the finder's CRSP 500) and is recorded as typed provenance on the
   delisting (`Delisting.rewrites`, one `Rewrite` each: the rule, the successor, how it was found, the evidence,
   a handoff's `successor_from`). `continuation(d, successor, rule, ...)` sets CRSP `crsp_codes.CONTINUATION_CODE` (304)
   and the bucket together and drops what a continuation cannot carry, one rule for all: `no_evidence_default`,
@@ -1075,7 +1079,13 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   (`SecurityContext.record`: its sightings, own CUSIPs, their trading fails rows and the fails index); a worked-out
   closing day (`LastTrade.worked_out`) is not the classification's anchor or the delisting's ticker day, which stay
   the Form 25's. Sub-plan 5h: `TradingRecord.has_cusips`: a security with no CUSIP gets no continued-filings
-  ending dated by its last sighting alone (`ended_without_delisting` instead: WW 2013, NCRA 2013). The finder's R7 and
+  ending dated by its last sighting alone (`ended_without_delisting` instead: WW 2013, NCRA 2013). FB-004 part d,
+  `_dropped_without_filings`: where the classifier finds nothing (`unknown`, no deregistration) and `Dating.midas_drop`
+  dates a drop, the delisting is CRSP 500 (compliance failure, reason unavailable: the exchange's removal is measured
+  and nothing filed says why, so no drop reason and the harsh mark applies; 520 would be no mark, 574 a bankruptcy
+  nothing states), rewrite `Rule.MIDAS_DROP`, flags `no_form25` and `midas_drop` (info); stage 9e then reads its OTC
+  symbol from the fails rows (First Republic's FRCB; Signature's SBNY has too few rows in the 60 days after its last
+  day, so none). The finder's R7 and
   its continued transfer's successor are rewrites (`rewrites.continuation`, `security_goes_on`); each `form25_*` review
   item carries the Form 25 typed (`review_triage.FilingRef`, `ReviewItem.filing`): the handoff stage and stage 9d read
   its form and accession there, never from the reason.

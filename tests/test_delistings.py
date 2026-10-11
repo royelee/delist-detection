@@ -1259,3 +1259,46 @@ def test_the_fallbacks_early_form25_is_judged_as_the_early_windows_is(fake_edgar
     edgar.raws["w2"] = _f25_raw("New York Stock Exchange LLC", class_text="Class B Common Stock", form_tag="25-NSE")
     events, review = DelistingFinder(edgar, clf).find(_ctx(sec, listed=False))
     assert all(e.form25_sub is None for e in events) and [r.flag for r in review] == ["ended_without_delisting"]
+
+
+# -- FB-004 part d: a drop dated by MIDAS when the issuer filed nothing, and the ending nothing else explains ------------
+class _MidasDays:
+    """MIDAS's adapter double: a last day with exchange volume per ticker, inside the window asked."""
+
+    def __init__(self, **days):
+        self.days = {t: date.fromisoformat(d) for t, d in days.items()}
+
+    def last_trade_day(self, ticker, lo, hi):
+        d = self.days.get(ticker)
+        return d if d is not None and lo <= d <= hi else None
+
+
+def _bank(rows=None):
+    sec = _sec("BBG_BANK", 1288784, "SBNK", "2012-06-29", "2022-12-31", "SIGNATURE BANK")
+    return sec, (rows if rows is not None else _trading("SBNK", "2023-03-13", n=25, step=14))
+
+
+def test_a_drop_with_no_filing_at_all_is_dated_by_midas_and_is_crsp_500(fake_edgar):
+    """SBNY: EDGAR holds nothing for the bank. MIDAS volume to 2023-03-10, the rows go on at two prices: a confirmed
+    `dropped` ending, CRSP 500 (no drop reason, so the harsh mark applies), published last trade."""
+    sec, rows = _bank()
+    fake_edgar.submissions_by_cik[1288784] = []
+    clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))
+    (ev,), review = DelistingFinder(fake_edgar, clf, midas=_MidasDays(SBNK="2023-03-10")).find(
+        _ctx(sec, rows=rows))
+    assert (ev.delist_date, ev.record.crsp_code, ev.record.bucket.value) == ("2023-03-10", 500, "compliance_failure")
+    assert (ev.last_trade.day, ev.last_trade.source, ev.last_trade.confirmed) == (date(2023, 3, 10), "midas", True)
+    assert ev.last_trade.publishable(None) and [rw.rule.value for rw in ev.rewrites] == ["midas_drop"]
+    assert {"no_form25", "midas_drop"} <= set(ev.flags) and "no_evidence_default" not in ev.flags
+    assert review == []
+
+
+def test_a_drop_with_a_filing_around_its_end_is_not_a_midas_drop(fake_edgar):
+    """The rule never fires for an issuer that filed within 180 days of MIDAS's last day: the fallback finds nothing
+    and the security has no ending (`ended_without_delisting`)."""
+    sec, rows = _bank()
+    fake_edgar.submissions_by_cik[1288784] = [EdgarSubmission("x1", "8-K", "2023-03-20", "2023-03-20", "8.01", "k.htm")]
+    fake_edgar.texts["x1"] = "Item 8.01 Other Events. " + "x" * 300
+    clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))
+    events, review = DelistingFinder(fake_edgar, clf, midas=_MidasDays(SBNK="2023-03-10")).find(_ctx(sec, rows=rows))
+    assert events == [] and [r.flag for r in review] == ["ended_without_delisting"]

@@ -190,6 +190,11 @@ CATALOG: dict[str, FlagInfo] = {
         "check", "No Form 25 was found, so the delisting was dated and classified from other filings (a "
                  "bankruptcy or anchor 8-K, an SEC revocation or a Form 15).",
         f"Check the delisting date and bucket against the cited filing; {_ACCEPT}."),
+    "midas_drop": FlagInfo(
+        "info", "A drop no filing documents: the issuer has no SEC filing around the last day SEC MIDAS shows "
+                "exchange volume (a bank that filed with the FDIC), and the security's own CUSIPs traded on over "
+                "the counter after it. The last trade is that MIDAS day (CRSP 500, reason unavailable).",
+        "Nothing to do unless the date or the kind looks wrong; read the receivership or delisting notice."),
     "delist_date_approx": FlagInfo(
         "check", "No filing dated the delisting near the last observation, so delist_date is the last "
                  "observation itself.",

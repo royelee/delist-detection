@@ -93,6 +93,10 @@
    "note": "SOV 2009: a 25-NSE a stale observation and a cover continued (C)",
    "other_cik": null
   },
+  "BBG000M6TR37": {
+   "note": "SBNY 2023: Signature Bank, closed by the FDIC; no EDGAR filing, MIDAS volume to 2023-03-10, the fails rows go on over the counter",
+   "other_cik": null
+  },
   "BBG000MJRJJ2": {
    "note": "HHC 2023: a holding company's formation (R6b refuses)",
    "other_cik": null
@@ -119,6 +123,10 @@
   },
   "BBG000VMWHH5": {
    "note": "DISCK 2022: an exchange's 25-NSE beside an 8-A12B for the new class (no R7)",
+   "other_cik": null
+  },
+  "BBG0019LSQ49": {
+   "note": "FRCB 2023: First Republic Bank, closed by the FDIC; no EDGAR filing, MIDAS volume (FRC) to 2023-04-28, the fails rows go on as FRCB at about $0.40",
    "other_cik": null
   },
   "BBG001KS9450": {
@@ -3514,6 +3522,177 @@
    "security_type": "Common Stock",
    "share_class": "COMMON"
   },
+  "BBG000M6TR37": {
+   "cusips": [
+    "82669G104"
+   ],
+   "eras": {
+    "SBNY@2012-06-29": [
+     [
+      "SBNY",
+      "2012-06-29",
+      "SIGNATURE BANK",
+      "",
+      ""
+     ],
+     [
+      "SBNY",
+      "2012-12-31",
+      "SIGNATURE BANK",
+      "",
+      ""
+     ],
+     [
+      "SBNY",
+      "2013-06-28",
+      "SIGNATURE BANK",
+      "",
+      ""
+     ],
+     [
+      "SBNY",
+      "2013-12-31",
+      "SIGNATURE BANK",
+      "",
+      ""
+     ],
+     [
+      "SBNY",
+      "2014-06-30",
+      "SIGNATURE BANK",
+      "",
+      ""
+     ],
+     [
+      "SBNY",
+      "2014-12-31",
+      "SIGNATURE BANK",
+      "",
+      ""
+     ],
+     [
+      "SBNY",
+      "2015-06-30",
+      "SIGNATURE BANK",
+      "",
+      ""
+     ],
+     [
+      "SBNY",
+      "2015-12-31",
+      "SIGNATURE BANK",
+      "",
+      ""
+     ],
+     [
+      "SBNY",
+      "2016-06-30",
+      "SIGNATURE BANK",
+      "",
+      ""
+     ],
+     [
+      "SBNY",
+      "2016-12-30",
+      "SIGNATURE BANK",
+      "",
+      ""
+     ],
+     [
+      "SBNY",
+      "2017-06-30",
+      "SIGNATURE BANK",
+      "",
+      ""
+     ],
+     [
+      "SBNY",
+      "2017-12-31",
+      "SIGNATURE BANK",
+      "",
+      ""
+     ],
+     [
+      "SBNY",
+      "2018-06-30",
+      "SIGNATURE BANK",
+      "",
+      ""
+     ],
+     [
+      "SBNY",
+      "2018-12-31",
+      "SIGNATURE BANK",
+      "",
+      ""
+     ],
+     [
+      "SBNY",
+      "2019-06-30",
+      "SIGNATURE BANK",
+      "",
+      ""
+     ],
+     [
+      "SBNY",
+      "2019-12-31",
+      "SIGNATURE BANK",
+      "",
+      ""
+     ],
+     [
+      "SBNY",
+      "2020-06-30",
+      "SIGNATURE BANK",
+      "",
+      ""
+     ],
+     [
+      "SBNY",
+      "2020-12-31",
+      "SIGNATURE BANK",
+      "",
+      ""
+     ],
+     [
+      "SBNY",
+      "2021-06-30",
+      "SIGNATURE BANK",
+      "",
+      ""
+     ],
+     [
+      "SBNY",
+      "2021-12-31",
+      "SIGNATURE BANK",
+      "",
+      ""
+     ],
+     [
+      "SBNY",
+      "2022-06-30",
+      "SIGNATURE BANK",
+      "",
+      ""
+     ],
+     [
+      "SBNY",
+      "2022-12-31",
+      "SIGNATURE BANK",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1288784,
+   "line_tickers": [],
+   "listed": false,
+   "name": "SIGNATURE BANK",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
   "BBG000MJRJJ2": {
    "cusips": [
     "44267D107"
@@ -4385,6 +4564,179 @@
    "observed": true,
    "security_type": "Common Stock",
    "share_class": "CLASS C"
+  },
+  "BBG0019LSQ49": {
+   "cusips": [
+    "33616C100"
+   ],
+   "eras": {
+    "FRC@2012-06-29": [
+     [
+      "FRC",
+      "2012-06-29",
+      "FIRST REPUBLIC BANK",
+      "",
+      ""
+     ],
+     [
+      "FRC",
+      "2012-12-31",
+      "FIRST REPUBLIC BANK",
+      "",
+      ""
+     ],
+     [
+      "FRC",
+      "2013-06-28",
+      "FIRST REPUBLIC BANK",
+      "",
+      ""
+     ],
+     [
+      "FRC",
+      "2013-12-31",
+      "FIRST REPUBLIC BANK",
+      "",
+      ""
+     ],
+     [
+      "FRC",
+      "2014-06-30",
+      "FIRST REPUBLIC BANK",
+      "",
+      ""
+     ],
+     [
+      "FRC",
+      "2014-12-31",
+      "FIRST REPUBLIC BANK",
+      "",
+      ""
+     ],
+     [
+      "FRC",
+      "2015-06-30",
+      "FIRST REPUBLIC BANK",
+      "",
+      ""
+     ],
+     [
+      "FRC",
+      "2015-12-31",
+      "FIRST REPUBLIC BANK",
+      "",
+      ""
+     ],
+     [
+      "FRC",
+      "2016-06-30",
+      "FIRST REPUBLIC BANK",
+      "",
+      ""
+     ],
+     [
+      "FRC",
+      "2016-12-30",
+      "FIRST REPUBLIC BANK",
+      "",
+      ""
+     ],
+     [
+      "FRC",
+      "2017-06-30",
+      "FIRST REPUBLIC BANK",
+      "",
+      ""
+     ],
+     [
+      "FRC",
+      "2017-12-31",
+      "FIRST REPUBLIC BANK",
+      "",
+      ""
+     ],
+     [
+      "FRC",
+      "2018-06-30",
+      "FIRST REPUBLIC BANK",
+      "",
+      ""
+     ],
+     [
+      "FRC",
+      "2018-12-31",
+      "FIRST REPUBLIC BANK",
+      "",
+      ""
+     ],
+     [
+      "FRC",
+      "2019-06-30",
+      "FIRST REPUBLIC BANK",
+      "",
+      ""
+     ],
+     [
+      "FRC",
+      "2019-12-31",
+      "FIRST REPUBLIC BANK",
+      "",
+      ""
+     ],
+     [
+      "FRC",
+      "2020-06-30",
+      "FIRST REPUBLIC BANK",
+      "",
+      ""
+     ],
+     [
+      "FRC",
+      "2020-12-31",
+      "FIRST REPUBLIC BANK",
+      "",
+      ""
+     ],
+     [
+      "FRC",
+      "2021-06-30",
+      "FIRST REPUBLIC BANK",
+      "",
+      ""
+     ],
+     [
+      "FRC",
+      "2021-12-31",
+      "FIRST REPUBLIC BANK",
+      "",
+      ""
+     ],
+     [
+      "FRC",
+      "2022-06-30",
+      "FIRST REPUBLIC BANK",
+      "",
+      ""
+     ],
+     [
+      "FRC",
+      "2022-12-31",
+      "FIRST REPUBLIC BANK",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1132979,
+   "line_tickers": [
+    "FRCB"
+   ],
+   "listed": false,
+   "name": "FIRST REPUBLIC BANK",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
   },
   "BBG001KS9450": {
    "cusips": [
