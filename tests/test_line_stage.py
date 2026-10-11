@@ -305,6 +305,20 @@ def test_the_text_sources_filter_the_8ks_before_the_cap():
     assert lines.cusips == {"BBGA": ["A1", "316645100"]} and lines.securities["BBGA"].line_tickers == {"FNP"}
 
 
+def test_a_line_whose_later_step_only_an_8k_names_reads_the_texts_in_that_round():
+    """YRCW (batch 3 gate): the fails rows give the first step (a reverse split under the line's own ticker), and the
+    second, Yellow's new ticker and CUSIP, is named only by the rename 8-K; the texts are read in the round the line
+    first has no step, not only in the first round."""
+    rows = _line("AA", ["C1", "C2"]) + [r for r in _line("YELL", ["X1", "X2", "985510106"]) if r.cusip == "985510106"]
+    renamed = _firsts(rows)["985510106"]
+    texts = {f"k-{renamed}": 'its common stock will trade under the ticker symbol "YELL", CUSIP number 985510106'}
+    edgar = _Edgar(_stating(rows), texts=texts)
+    lines = _follow([_Spec("BBGA", 1, "AA", ["C1"])], rows, edgar=edgar)
+    assert lines.cusips == {"BBGA": ["C1", "C2", "985510106"]}
+    assert "YELL" in lines.securities["BBGA"].line_tickers
+    assert edgar.read.count(f"k-{renamed}") == 1        # each line end's texts are read once
+
+
 # --- failures: the ones that stop the run, and the reads that are reported, never cached ---------------------------
 
 def test_openfigi_unavailable_inside_the_stage_stops_the_run():

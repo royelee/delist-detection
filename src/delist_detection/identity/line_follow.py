@@ -765,6 +765,7 @@ def follow_lines(identity: "Identity", clients: LineSources, *, as_of: date,
     named: dict[str, set[str]] = defaultdict(set)
     counts: Counter[str] = Counter()
     flagged: set[str] = set()            # securities whose step already got a resolution_degraded item
+    texted: set[tuple[str, str]] = set()  # (security, its line's last CUSIP) whose end's 8-Ks were read
     for round_no in range(1, MAX_ROUNDS + 1):
         if round_no > 1:        # the tickers a line took last round (CEB beside EXBD): their rows are held now too
             ftd.follow(symbols=spellings_of(todo))
@@ -778,18 +779,24 @@ def follow_lines(identity: "Identity", clients: LineSources, *, as_of: date,
 
         steps = {sid: steps_of(sid) for sid in todo}
         new_symbols: set[str] = set()
-        if round_no == 1:
-            stopped = (as_of - timedelta(days=TEXT_SOURCE_DAYS)).isoformat()
-            for sid in todo:
-                end = line_end(out.cusips.get(sid, []), own(sid), ftd)
-                if steps[sid] or end is None or end.last >= stopped:
-                    continue
-                symbols, cusips = reads.text_sources(out.securities[sid], end)
-                if not symbols and not cusips:      # no filing names the new ticker or CUSIP: the rows' names may
-                    cusips = reads.renamed_cusips(out.securities[sid], end, out.cusips.get(sid, []), ftd)
-                extra[sid] |= symbols
-                named[sid] |= cusips
-                new_symbols |= symbols
+        # a line with no step this round has its end's 8-Ks read, in whichever round it first has none (YRCW: two
+        # reverse splits under its own ticker, then Yellow's YELL, which only the rename 8-K names); once per end
+        stopped = (as_of - timedelta(days=TEXT_SOURCE_DAYS)).isoformat()
+        for sid in todo:
+            if steps[sid] or sid not in out.securities:
+                continue
+            end = line_end(out.cusips.get(sid, []), own(sid), ftd)
+            if end is None or end.last >= stopped or (sid, end.cusip) in texted:
+                continue
+            texted.add((sid, end.cusip))
+            symbols, cusips = reads.text_sources(out.securities[sid], end)
+            # no filing names the new ticker or CUSIP: the rows' names may, read in the first round only (a pass
+            # over every fails row of the window, anchored on the one rename EDGAR dates)
+            if not symbols and not cusips and round_no == 1:
+                cusips = reads.renamed_cusips(out.securities[sid], end, out.cusips.get(sid, []), ftd)
+            extra.setdefault(sid, set()).update(symbols)
+            named[sid] |= cusips
+            new_symbols |= symbols
         new_cusips = {st.new_cusip for v in steps.values() for st in v if st.kind == SWITCH}
         new_cusips |= {c for v in named.values() for c in v}
         if new_cusips or new_symbols:
