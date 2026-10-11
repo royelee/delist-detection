@@ -2866,7 +2866,7 @@ OLD_MERGER_8K = EdgarSubmission("0000004242-12-000040", "8-K", "2012-09-24", "20
 OLD_F25 = EdgarSubmission("0000876661-12-000300", "25-NSE", "2012-09-24", "", "", "primary_doc.xml")
 
 
-def _new_registrant(fake_edgar):
+def _new_registrant(fake_edgar, registration=False):
     """The registrant of the line after RS's reverse-split-like switch is another company, CIK 4343 (as Coca-Cola
     European Partners is of Coca-Cola Enterprises): the lookup finds it by the name its fails rows carry, and it files
     the merger and the Form 25 that end the line."""
@@ -2875,6 +2875,9 @@ def _new_registrant(fake_edgar):
         EdgarSubmission("0000004343-12-000001", "10-K", "2012-03-01", "2011-12-31", "", "k.htm"),
         EdgarSubmission("0000004343-13-000004", "10-Q", "2013-02-08", "2012-12-31", "", "q.htm"),
         replace(MERGER_8K, accession="0000004343-14-000020"), MERGER_F25]
+    if registration:         # its 8-K12B: the holders' shares of the old registrant carried over to it
+        fake_edgar.submissions_by_cik[4343].append(
+            EdgarSubmission("0000004343-12-000002", "8-K12B", "2012-09-28", "2012-09-28", "", "r.htm"))
     fake_edgar.texts["0000004343-14-000020"] = ("Item 3.01. trading suspended prior to the opening of trading on "
                                                 "June 20, 2014 " + "x" * 300)
     fake_edgar.texts["0000004242-12-000040"] = ("Item 3.01. trading suspended prior to the opening of trading on "
@@ -2910,6 +2913,25 @@ def test_the_line_after_a_registrant_that_merged_out_is_a_derived_security(fake_
     assert sorted((r["ticker"], r["as_of"], r["sec_id"]) for r in seeds) == caller
     assert {(r["sec_id"], r["bucket"], r["successor_sec_id"]) for r in t["delistings"]} == {
         ("BBGRS01", "merger", ""), ("BBGRSNEW1", "merger", "")}
+
+
+def test_the_old_line_continues_into_a_derived_security_of_another_registrant(fake_edgar, tmp_path):
+    """The old line ended at the switch with no Form 25 of its own, the line after it is a derived security (its
+    registrant merged out, rule X gives it CIK 4343), and 4343's 8-K12B says the holders' shares carried over, at
+    about the same price: the old line's row is the continuation to the derived security, which stays out of the
+    caller's tables."""
+    _new_registrant(fake_edgar, registration=True)
+    rows = [FtdRow("2012-09-25", RS_NEW, "RSZZZZ", "REVERSE SPLIT CO NEW", 0.01),
+            *_priced("RS", RS_NEW, "REVERSE SPLIT CO NEW", _weekly("2012-10-01", 91), 12.5)]
+    t = _line_run(fake_edgar, tmp_path, filings=[SPLIT_8K],
+                  figi={("ID_CUSIP", RS_NEW): _figi_answer("BBGRSNEW1", "RS", "REVERSE SPLIT CO")}, new_rows=rows)
+    assert {r["sec_id"]: (r["observed"], r["issuer_cik"]) for r in t["securities"]} == {
+        "BBGRS01": ("true", "4242"), "BBGRSNEW1": ("false", "4343")}
+    old = next(r for r in t["delistings"] if r["sec_id"] == "BBGRS01")
+    assert (old["bucket"], old["successor_sec_id"]) == ("exchange_transfer", "BBGRSNEW1")
+    assert "handoff_continuation" in old["review_flags"]
+    om = read_table("observation_map", table_path(tmp_path, "observation_map"))
+    assert {r["sec_id"] for r in om} == {"BBGRS01"}
 
 
 def test_a_derived_line_on_its_origins_composite_whose_price_did_not_carry_over_is_not_made(

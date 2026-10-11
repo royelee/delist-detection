@@ -424,8 +424,13 @@ def _resolve_issuers(eras: list[TickerEra], ftd: FtdIndex, handoffs: Sequence[Ha
     # the first run answers keeps that answer (rule B reads the 8-K filers of the 120 days before its date).
     ciks = {k: r.cik for k, r in answers.items()}
     by_cap, by_end = (passes.infer(eras, ftd, dates, ciks, handoffs) for dates in (capped, last_seen))
-    inferred = {k: v for k, v in {**by_end.inferred, **by_cap.inferred}.items() if v.cik not in excluded.get(k, ())}
-    disagreements = {**by_end.disagreements, **by_cap.disagreements}
+    def allowed(found: dict[str, InferredIssuer]) -> dict[str, InferredIssuer]:
+        """One pass's answers without those naming an issuer the era is asked without (before the passes merge: the
+        capped pass's excluded answer would otherwise win the merge and be dropped, losing the followed pass's)."""
+        return {k: v for k, v in found.items() if v.cik not in excluded.get(k, ())}
+
+    inferred = {**allowed(by_end.inferred), **allowed(by_cap.inferred)}
+    disagreements = {**allowed(by_end.disagreements), **allowed(by_cap.disagreements)}
     for key, found in inferred.items():
         answers[key] = TickerResolution(tickers[key], found.cik, None, found.source)
     by_key = {e.key: e for e in eras}

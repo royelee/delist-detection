@@ -324,3 +324,29 @@ def test_the_degraded_check_of_an_excluded_lookup_asks_for_the_key_of_that_looku
     assert {ex for _, ex in lookup.degraded_calls} == {(), (101,)}
     flagged = [r for r in got.review if r.flag == "resolution_degraded" and "issuer resolution" in r.reason]
     assert [r.reason.split(":")[0] for r in flagged] == ["X@2021-03-01 X CO NEWER, INC"]
+
+
+def test_a_second_pass_answer_is_filtered_before_the_two_passes_are_merged(monkeypatch):
+    """The capped pass infers the excluded issuer for the era and the followed pass another one: the merge would take
+    the capped answer and the filter then drop it, losing the valid one. Each pass is filtered first."""
+    calls = []
+
+    def infer(self, eras, ftd, dates, ciks, handoffs=None):
+        calls.append(1)
+        cik = 101 if len(calls) % 2 == 1 else 303          # the capped pass first, then the followed one
+        return SecondPass({DERIVED_KEY: InferredIssuer(cik, "rule_b", "8-K")},
+                          {DERIVED_KEY: InferredIssuer(cik, "rule_c", "CUSIP")})
+
+    monkeypatch.setattr(EraIssuers, "infer", infer)
+    got, _ = _run(_fails(10.0, 10.0), {PAIR: ORIGIN}, ccc=OWN_COMPOSITE)
+    assert got.verdicts == {PAIR: "without_old_issuer"} and got.issuers[DERIVED_KEY].cik == 303
+
+
+def test_an_origin_with_no_issuer_gives_no_rule_x_verdict():
+    """There is no old issuer to leave out: the guard on `issuer_cik is None`."""
+    origin = DerivedFrom("BBGX", None, "merged_out", "22222B202", "2021-03-01")
+    era = TickerEra("X", "2021-03-01", "2021-03-01", [Observation("X", "2021-03-01", "X CO NEW", derived=True)],
+                    ftd_cusips=("33333C303",), derived_from=origin)
+    found = SimpleNamespace(issuers={}, answers={era.key: SimpleNamespace(source="efts")})
+    assert _check_derived([era], {PAIR: origin}, {}, None, {era.key: SimpleNamespace(sec_id="BBGY")}, found) == {}
+    # cik_of(issuers, key) is None for an era with no issuer answer: without the guard None == None gives a verdict
