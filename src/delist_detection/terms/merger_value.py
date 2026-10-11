@@ -145,11 +145,13 @@ class MergerValues:
         v = self.records.get(key) or MergerValue(key)
         price = answers.received_close(key.sec_id, last_trade, terms.ticker) if answers else None
         kept = tuple(f for f in v.flags if flag_name(f) not in GATE_FLAGS)
+        # delistings.csv carries the stock leg only once an answer prices it (a leg is its ratio and price together,
+        # `dlret.decide`); the contract publishes the statement either way (`contract_inputs`)
+        priced = None if price is None else {"cash_per_share": terms.cash_per_share, "stock_ratio": terms.stock_ratio,
+                                             "acquirer_price": price, "acquirer_ticker": terms.ticker}
         self.records[key] = replace(
             v, statement=terms, payout=terms.cash_per_share, source=STATEMENT_SOURCE, confidence="medium",
-            terms={"cash_per_share": terms.cash_per_share, "stock_ratio": terms.stock_ratio,
-                   "acquirer_price": price, "acquirer_ticker": terms.ticker},
-            flags=(*kept, f"{TERMS_GATE_SKIPPED}:own_statement"), priced_by="", acquirer_sec_id="",
+            terms=priced, flags=(*kept, f"{TERMS_GATE_SKIPPED}:own_statement"), priced_by="", acquirer_sec_id="",
             price_ticker=terms.ticker, leg_sec_ids={}, request=(terms.ticker, ""), own_verdict=None)
 
     def _decided(self, key: DelistingKey) -> tuple[float | None, Mapping[str, Any] | None]:

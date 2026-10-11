@@ -305,7 +305,9 @@ def test_terms_that_failed_the_gate_give_way_to_a_one_for_one_statement_into_a_n
     assert v.request == ("TTEC", "") and v.flags == ("terms_gate_skipped:own_statement",)
     assert values.requests([{"sec_id": "R", "delist_date": "2016-09-08"}]) == {
         d.key: ("TTEC", "", "TITAN TECHNOLOGIES CORP")}
-    assert values.table_terms(d.key).stock_ratio == 1.0 and values.table_terms(d.key).acquirer_price is None
+    t = values.table_terms(d.key)                    # unanswered: delistings.csv carries no leg (the contract does)
+    assert (t.stock_ratio, t.acquirer_price, t.payout_source) == (None, None, "registrant_statement")
+    assert _decided(t, last_close=17.35).method.value == "assumed_par"      # as any merger its terms leave unpriced
 
 
 def test_an_answered_close_prices_the_statements_stock_leg(monkeypatch):
@@ -313,7 +315,18 @@ def test_an_answered_close_prices_the_statements_stock_leg(monkeypatch):
     from delist_detection.outputs.price_requests import PriceAnswers, PriceKey
     answers = PriceAnswers({PriceKey("R", "2016-09-07", "received_close", "TTEC", "2016-09-08"): 21.5})
     d, _, values = _failed_gate_stage(monkeypatch, flags=["llm_gate_failed"], answers=answers, with_values=True)
-    assert values.table_terms(d.key).acquirer_price == 21.5
+    t = values.table_terms(d.key)
+    assert (t.stock_ratio, t.acquirer_price) == (1.0, 21.5)
+    assert abs(_decided(t, last_close=20.0).value - (21.5 / 20.0 - 1)) < 1e-9
+
+
+def _decided(t, *, last_close):
+    """The ending value stage 10a decides from a merger's table terms (`pipeline._delisting_rows`)."""
+    from delist_detection.outputs.dlret import ValueInputs, decide
+    from delist_detection.vocabulary.exchanges import Exchange
+    return decide(ValueInputs(CrspBucket.MERGER, Exchange.NASDAQ, last_close, payout_per_share=t.payout_per_share,
+                              stock_ratio=t.stock_ratio, acquirer_price=t.acquirer_price,
+                              payout_confidence=t.payout_confidence))
 
 
 def test_terms_the_gate_kept_still_outvote_the_statement(monkeypatch):
