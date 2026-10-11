@@ -10,7 +10,11 @@ from delist_detection.sources.ftd import FtdIndex, FtdRow
 from delist_detection.identity.observations import Observation, ObservationIndex, load_observations, split_eras
 from delist_detection.identity.added_securities import AddedAcquirer, AddedSuccessor
 from delist_detection.identity.history import Range, Sighting, ranges_from_sightings
-from delist_detection.identity.identity import _refine, era_cusips, era_last_seen, last_sightings, refine_eras
+from delist_detection.identity.identity import (
+    FirstPass, _refine, capped_sightings, choose_first_pass, era_capped_seen, era_cusips, era_last_seen, last_sightings,
+    refine_eras,
+)
+from delist_detection.identity.ticker_resolver import TickerResolution
 from delist_detection.identity.security_master import (
     EraResolution, FigiResolver, Handoff, Issuer, Security, build_securities, cusip_handoffs, issuers_by_era,
 )
@@ -301,6 +305,50 @@ def test_era_last_seen_stops_before_the_tickers_next_era():
     ftd = FtdIndex(_own("KORS", "G60754101", rows, "MICHAEL KORS HLDGS LTD"))
     assert era_last_seen(era, ftd, until="2014-12-31") == "2014-11-03"
     assert era_last_seen(era, ftd) == "2016-05-02"
+
+
+def test_the_capped_date_is_one_step_and_the_followed_date_the_end_of_the_rows():
+    era = replace(_era("HOT", ("2008-01-16", "STARWOOD HOTELS & RESRTS")), ftd_cusips=("85590A401",))
+    own = ["2008-06-02", "2009-05-04", "2010-04-05", "2011-03-07", "2012-02-06"]
+    ftd = FtdIndex(_own("HOT", "85590A401", own, "STARWOOD HOTELS&RESORTS WRLDWD"))
+    assert era_capped_seen(era, ftd) == "2008-06-02"
+    assert era_last_seen(era, ftd) == "2012-02-06"
+    assert capped_sightings([era], ftd) == {"HOT@2008-01-16": "2008-06-02"}
+
+
+def _answer(cik, source):
+    return TickerResolution("X", cik, None, source)
+
+
+@pytest.mark.parametrize("capped, followed, answer, fallback", [
+    # both strong, one CIK: the capped date's answer (its source is the one the tables have always shown)
+    ((1, "name_search"), (1, "efts"), (1, "name_search"), None),
+    # both strong, two CIKs: the end of the line, where the security's own Form 25 is (ITC, Laredo, Sprint)
+    ((1, "name_search"), (2, "name_search"), (2, "name_search"), None),
+    ((1, "efts"), (2, "efts_frequency"), (2, "efts_frequency"), None),
+    # ... unless the end of the line only has today's ticker map: a successor took the ticker and the name (Prologis)
+    ((1, "name_search"), (2, "company_tickers"), (1, "name_search"), None),
+    ((1, "company_tickers"), (2, "company_tickers"), (2, "company_tickers"), None),
+    # one strong: it (a later rename loses nothing; a seed's early miss is repaired at the end of the line)
+    ((1, "company_tickers"), (None, "rejected_validation"), (1, "company_tickers"), None),
+    ((None, "rejected_validation"), (2, "efts_frequency"), (2, "efts_frequency"), None),
+    ((1, "name_search"), (2, "efts_name_mismatch"), (1, "name_search"), None),
+    ((1, "efts_frequency_name_mismatch"), (2, "efts"), (2, "efts"), None),
+    # neither strong: no first-pass answer; a weak one is kept aside, the capped date's first
+    ((1, "efts_name_mismatch"), (None, "rejected_validation"), (None, "rejected_validation"), (1, "efts_name_mismatch")),
+    ((None, "rejected_validation"), (2, "rename"), (None, "rejected_validation"), (2, "rename")),
+    ((1, "efts_name_mismatch"), (2, "efts_name_mismatch"), (None, "none"), (1, "efts_name_mismatch")),
+    ((None, "none"), (None, "rejected_validation"), (None, "none"), None),
+])
+def test_the_first_pass_answer_of_two_lookups(capped, followed, answer, fallback):
+    got = choose_first_pass(_answer(*capped), _answer(*followed))
+    assert (got.answer.cik, got.answer.source) == answer
+    assert (got.fallback and (got.fallback.cik, got.fallback.source)) == fallback
+
+
+def test_a_pin_or_an_override_is_strong_and_a_miss_is_not():
+    assert _answer(1, "cik_map").strong and _answer(1, "manual").strong
+    assert not _answer(None, "rejected_validation").strong and not _answer(1, "rename").strong
 
 
 def test_the_fails_window_runs_to_the_run_date_whatever_the_newest_observation():

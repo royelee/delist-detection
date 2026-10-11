@@ -7,8 +7,8 @@ on, and answers what later stages read about who each one is (`Identity`):
 1. the ticker eras (CONTEXT.md), built in one place: `observations.split_eras` splits each ticker's observations,
    then `refine_eras` splits them again on the SEC fails-to-deliver rows under the ticker, which this stage loads
    (`Identity.ftd`; later stages extend it);
-2. each era's issuer CIK, asked at the era's last sighting (`era_last_seen`) with its own pin, name and first
-   sighting: the issuer lookup's first pass (`IssuerLookup`, the memoized (ticker, date, observed name) -> CIK
+2. each era's issuer CIK, asked at the era's capped date and at the end of its own fails rows (`era_capped_seen`,
+   `era_last_seen`; `choose_first_pass`) with its own pin, name and first sighting: the issuer lookup's first pass (`IssuerLookup`, the memoized (ticker, date, observed name) -> CIK
    lookup), then stage 2b's check of a name-search answer against the era's span and its ticker's fails rows
    (`EraIssuers.check_names`), then the second pass for the eras left with no CIK and no pin (`EraIssuers.infer`),
    then each issuer's EDGAR names (the run's issuer record);
@@ -212,15 +212,48 @@ def _refine(index: ObservationIndex, ftd_client: Any, as_of: date, limit: int | 
     return eras, era_by_key, ftd
 
 
+@dataclass(frozen=True)
+class FirstPass:
+    """One era's first-pass answer out of its two lookups (`choose_first_pass`): `answer`, what the era-level passes
+    see (a strong answer, or no CIK), and `fallback`, a weak answer kept aside, which stands only when no pass
+    infers an issuer."""
+    answer: TickerResolution
+    fallback: TickerResolution | None = None
+
+
+def choose_first_pass(capped: TickerResolution, followed: TickerResolution) -> FirstPass:
+    """The first-pass answer of an era asked at its capped date and at the end of its own fails rows
+    (`era_capped_seen`, `era_last_seen`; one answer given twice when they are one day).
+
+    The names the caller observed were in force at the capped date; the security's own Form 25 is at the end of the
+    rows. So: both strong (`TickerResolution.strong`) and one CIK, the capped date's answer; both strong and two
+    CIKs, the followed date's (ITC Holdings 2016, Sprint 2020: another company of the name answers early), unless
+    it is today's ticker map and the capped date's is not (by the end of the line a successor holds the ticker and
+    the name: Prologis 2011, Merck 2009); one strong, that one (a later rename rejects the right company at the
+    end: AMC Networks; a seed's early date finds no Form 25: Coca-Cola Enterprises); neither, no answer, with a
+    weak one kept aside (the capped date's first)."""
+    if capped.strong and followed.strong:
+        successor = followed.source == "company_tickers" and capped.source != "company_tickers"
+        return FirstPass(followed if followed.cik != capped.cik and not successor else capped)
+    if capped.strong or followed.strong:
+        return FirstPass(capped if capped.strong else followed)
+    fallback = capped if capped.cik is not None else followed if followed.cik is not None else None
+    blank = capped if capped.cik is None else followed if followed.cik is None else \
+        TickerResolution(capped.ticker, None, None, "none")
+    return FirstPass(blank, fallback)
+
+
 @dataclass
 class _Issuers:
     """Stage 2's answer for each era: the lookup's (`answers`, by era key: the first pass's, or the 2b or second-pass
     answer that replaced it), its `Issuer` (`issuers`: CIK and EDGAR names, for the eras whose issuer is known), the
-    era's last sighting the lookup was asked at, the issuer CIKs whose names read was degraded, the 2b and
-    second-pass answers (`inferred`), the second pass's contradictions of first-pass answers (`disagreements`), and
-    the eras whose 2b or second-pass reads rested on a failed request or a stale copy (`degraded`)."""
+    two dates the lookup was asked at (`capped`, and `last_seen`, the end of the era's own fails rows), the issuer
+    CIKs whose names read was degraded, the 2b and second-pass answers (`inferred`), the second pass's contradictions
+    of first-pass answers (`disagreements`), and the eras whose 2b or second-pass reads rested on a failed request or
+    a stale copy (`degraded`)."""
     answers: dict[str, TickerResolution]
     issuers: dict[str, Issuer]
+    capped: dict[str, str]
     last_seen: dict[str, str]
     names_degraded: set[int]
     inferred: dict[str, InferredIssuer]
@@ -230,33 +263,40 @@ class _Issuers:
 
 def _resolve_issuers(eras: list[TickerEra], ftd: FtdIndex, handoffs: Sequence[Handoff], clients: Sources,
                      log: Callable[[str], None], workers: int, meter: StageMeter) -> _Issuers:
-    """2. The issuer CIK of each era, resolved at the era's last sighting (index
-    snapshots can be months apart, and the lookup's Form 25 search is anchored
-    on this date), with each era's own pin and name (a pin or name looked up by
+    """2. The issuer CIK of each era, resolved at two dates, its capped date and the end of its own fails rows, one
+    answer chosen (`choose_first_pass`), with each era's own pin and name (a pin or name looked up by
     (ticker, date) can belong to a neighbouring era when the last sighting falls
     between the two: FTD rows of a shared CUSIP carry KORS@2012's last sighting
     past KORS@2014's first observation). The lookup tier that found it
     (cik_map, manual, company_tickers, ...) is kept for the delisting rows'
     resolution_source. Then 2b's check of the name-search answers, and the second pass
-    (`EraIssuers.infer`, never saved) for the eras left with no CIK and no pin: a renamed issuer found by
-    its 8-K frequency or by a CUSIP handoff. Then each issuer's EDGAR names
+    (`EraIssuers.infer`, never saved, run with each date) for the eras left with no CIK and no pin: a renamed issuer
+    found by its 8-K frequency or by a CUSIP handoff. Then each issuer's EDGAR names
     (`IssuerRecord.names`), which stage 3 checks CUSIPs and FIGI names against:
     an issuer whose read failed has none (its eras are checked against their
     observed names only) and is reported degraded."""
     resolver, record = clients.resolver, clients.issuers
-    last_seen = last_sightings(eras, ftd)
+    capped, last_seen = capped_sightings(eras, ftd), last_sightings(eras, ftd)
+
+    def both(lookup, e: TickerEra) -> tuple[TickerResolution, TickerResolution]:
+        """The era's answers at its capped date and at the end of its rows (one lookup when they are one day)."""
+        at_cap = lookup.resolve(e.ticker, capped[e.key], pin=e.cik_pin, name=e.name, since=e.first)
+        if last_seen[e.key] <= capped[e.key]:
+            return at_cap, at_cap
+        return at_cap, lookup.resolve(e.ticker, last_seen[e.key], pin=e.cik_pin, name=e.name, since=e.first)
+
     mark = meter.start()
     if workers > 1:
         # Warm the EDGAR caches: each era resolved on a worker thread by a shadow
-        # lookup (a snapshot of this memo that saves nothing), its answer thrown
+        # lookup (a snapshot of this memo that saves nothing), its answers thrown
         # away. The resolve below then runs one era at a time, in order, on this
         # thread, and finds its requests answered.
-        warm(eras, lambda shadow, e: shadow.resolve(e.ticker, last_seen[e.key], pin=e.cik_pin, name=e.name,
-                                                    since=e.first),
-             workers=workers, state=resolver.shadow, name="issuer resolution")
-    answers = {e.key: resolver.resolve(e.ticker, last_seen[e.key], pin=e.cik_pin, name=e.name, since=e.first)
-               for e in eras}
+        warm(eras, both, workers=workers, state=resolver.shadow, name="issuer resolution")
+    first = {e.key: choose_first_pass(*both(resolver, e)) for e in eras}
     resolver.flush()
+    answers = {key: f.answer for key, f in first.items()}
+    log(f"issuer lookups: {sum(last_seen[k] > capped[k] for k in first)} eras asked at two dates, "
+        f"{sum(f.fallback is not None for f in first.values())} weak answers kept aside")
     passes = EraIssuers(record, resolver.frequency_candidates)
     tickers = {e.key: e.ticker for e in eras}
     checked = passes.check_names(eras, ftd, last_seen, answers)                                          # 2b
@@ -264,11 +304,19 @@ def _resolve_issuers(eras: list[TickerEra], ftd: FtdIndex, handoffs: Sequence[Ha
         answers[key] = TickerResolution(tickers[key], found.cik, None, found.source)
     log(f"name checks: {len(checked)} name-search answers replaced"
         + (f" ({', '.join(f'{k} -> {v.cik}' for k, v in sorted(checked.items()))})" if checked else ""))
-    second = passes.infer(eras, ftd, last_seen, {k: r.cik for k, r in answers.items()}, handoffs)
-    for key, found in second.inferred.items():
+    # The second pass with the capped dates, then with the followed ones, on the same first-pass answers: an era
+    # the first run answers keeps that answer (rule B reads the 8-K filers of the 120 days before its date).
+    ciks = {k: r.cik for k, r in answers.items()}
+    by_cap, by_end = (passes.infer(eras, ftd, dates, ciks, handoffs) for dates in (capped, last_seen))
+    inferred = {**by_end.inferred, **by_cap.inferred}
+    disagreements = {**by_end.disagreements, **by_cap.disagreements}
+    for key, found in inferred.items():
         answers[key] = TickerResolution(tickers[key], found.cik, None, found.source)
-    log(f"resolver's second pass: {len(second.inferred)} issuers inferred, "
-        f"{len(second.disagreements)} first-pass answers its CUSIP evidence contradicts")
+    for key, f in first.items():                 # a weak answer stands only where no pass inferred an issuer
+        if answers[key].cik is None and f.fallback is not None:
+            answers[key] = f.fallback
+    log(f"resolver's second pass: {len(inferred)} issuers inferred, "
+        f"{len(disagreements)} first-pass answers its CUSIP evidence contradicts")
     ciks = {k: r.cik for k, r in answers.items()}
     issuer_ciks = [cik for cik in dict.fromkeys(ciks.values()) if cik]
     if workers > 1:
@@ -278,8 +326,8 @@ def _resolve_issuers(eras: list[TickerEra], ftd: FtdIndex, handoffs: Sequence[Ha
     names_degraded = set(reads.ciks)
     meter.done("issuer resolution", mark)
     # stage 2b's answers are reported as issuer_inferred, as the second pass's are
-    return _Issuers(answers, issuers_by_era(ciks, issuer_names), last_seen, names_degraded,
-                    {**checked, **second.inferred}, second.disagreements, set(passes.degraded))
+    return _Issuers(answers, issuers_by_era(ciks, issuer_names), capped, last_seen, names_degraded,
+                    {**checked, **inferred}, disagreements, set(passes.degraded))
 
 
 def _trading_span(ftd: FtdIndex, cusip: str) -> tuple[str, str] | None:
@@ -357,7 +405,8 @@ def _resolve_securities(eras: list[TickerEra], era_by_key: dict[str, TickerEra],
             review.append(ReviewItem(res.sec_id or "", era.ticker, cik_of(issuers, key), flag,
                                      f"{era.key} {era.name or ''}".strip(), last_seen=era.last))
     for e in eras:
-        if clients.resolver.is_degraded(e.ticker, found.last_seen[e.key], name=e.name) or e.key in found.degraded:
+        if any(clients.resolver.is_degraded(e.ticker, day, name=e.name)
+               for day in {found.capped[e.key], found.last_seen[e.key]}) or e.key in found.degraded:
             review.append(degraded_item(resolutions[e.key].sec_id or "", e.ticker, cik_of(issuers, e.key),
                                          f"{e.key} {e.name or ''}: issuer resolution",
                                          "; its answer was used for this run but not saved", last_seen=e.last))
@@ -586,22 +635,30 @@ def _own_rows(era: TickerEra, rows: Sequence[FtdRow]) -> list[FtdRow]:
     return list(rows)
 
 
+def _later_own_rows(era: TickerEra, ftd: FtdIndex, after: str, horizon_days: int, stop: str | None = None) -> list[str]:
+    """The days of the era's own rows (`_own_rows`) under its ticker in the `horizon_days` after `after`, before `stop`."""
+    lo = (date.fromisoformat(after) + timedelta(days=1)).isoformat()
+    hi = (date.fromisoformat(after) + timedelta(days=horizon_days)).isoformat()
+    return [r.date for r in _own_rows(era, ftd.by_symbol(era.ticker, lo, hi)) if stop is None or r.date < stop]
+
+
+def era_capped_seen(era: TickerEra, ftd: FtdIndex, horizon_days: int = 400) -> str:
+    """The era's capped date: its last observation, or a later FTD row of its
+    own (`_own_rows`) under its ticker within `horizon_days`. The names the
+    caller observed were in force around this date."""
+    return max([era.last, *_later_own_rows(era, ftd, era.last, horizon_days)])
+
+
 def era_last_seen(era: TickerEra, ftd: FtdIndex, horizon_days: int = 400, until: str | None = None) -> str:
-    """The era's last sighting: its last observation, or a later FTD row of its
-    own (`_own_rows`) under its ticker within `horizon_days`. An era with FTD
-    CUSIPs of its own is then followed along them, each step at most
+    """The era's last sighting: its capped date (`era_capped_seen`); an era with
+    FTD CUSIPs of its own is then followed along them, each step at most
     `horizon_days` past the row before, to the last row before `until` (the
     day the ticker's next era begins; None: no later era): the security's own
     fails rows say how long it traded, whatever the caller observed (one seed
     in 2008, Starwood's rows to 2016)."""
-    def later(after: str, stop: str | None) -> list[str]:
-        lo = (date.fromisoformat(after) + timedelta(days=1)).isoformat()
-        hi = (date.fromisoformat(after) + timedelta(days=horizon_days)).isoformat()
-        return [r.date for r in _own_rows(era, ftd.by_symbol(era.ticker, lo, hi)) if stop is None or r.date < stop]
-
-    last = max([era.last, *later(era.last, None)])
+    last = era_capped_seen(era, ftd, horizon_days)
     while era.ftd_cusips:
-        more = later(last, until)
+        more = _later_own_rows(era, ftd, last, horizon_days, until)
         if not more:
             break
         last = max(more)
@@ -616,6 +673,11 @@ def last_sightings(eras: Sequence[TickerEra], ftd: FtdIndex) -> dict[str, str]:
         starts[e.ticker].append(e.first)
     return {e.key: era_last_seen(e, ftd, until=min((f for f in starts[e.ticker] if f > e.first), default=None))
             for e in eras}
+
+
+def capped_sightings(eras: Sequence[TickerEra], ftd: FtdIndex) -> dict[str, str]:
+    """Each era's capped date by era key (`era_capped_seen`)."""
+    return {e.key: era_capped_seen(e, ftd) for e in eras}
 
 
 def era_rows(era: TickerEra, ftd: FtdIndex, last_seen: str) -> list[FtdRow]:

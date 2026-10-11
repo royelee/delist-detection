@@ -22,11 +22,13 @@ import requests
 
 from delist_detection.sources.edgar import EdgarSubmission
 from delist_detection.sources.ftd import FtdIndex, FtdRow
-from delist_detection.identity.identity import EraIssuers, InferredIssuer, identify, last_sightings, refine_eras
+from delist_detection.identity.identity import (
+    EraIssuers, InferredIssuer, capped_sightings, identify, last_sightings, refine_eras,
+)
 from delist_detection.identity.observations import ObservationIndex, load_observations
 from delist_detection.pipeline import Clients
 from delist_detection.identity.security_master import Handoff, cusip_handoffs
-from delist_detection.identity.ticker_resolver import TickerResolver
+from delist_detection.identity.ticker_resolver import TickerResolution, TickerResolver
 from tests.identity_cases import CommittedLookup
 
 FIX = Path(__file__).parent / "fixtures" / "eras"
@@ -149,11 +151,12 @@ def test_the_fixture_eras_and_last_sightings_are_the_real_ones(eras, ftd):
 
 # --- 1a: each era is looked up under its own name --------------------------------
 
-def _identify(tickers, resolver, *, edgar=None, figi=None, observations=None):
-    """The identity stage (`identity.identify`) over the fixture's observations of `tickers` and its fails rows,
-    the issuer lookup `resolver`, OpenFIGI `figi` (default: no US line for anything)."""
+def _identify(tickers, resolver, *, edgar=None, figi=None, observations=None, rows=None):
+    """The identity stage (`identity.identify`) over the fixture's observations of `tickers` and its fails rows
+    (`rows`, default the fixture's), the issuer lookup `resolver`, OpenFIGI `figi` (default: no US line for
+    anything)."""
     clients = Clients(edgar=edgar or _Edgar(), resolver=resolver, classifier=None, figi=figi or _NoFigi(),
-                      ftd_client=_RowsClient(_rows()), as_of=FTD_WINDOW[1])
+                      ftd_client=_RowsClient(rows if rows is not None else _rows()), as_of=FTD_WINDOW[1])
     index = ObservationIndex([o for o in (observations or load_observations(FIX / "renamed_observations.csv"))
                               if o.ticker in tickers])
     return identify(index, clients, as_of=FTD_WINDOW[1])
@@ -587,10 +590,136 @@ def test_the_second_pass_answer_is_used_flagged_and_never_saved(tmp_path):
         "KORS@2012-06-29": (1530721, "shared_cusip"), "KORS@2014-12-31": (1530721, "name_search"),
         "CPRI@2018-12-31": (1530721, "company_tickers")}
     saved = json.loads((tmp_path / "res.json").read_text())["entries"]
-    assert sorted(saved) == ["CPRI|2026-08-20|CAPRI HOLDINGS LTD", "KORS|2019-01-03|MICHAEL KORS HOLDINGS LTD"]
+    assert sorted(saved) == ["CPRI|2026-02-04|CAPRI HOLDINGS LTD", "CPRI|2026-08-20|CAPRI HOLDINGS LTD",
+                             "KORS|2019-01-03|MICHAEL KORS HOLDINGS LTD"]
     inferred = [(i.ticker, i.cik, i.reason) for i in identity.review if i.flag == "issuer_inferred"]
     assert inferred == [("KORS", 1530721, "KORS@2012-06-29 CAPRI HOLDINGS LTD: issuer 1530721 by shared_cusip: "
                                           "shares CUSIP G60754101 with KORS@2014-12-31")]
+
+
+# --- the issuer is asked at two dates: the capped date and the end of the era's own fails rows ---------------
+
+class _DatedLookup(CommittedLookup):
+    """The lookup answering by era and date: `dated` maps an era key to {lookup date: (CIK, tier)}; a date it does
+    not list is a miss. `asked` records every (era key, date). Other eras answer as `CommittedLookup` does.
+    `candidates` are the 8-K frequency candidates it offers (`frequency_candidates`, the resolver's own by default
+    none); `degraded_on` the one lookup date it reports degraded."""
+
+    def __init__(self, dated, answers=None, *, candidates=None, degraded_on=None):
+        super().__init__(answers or {})
+        self.dated, self.asked = dated, []
+        self.candidates, self.degraded_on = candidates, degraded_on
+
+    def resolve(self, ticker, observed_date=None, *, pin=None, name=None, since=None):
+        key = f"{ticker}@{since}"
+        self.asked.append((key, observed_date))
+        if key not in self.dated:
+            return super().resolve(ticker, observed_date, pin=pin, name=name, since=since)
+        cik, tier = self.dated[key].get(observed_date, (None, "rejected_validation"))
+        return TickerResolution(ticker, cik, None, tier)
+
+    def is_degraded(self, ticker, observed_date=None, *, name=None) -> bool:
+        return observed_date == self.degraded_on
+
+    def frequency_candidates(self, ticker, day):
+        return self.candidates(ticker, day) if self.candidates else super().frequency_candidates(ticker, day)
+
+
+# MATX@2012-12-31 (Matson): one observed ticker whose own CUSIP's fails rows run on for twelve years after the
+# capped date. Two issuers the fixture's EDGAR serves stand for the lookup's answers: Matson (3453, "A") and
+# Edgewell (1096752, "B").
+MATX, MATX_CAP, MATX_END, A, B = "MATX@2012-12-31", "2014-08-01", "2026-08-31", 3453, 1096752
+
+
+@pytest.fixture
+def matx_dates(eras, ftd):
+    """MATX's two lookup dates, as the stage computes them."""
+    one = [eras[MATX]]
+    assert capped_sightings(one, ftd) == {MATX: MATX_CAP}
+    assert last_sightings(list(eras.values()), ftd)[MATX] == MATX_END
+    return MATX_CAP, MATX_END
+
+
+def _matx(dated, **kw):
+    """The identity stage over MATX with the lookup answering `dated` ({date: (CIK, tier)}): the lookup, the stage."""
+    lookup = _DatedLookup({MATX: dated}, **kw)
+    return lookup, _identify({"MATX"}, lookup)
+
+
+def _issuer_and_tier(identity, key=MATX):
+    return identity.issuers[key].cik, identity.tier(key)
+
+
+def test_an_era_is_asked_at_its_capped_date_and_at_the_end_of_its_rows(matx_dates):
+    lookup, _ = _matx({})
+    assert [day for key, day in lookup.asked if key == MATX] == [MATX_CAP, MATX_END]
+
+
+def test_an_era_whose_two_dates_are_one_day_is_asked_once(eras, ftd):
+    """CZN@2008: no row after its last observation (2009-06-08)."""
+    key = "CZN@2008-01-16"
+    assert capped_sightings([eras[key]], ftd) == last_sightings([eras[key]], ftd) == {key: "2009-06-08"}
+    lookup = _DatedLookup({})
+    _identify({"CZN"}, lookup)
+    assert [day for k, day in lookup.asked if k == key] == ["2009-06-08"]
+
+
+def test_a_later_rename_does_not_lose_the_issuer(matx_dates):
+    """The capped date finds the company; at the end of the line it has another name and the lookup finds no one."""
+    _, identity = _matx({MATX_CAP: (A, "company_tickers")})
+    assert _issuer_and_tier(identity) == (A, "company_tickers")
+
+
+def test_the_end_of_the_line_answers_for_a_seed(matx_dates):
+    """The capped date finds no Form 25 for a seed; the end of its rows does."""
+    _, identity = _matx({MATX_END: (A, "efts_frequency")})
+    assert _issuer_and_tier(identity) == (A, "efts_frequency")
+
+
+def test_two_strong_answers_take_the_end_of_the_line(matx_dates):
+    _, identity = _matx({MATX_CAP: (B, "name_search"), MATX_END: (A, "efts")})
+    assert _issuer_and_tier(identity) == (A, "efts")
+
+
+def test_todays_ticker_map_at_the_end_does_not_replace_the_named_issuer(matx_dates):
+    _, identity = _matx({MATX_CAP: (A, "name_search"), MATX_END: (B, "company_tickers")})
+    assert _issuer_and_tier(identity) == (A, "name_search")
+
+
+def test_a_weak_answer_gives_way_to_the_second_pass():
+    """KORS@2012's lookup finds another company by a name that does not agree (efts_name_mismatch); that weak
+    answer is not what the passes see, so the second pass gives it KORS@2014's issuer through their shared CUSIP,
+    and no CUSIP disagreement is flagged against a weak answer."""
+    lookup = CommittedLookup({"KORS@2012-06-29": (883569, "efts_name_mismatch"),
+                              "KORS@2014-12-31": (1530721, "name_search"), "CPRI@2018-12-31": (1530721, "cik_map")})
+    identity = _identify({"KORS", "CPRI"}, lookup)
+    assert _issuer_and_tier(identity, "KORS@2012-06-29") == (1530721, "shared_cusip")
+    assert [i.ticker for i in identity.review if i.flag == "issuer_inferred"] == ["KORS"]
+    assert not [i for i in identity.review if i.flag == "issuer_cusip_disagrees"]
+
+
+def test_a_weak_answer_stands_when_nothing_is_inferred(matx_dates):
+    _, identity = _matx({MATX_CAP: (A, "efts_name_mismatch"), MATX_END: (A, "efts_name_mismatch")})
+    assert _issuer_and_tier(identity) == (A, "efts_name_mismatch")
+
+
+def test_an_era_degraded_at_either_date_is_flagged(matx_dates):
+    _, identity = _matx({MATX_CAP: (A, "name_search"), MATX_END: (A, "name_search")}, degraded_on=MATX_END)
+    flagged = [i.reason for i in identity.review if i.flag == "resolution_degraded"]
+    assert len(flagged) == 1 and flagged[0].startswith(MATX)
+
+
+def test_the_second_pass_runs_with_the_capped_dates_first(eras, ftd, frequency):
+    """CPO@2008 (Corn Products International, now Ingredion 1046257) has no first-pass answer. The fixture's 8-K
+    frequency rank was recorded for its capped date (2010-07-13) and none for the end of its rows (2012-05-31): rule B
+    answers with the capped date only, and the stage keeps that answer when it runs the pass with both."""
+    key = "CPO@2008-01-16"
+    assert (capped_sightings([eras[key]], ftd), last_sightings([eras[key]], ftd)) == (
+        {key: "2010-07-13"}, {key: "2012-05-31"})
+    assert _infer(eras, ftd, [key]) == {}                         # the pass with the followed dates alone
+    resolver = TickerResolver(_Edgar())
+    identity = _identify({"CPO"}, _DatedLookup({}, candidates=resolver.frequency_candidates))
+    assert _issuer_and_tier(identity, key) == (1046257, "efts_frequency_renamed")
 
 
 def test_a_second_pass_read_that_failed_degrades_the_era_it_was_read_for():

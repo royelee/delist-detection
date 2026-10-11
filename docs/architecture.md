@@ -603,7 +603,16 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   tier and is never written to the on-disk resolver cache. The pipeline looks
   each era up under its own pin and name (`resolve(..., pin=, name=)`) and
   its first sighting (`since=`): every search tier, and a cached answer from
-  one, takes only a company that had filed by then. The date it asks at is the era's last sighting (`identity.last_sightings`): its last observation, then its own CUSIP's fails rows under its ticker for as long as they continue, each step at most 400 days, stopping before the ticker's next era. One seed in 2008 is asked at the security's real end. The
+  one, takes only a company that had filed by then. The identity stage asks it at two dates for each era: the capped date
+  (`identity.era_capped_seen`: the last observation, or a later fails row of the era's own within 400 days) and the end of the
+  era's own fails rows (`identity.last_sightings`: its own CUSIP's rows under its ticker for as long as they continue, each step at
+  most 400 days, stopping before the ticker's next era; one seed in 2008 is asked at the security's real end).
+  `identity.choose_first_pass` picks the answer. A miss has no CIK; a weak answer is a CIK from one of `WEAK_SOURCES`
+  (`efts_name_mismatch`, `efts_frequency_name_mismatch`, `rename`); any other CIK is strong (`TickerResolution.strong`).
+  Both strong and one CIK: the capped date's answer. Both strong and two CIKs: the end of the line's (another company of
+  the name answers early: ITC Holdings 2016, Sprint 2020), unless it is `company_tickers` and the capped date's is not (by
+  the end a successor holds the ticker and the name: Prologis 2011, Merck 2009). One strong: that one. Neither: no
+  first-pass answer, the weak one (the capped date's first) kept aside, standing only when no pass infers an issuer. The
   name search drops EDGAR's nameless multi-company hits and ranks up to 5
   candidates by the words the name shares with their EDGAR names (current
   and former). The era-level passes, which read the run's other eras and its fails rows and are never saved,
@@ -612,8 +621,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `identify(index, clients, as_of=, limit=, log=, workers=, meter=)` gives `Identity`: the refined eras
   (`refine_eras`, the second split after `observations.split_eras`: a CUSIP switch under the ticker, or a gap over
   `ERA_GAP_DAYS` no fails row bridges) and the run's fails index, opened by stage 1 over the fails files (`ftd`;
-  `ftd_lo`, its `opened_from`; later stages ask it for more rows), each era's issuer (`issuers`, by era key, the one source of an era's CIK: asked at its last sighting,
-  `era_last_seen`, with its own pin, name and first sighting), each era's FIGI resolution, the securities, each
+  `ftd_lo`, its `opened_from`; later stages ask it for more rows), each era's issuer (`issuers`, by era key, the one source of an era's CIK: asked at its capped date and at its last sighting,
+  `era_capped_seen` and `era_last_seen`, with its own pin, name and first sighting; `choose_first_pass` takes one answer), each era's FIGI resolution, the securities, each
   security's CUSIPs over its whole life (`cusips`, their rows followed to the run date), the identity review items, and the
   facts later stages read: `tier`/`resolution_source` (the lookup tier that found an era's or a security's issuer;
   "security_master" for none), `rows_decided` (stage 2b's `ticker_rows` eras: stages 4c and 10g keep their CIK in
@@ -624,8 +633,10 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   (`security_master.cusip_handoffs`) are computed once, for the second pass and stage 3; a foreign era
   (`foreign_ticker_eras`) is given once, to `FigiResolver(foreign=)`, which guards it as an unconfirmed one. The era
   helpers live here: `era_cusips`/`candidate_cusips` (an era takes an FTD CUSIP only when a fails row's description
-  names its issuer, `names.description_matches` against the observed and EDGAR names — spec D21), `era_last_seen`/`last_sightings`
-  (the last sighting, followed along the era's own CUSIP rows), `era_rows`. `EraIssuers` is the era-level issuer passes, over the issuer record and the
+  names its issuer, `names.description_matches` against the observed and EDGAR names — spec D21), `era_capped_seen`/`capped_sightings`
+  (the capped date) and `era_last_seen`/`last_sightings` (the last sighting, followed along the era's own CUSIP rows),
+  `era_rows`. The second pass (`EraIssuers.infer`) runs twice on the same first-pass answers, with the capped dates and then
+  with the followed ones; an era the first run answers keeps that answer. `EraIssuers` is the era-level issuer passes, over the issuer record and the
   lookup's frequency candidates, with their own state (`degraded`, by era key: a failed search, or an issuer read
   that failed or was stale since the era began, reported `resolution_degraded` beside the lookup's own
   `is_degraded`). `infer` is the second pass, never cached, for eras left

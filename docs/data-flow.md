@@ -47,7 +47,7 @@ one observation per row per file).
               ┌────────────────────────────┐
               │  era_last_seen, era_cusips │   last sighting followed along the era's own CUSIP rows + CUSIPs
               └─────────────┬──────────────┘
-                             │ TickerResolver.resolve (era ticker, era_last_seen)
+                             │ TickerResolver.resolve (era ticker, era_capped_seen and era_last_seen; choose_first_pass)
                              ▼
               ┌────────────────────────────┐
               │  TickerResolver: era → CIK │   1. cik pin  2. manual override
@@ -493,7 +493,7 @@ rejects it, and the company search sees only today's name. The eras left with
 no CIK and no pin, with at least 3 fails rows of their own
 (`identity.era_rows`, `era_last_seen`'s row choice from the first
 observation to the last sighting), are answered in era-key order, and the
-answers are never saved (they depend on the run's other eras). The date it asks at is the era's last sighting (`identity.last_sightings`): its last observation, then its own CUSIP's fails rows under its ticker for as long as they continue, each step at most 400 days, stopping before the ticker's next era. One seed in 2008 is asked at the security's real end. A candidate CIK
+answers are never saved (they depend on the run's other eras). It runs twice on the same first-pass answers, with each era's capped date (`identity.capped_sightings`: its last observation, or a later fails row of its own within 400 days) and then with its last sighting (`identity.last_sightings`: its own CUSIP's fails rows under its ticker for as long as they continue, each step at most 400 days, stopping before the ticker's next era; one seed in 2008 is asked at the security's real end); an era the first run answers keeps that answer. The first pass asks the same two dates, and `identity.choose_first_pass` takes one answer. A miss has no CIK; a weak answer is a CIK from `ticker_resolver.WEAK_SOURCES` (`efts_name_mismatch`, `efts_frequency_name_mismatch`, `rename`); any other CIK is strong. Both strong and one CIK: the capped date's answer. Both strong and two CIKs: the last sighting's, unless that is `company_tickers` and the capped date's is not (a successor can hold the ticker and the name by the end: Prologis 2011, Merck 2009). One strong: that one. Neither: no first-pass answer, with the weak one (the capped date's first) standing only when no pass infers an issuer. A candidate CIK
 must pass **guard G**: it existed by the era's first fails row, every row's
 description matches a name it carried by 30 days after the row's date
 (`names.description_matches`; an earlier name counts, since SEC updates

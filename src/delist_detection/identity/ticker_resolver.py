@@ -56,6 +56,12 @@ _GIVEN_SOURCES = frozenset({"cik_map", "manual", "rename"})
 RETIRE_OLD_NAME_SEARCH = False
 
 
+# A CIK a tier took although its EDGAR names do not agree with the observed name, or one reached through the rename
+# map: the lookup's last resort. `identity.choose_first_pass` never prefers it to an answer whose name agrees, and the
+# era-level passes may answer in its place.
+WEAK_SOURCES = frozenset({"efts_name_mismatch", "efts_frequency_name_mismatch", "rename"})
+
+
 @dataclass
 class TickerResolution:
     ticker: str
@@ -67,6 +73,11 @@ class TickerResolution:
     # identity stage records the same way: 'name_in_force' | 'ticker_rows' | 'efts_frequency_renamed'
     # | 'shared_cusip' | 'cusip_handoff'
     source: str
+
+    @property
+    def strong(self) -> bool:
+        """A CIK from a pin, an override or a tier that checked the name (not one of `WEAK_SOURCES`, not a miss)."""
+        return self.cik is not None and self.source not in WEAK_SOURCES
 
 
 class TickerResolver:

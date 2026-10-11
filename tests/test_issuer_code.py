@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from delist_detection.identity.identity import EraIssuers, era_last_seen, refine_eras
+from delist_detection.identity.identity import EraIssuers, last_sightings, refine_eras
 from delist_detection.identity.observations import Observation, split_eras
 from delist_detection.identity.ticker_resolver import TickerResolver
 from delist_detection.sources.edgar import EdgarSubmission
@@ -44,7 +44,7 @@ def _pass(fnfv_cusip="31620R402", fnf_cusip="31620R105", fnf_first="2014-12-31",
         + split_eras([Observation("FNFV", "2014-12-31", "FNFV GROUP INC"), Observation("FNFV", "2016-12-30", "FNFV GROUP INC")])
     ftd = FtdIndex(_rows("FNF", fnf_cusip, "FIDELITY NATL FINL INC") + _rows("FNFV", fnfv_cusip, "FNFV GROUP INC"))
     refined = refine_eras(eras, ftd)
-    last_seen = {e.key: era_last_seen(e, ftd) for e in refined}
+    last_seen = last_sightings(refined, ftd)
     resolver = TickerResolver(_Edgar(companies))
     ciks ={e.key: (fnf_cik if e.ticker == "FNF" else None) for e in refined}
     got = EraIssuers(resolver.issuers, resolver.frequency_candidates).infer(refined, ftd, last_seen, ciks, [])
@@ -80,5 +80,5 @@ def test_eras_of_two_issuers_holding_the_code_give_nothing():
     resolver = TickerResolver(_Edgar(COMPANIES))
     ciks = {e.key: {"FNF": FNF, "FNFB": 999}.get(e.ticker) for e in refined}
     got = EraIssuers(resolver.issuers, resolver.frequency_candidates).infer(
-        refined, ftd, {e.key: era_last_seen(e, ftd) for e in refined}, ciks, [])
+        refined, ftd, last_sightings(refined, ftd), ciks, [])
     assert got.inferred == {}
