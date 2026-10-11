@@ -408,7 +408,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   the flag on a delisting's own row), `report_halt_feed_failures` (a
   last-trade decision that asked a Nasdaq halt-feed day that failed).
 - `outputs/manifest.py` — `run_manifest.json` (`build`/`write`) and `StageMeter`, the
-  per-stage SEC traffic it reports. Its `continuation_filings` are stage 9g's readings, a confirmation's filing or a
+  per-stage SEC traffic it reports (a stage that runs more than once is added up). Its `continuation_filings` are stage 9g's readings, a confirmation's filing or a
   doubt (`run_snapshot.continuation_entries` writes them, `RunSnapshot.continuations` reads them back). Its
   `merger_terms` (FB-004) is the LLM reader's model and its answers by source (`LLMMergerTermsExtractor.usage`: the
   sequential pass's answers `from_cache` as the run found it, `asked` of the model this run, a warm fill included, and

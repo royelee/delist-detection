@@ -360,6 +360,24 @@ def test_the_stage_meter_counts_edgar_requests_apart_from_data_file_downloads():
     assert lines == ["issuer resolution: 1 EDGAR requests, 1 SEC data-file downloads (all threads)"]
 
 
+def test_a_stage_the_meter_finishes_twice_reports_the_sum_of_both():
+    """Both counts the meter reports (EDGAR requests, SEC data-file downloads) are sums, so the stage's entry is the two
+    parts added; it has no maximum or average field. The key order is the one a single finish gives."""
+    meter = manifest.StageMeter(lambda *_: None)
+    mark = meter.start()
+    sec_stats.SEC_STATS.add("request:submissions")
+    sec_stats.SEC_STATS.add("request:sec_data")
+    meter.done("payouts", mark)
+    mark = meter.start()
+    sec_stats.SEC_STATS.add("request:submissions")
+    sec_stats.SEC_STATS.add("request:filing")
+    sec_stats.SEC_STATS.add("request:sec_data")
+    sec_stats.SEC_STATS.add("request:sec_data")
+    meter.done("payouts", mark)
+    assert meter.stages == {"payouts": {"edgar_requests": 3, "sec_data_downloads": 3}}
+    assert list(meter.stages["payouts"]) == ["edgar_requests", "sec_data_downloads"]
+
+
 # Read at import, before conftest's autouse fixture stubs them for each test.
 _REAL_EFTS = {name: getattr(TickerResolver, name) for name in ("_efts_lookup", "_efts_pre_delist_frequency_ranked")}
 

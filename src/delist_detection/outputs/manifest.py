@@ -144,5 +144,7 @@ class StageMeter:
         counts, _ = SEC_STATS.since(mark)
         edgar_n = sum(v for k, v in counts.items() if k.startswith("request:") and k != "request:sec_data")
         data_n = counts.get("request:sec_data", 0)
-        self.stages[stage] = {"edgar_requests": edgar_n, "sec_data_downloads": data_n}
+        before = self.stages.get(stage, {})       # a stage that runs more than once is added up
+        self.stages[stage] = {"edgar_requests": before.get("edgar_requests", 0) + edgar_n,
+                              "sec_data_downloads": before.get("sec_data_downloads", 0) + data_n}
         self.log(f"{stage}: {edgar_n} EDGAR requests, {data_n} SEC data-file downloads (all threads)")
