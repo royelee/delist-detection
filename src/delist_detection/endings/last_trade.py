@@ -36,7 +36,7 @@ from dataclasses import replace
 from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from ..filings.evidence import ITEM_MIN_SECTION, item_mention
+from ..filings.evidence import ITEM_MIN_SECTION, item_mention, own_filings
 # the last trade's sources, flags and facts are the row vocabulary's (exit_kind): this module dates an ending and
 # answers a `LastTrade`, the measurement side reads the same definitions back from a row
 from ..vocabulary.exit_kind import (CLOSING_DAY, CONFLICT, EIGHTK_301, EX99_NOTICE, FAILS_ROWS, LAST_SIGHTING, MIDAS,
@@ -437,8 +437,9 @@ class Dating:
                    last_seen: date) -> LastTrade | None:
         """The last trade of a drop the issuer filed nothing about (FB-004 part d: Signature Bank and First Republic
         Bank, which filed with the FDIC, not the SEC): the last day SEC MIDAS shows exchange volume under `ticker` or
-        any ticker the security carried (`midas_last`, up to `last_seen`), when the issuer has no filing of any form
-        within MIDAS_DROP_QUIET_DAYS of it (`filings`: its EDGAR list) and the security's own CUSIPs go on trading
+        any ticker the security carried (`midas_last`, up to `last_seen`), when the issuer made no filing of any form
+        within MIDAS_DROP_QUIET_DAYS of it (`filings`: its EDGAR list; what others filed about it, its holders' SC
+        13G/As, does not count: `evidence.own_filings`) and the security's own CUSIPs go on trading
         after it at changing prices (`TradingRecord.trades_after`: over the counter, not fails still settling at the
         last close). Source `midas`, confirmed, so the contract publishes it. None otherwise: MIDAS has no day (or
         none inside its coverage), a filing stands around the end, or nothing shows the CUSIPs trading on."""
@@ -446,7 +447,7 @@ class Dating:
         if day is None or not trading.has_cusips:
             return None
         near = timedelta(days=MIDAS_DROP_QUIET_DAYS)
-        if any(f.filing_date and abs(date.fromisoformat(f.filing_date) - day) <= near for f in filings):
+        if any(f.filing_date and abs(date.fromisoformat(f.filing_date) - day) <= near for f in own_filings(filings)):
             return None
         if not trading.trades_after(day.isoformat()):
             return None

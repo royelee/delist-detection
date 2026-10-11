@@ -721,6 +721,17 @@ def test_a_drop_is_none_when_the_issuer_filed_around_its_end(fake_edgar, why, fi
         filings, ticker="SBNY", trading=trading, last_seen=date(2023, 5, 1)) is None, why
 
 
+@pytest.mark.parametrize("form", ["SC 13G/A", "SC 13G", "SC 13D", "SCHEDULE 13G/A", "4", "144", "SC TO-T", "UPLOAD"])
+def test_a_drop_ignores_what_others_file_about_the_issuer(fake_edgar, form):
+    """FRCB 2023: EDGAR lists under First Republic Bank the ownership reports its holders filed about it (an SC 13G/A on
+    February 9, 78 days before its last trade); the bank itself filed nothing with the SEC."""
+    trading = _trading(cusips=["OWNCUSIP1"], fails=FtdIndex(_otc_rows()))
+    filings = [EdgarSubmission("x1", form, "2023-02-09", "", "", "x.htm")]
+    lt = Dating(fake_edgar, midas=_Midas(days={"SBNY": date(2023, 3, 10)})).midas_drop(
+        filings, ticker="SBNY", trading=trading, last_seen=date(2023, 5, 1))
+    assert lt is not None and lt.day == date(2023, 3, 10)
+
+
 def test_a_drop_ignores_a_filing_far_from_its_end(fake_edgar):
     trading = _trading(cusips=["OWNCUSIP1"], fails=FtdIndex(_otc_rows()))
     filings = [EdgarSubmission("x1", "10-K", "2022-01-01", "2021-12-31", "", "k.htm")]

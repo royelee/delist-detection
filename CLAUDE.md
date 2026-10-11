@@ -422,7 +422,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `issuer_exchange()` the exchange EDGAR's submissions JSON lists for a ticker.
 - `filings/evidence.py` — pure predicates over one issuer's EDGAR record: its names over time (`edgar_names`, `name_at`,
   `names_near`, `names_between`, `names_until`, `renamed_near`), its filings (`first_filing`, `bankruptcy_8ks`,
-  `filed_operating_between`, `still_operating`, `merger_evidence`, `is_spac`) and an 8-K's item text
+  `filed_operating_between`, `still_operating`, `merger_evidence`, `is_spac`, `own_filings`: the list without
+  `FILED_BY_OTHERS`, the forms EDGAR lists under an issuer that another party filed about it, ownership schedules,
+  insider forms 3/4/5 and 144, a bidder's tender offer, the SEC staff's UPLOAD) and an 8-K's item text
   (`item_mention`, `item_sections`, `item_text`, `mentions_bankruptcy`, `says_listing_transfer`,
   `cites_listing_deficiency`). The identity stages read its name readers, so it sits below them.
 
@@ -947,8 +949,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   Form 25: the 3.01 8-Ks up to the last sighting + 5 d, VRM 2024, MIDAS anchored on the dating filing; a merger
   left undated ends on the closing day its latest 2.01/5.01 8-K near the last sighting states, FCL, SGP 2009, never
   after the last sighting; else the last sighting, unsourced and unconfirmed), `midas_drop` (FB-004 part d: the last
-  day MIDAS shows exchange volume under any ticker the security carried, `midas_last`, when the issuer has no filing
-  of any form within `MIDAS_DROP_QUIET_DAYS` (180) of it and the security's own CUSIPs go on trading after it at
+  day MIDAS shows exchange volume under any ticker the security carried, `midas_last`, when the issuer made no filing
+  of any form within `MIDAS_DROP_QUIET_DAYS` (180) of it (what others filed about it, its holders' SC 13G/As, does not
+  count: `evidence.own_filings`) and the security's own CUSIPs go on trading after it at
   changing prices, `TradingRecord.trades_after`: source `midas`, confirmed, so published; Signature Bank, First
   Republic Bank, which filed with the FDIC), `unexplained` (FB-004 part d: an unexplained ending's last trade
   from SEC data only: the last day the security's own CUSIPs' fails rows show it trading, `TradingRecord.trades_until`
