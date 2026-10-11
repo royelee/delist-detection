@@ -127,6 +127,12 @@ class MergerValues:
     added: dict[str, AddedSecurity] = field(default_factory=dict)
     review: list[ReviewItem] = field(default_factory=list)
 
+    def absorb(self, other: MergerValues) -> None:
+        """Take `other`'s records and acquirers (the valuation of endings found after this stage ran: stage 9d's added
+        successors); its review items stay the caller's."""
+        self.records.update(other.records)
+        self.added.update(other.added)
+
     def get(self, key: DelistingKey) -> MergerValue | None:
         return self.records.get(key)
 

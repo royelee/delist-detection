@@ -2760,7 +2760,7 @@ MERGER_F25 = EdgarSubmission("0000876661-14-000300", "25-NSE", "2014-06-10", "",
 
 
 def _line_run(fake_edgar, tmp_path, *, filings, figi, new_rows, old_figi=True, listings=(), id_baseline=(),
-              extra_obs=()):
+              extra_obs=(), llm=None):
     """RS (CIK 4242), observed 2008-2009, its old CUSIP failing weekly under RS until 2012-09-17, then `new_rows`;
     `figi`: OpenFIGI's answers beyond the old CUSIP's (BBGRS01 unless `old_figi` is False)."""
     fake_edgar.company_map["RS"] = {"cik_str": 4242, "ticker": "RS", "title": "REVERSE SPLIT CO"}
@@ -2775,6 +2775,7 @@ def _line_run(fake_edgar, tmp_path, *, filings, figi, new_rows, old_figi=True, l
     if old_figi:
         answers[("ID_CUSIP", RS_OLD)] = _figi_answer("BBGRS01", "RS", "REVERSE SPLIT CO")
     index, clients = _index_clients(fake_edgar, [*obs, *extra_obs], rows, answers)
+    clients.llm_extractor = llm
     run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None, id_baseline=id_baseline)
     return {name: read_table(name, table_path(tmp_path, name)) for name in (
         "securities", "cusip_history", "delistings", "contract_delistings", "id_changes",
@@ -2862,6 +2863,34 @@ def test_a_figi_line_whose_new_cusip_has_its_own_figi_ends_as_a_continuation_to_
     assert (c["sec_id"], c["continuation"], c["successor_sec_id"]) == ("BBGRS01", "true", "BBGRSNEW1")
     assert ("BBGRSNEW1", "RS", "2012-09-25") in {(r["sec_id"], r["ticker"], r["valid_from"])
                                                  for r in t["ticker_history"]}
+
+
+class _CashLLM:
+    """The LLM extractor double: every merger it is asked about was paid $40.90 in cash."""
+
+    def __init__(self):
+        self.asked = []
+
+    def extract(self, record, security_name=""):
+        self.asked.append((record.ticker, record.sec_id))
+        return MergerTerms("cash", 40.9, None, "ACQUIRER CO", None, "high", "8-K:0000004242-14-000020", "")
+
+
+def test_the_ending_of_a_line_successor_the_run_added_is_valued(fake_edgar, tmp_path):
+    """C5 (NLSN, NRF, XL): the reverse split gives the line a CUSIP with its own composite (an added line successor);
+    its 2014 merger is found by stage 9d, after the mergers were valued. It is valued all the same: the LLM is asked
+    for it and the row carries the cash, not an assumed par."""
+    switch_f25 = EdgarSubmission("0000876661-12-000300", "25-NSE", "2012-09-24", "", "", "primary_doc.xml")
+    fake_edgar.raws["0000876661-12-000300"] = LINE_F25
+    llm = _CashLLM()
+    t = _line_run(fake_edgar, tmp_path, filings=[SPLIT_8K, switch_f25, LATER_10Q, MERGER_8K, MERGER_F25],
+                  figi={("ID_CUSIP", RS_NEW): _figi_answer("BBGRSNEW1", "RS", "REVERSE SPLIT CO")},
+                  new_rows=_rs_new_rows(), llm=llm)
+    row = next(r for r in t["delistings"] if r["sec_id"] == "BBGRSNEW1")
+    assert (row["bucket"], row["delist_date"]) == ("merger", "2014-06-20")
+    assert llm.asked == [("RS", "BBGRSNEW1")]
+    assert (row["payout_per_share"], row["payout_source"]) == ("40.900000", "llm")
+    assert "merger_at_par" not in row["review_flags"].split(";")
 
 
 def test_an_unknown_form25_at_the_lines_switch_becomes_the_continuation(fake_edgar, tmp_path):

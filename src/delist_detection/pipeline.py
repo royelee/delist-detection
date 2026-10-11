@@ -1047,7 +1047,8 @@ def _successor_endings(ctx: _RunContext, finder: DelistingFinder, added: Mapping
     no fails rows, and its CUSIPs), beside the run's securities of its issuer as its siblings; no era is made up for
     it, and its issuer's lookup tier is none ("security_master"). A successor listed today keeps no ending. An 8-K12B
     successor's span then runs to the ending's last trade. A Form 25 that already owns one of the run's delistings
-    (the predecessor's own, filed under the shared CIK: OKE 2026) raises no unmatched review item here."""
+    (the predecessor's own, filed under the shared CIK: OKE 2026) raises no unmatched review item here. Its endings are valued
+    with every other ending (`_run`)."""
     clients, out = ctx.clients, _SuccessorEndings()
     owned = {d.form25_sub.accession for d in delistings if d.form25_sub is not None}
     mark = ctx.meter.start()
@@ -1657,8 +1658,15 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     review += ends.review
     if ends.delistings:
         delistings += ends.delistings
-        closes.update(_last_trade_closes(ctx, ends.delistings, {**securities, **ends.securities},
-                                         {**sec_cusips, **ends.cusips}, ftd, ftd_lo, overrides, prices).closes)
+        run_securities, run_cusips = {**securities, **ends.securities}, {**sec_cusips, **ends.cusips}
+        ends_closes = _last_trade_closes(ctx, ends.delistings, run_securities, run_cusips, ftd, ftd_lo, overrides,
+                                         prices)
+        closes.update(ends_closes.closes)
+        ends_values = _merger_values(ctx, ends.delistings, run_securities, run_cusips, ftd, ends_closes, overrides,
+                                     prices, tol, search.sightings, ftd_lo)                     # 9d: C5
+        values.absorb(ends_values)
+        review += ends_values.review
+        added.update(ends_values.added)
     distress = _distress(ctx, delistings, {**sec_cusips, **ends.cusips}, ftd, review)              # 9e
     confirmations = _continuation_filings(ctx, delistings, securities, review, added)             # 9g
     _log_role_refusals(ctx, delistings)

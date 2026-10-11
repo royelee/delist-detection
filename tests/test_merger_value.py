@@ -329,3 +329,14 @@ def test_the_llm_calls_are_filled_ahead_on_their_own_threads_whatever_the_sec_wo
     many = {k: v.llm for k, v in _value(es, llm=Ext(), workers=1, llm_workers=4).records.items()}
     assert many == one
     assert sum(n.startswith("sec-warm") for n in threads) == 3 and threads[-3:] == [threading.main_thread().name] * 3
+
+
+def test_absorb_takes_the_records_and_acquirers_of_another_valuation_and_not_its_review_items():
+    from delist_detection.outputs.review_triage import ReviewItem
+    k1, k2 = DelistingKey("A", "2020-01-02"), DelistingKey("B", "2021-01-02")
+    first = MergerValues({k1: MergerValue(k1, payout=1.0)}, review=[ReviewItem("A", "A", 1, "x", "y")])
+    second = MergerValues({k2: MergerValue(k2, payout=2.0)}, added={"BBGACQ": object()},
+                          review=[ReviewItem("B", "B", 2, "x", "y")])
+    first.absorb(second)
+    assert set(first.records) == {k1, k2} and set(first.added) == {"BBGACQ"}
+    assert [r.sec_id for r in first.review] == ["A"]
