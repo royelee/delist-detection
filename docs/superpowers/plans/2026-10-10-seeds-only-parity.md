@@ -1211,6 +1211,133 @@ every era but WFT@2009-03-20.
 
 ---
 
+### Task 6: A weak answer stands only when the era's own fails rows fit it
+
+Checkpoint 2 found that the resolver's name-mismatch answers are almost always wrong (16 of 16
+from the 8-K frequency tier, about 37 of 43 from the Form 25 tier). Task 4 keeps such an answer
+aside and lets it stand when no pass infers an issuer, unchecked. A wrong issuer is worse than
+none: the delisting search then reads another company's filings (XP's "expiration" ending in
+the seeds run; US Bancorp's and C3 AI's blank endings in the full run, whose issuers are Prologis
+and an ETF trust). The second pass already has the test for "is this company the issuer of
+these rows": guard G's row test (`EraIssuers._fits_rows`). A weak answer must pass it.
+
+This task comes before the derived eras of Task 7: a derived era is looked up under a fails
+description, where a name mismatch is likely.
+
+Expected in the full run: AI@2021-06-30 and USB@2008-01-16 lose a wrong issuer (to none);
+AZPN's weak answer (AspenTech, right) stands if its rows fit. Expected in the seeds run: XP, TT,
+AI, ANN and MEL lose a wrong issuer.
+
+**Files:**
+- Modify: `src/delist_detection/identity/identity.py` (`EraIssuers.rows_fit`, the fallback loop in
+  `_resolve_issuers`, its log line and docstring)
+- Modify: `tests/test_resolver_renamed.py`
+- Modify: `docs/architecture.md` (the `identity.py` entry, where Task 4 described the weak answer)
+
+**Interfaces:**
+- Consumes: `FirstPass.fallback`, `era_rows`, `EraIssuers._fits_rows`, `ERA_MIN_ROWS` (Task 4 and before).
+- Produces: `EraIssuers.rows_fit(era: TickerEra, cik: int, rows: list[FtdRow]) -> bool`.
+
+- [ ] **Step 1: Write the failing tests**
+
+In `tests/test_resolver_renamed.py`, beside `test_a_weak_answer_stands_when_nothing_is_inferred`
+(which keeps passing: its era's rows are the answer's own company's):
+
+```python
+def test_a_weak_answer_whose_company_the_rows_do_not_fit_does_not_stand(matx_dates):
+    """The era's fails rows say MATSON; the weak answer is another company (B). It is no issuer: the delisting
+    search would read B's filings."""
+    _, identity = _matx({MATX_CAP: (B, "efts_frequency_name_mismatch"), MATX_END: (B, "efts_frequency_name_mismatch")})
+    assert MATX not in identity.issuers
+
+
+def test_a_weak_answer_for_an_era_with_too_few_rows_does_not_stand():
+    """An era with fewer than ERA_MIN_ROWS rows of its own has nothing to test a weak answer against."""
+```
+
+Write the second test's body with the file's fixtures: one observed ticker with fewer than three
+own fails rows (CZN@2008-01-16, the one-day era of the earlier test, if it has fewer than three;
+else build one with `_identify(rows=...)`), a lookup that answers a weak source with a CIK the
+file's `_Edgar` serves, and the assertion that the era is not in `identity.issuers`. Add a third
+test, `test_a_weak_answer_dropped_is_logged`, only if the stage's log is reachable from
+`_identify`; otherwise leave the log untested and say so in the report.
+
+Run: `PYTHONPATH=src ~/miniconda3/envs/rdagent4qlib/bin/python -m pytest tests/test_resolver_renamed.py -q -o addopts="" -k "weak_answer"`
+Expected: the two new tests fail (the weak answer stands today); the existing ones pass.
+
+- [ ] **Step 2: The row test, public**
+
+In `identity.py`, in `EraIssuers`, directly above `_guard`:
+
+```python
+    def rows_fit(self, era: TickerEra, cik: int, rows: list[FtdRow]) -> bool:
+        """Whether the era's own fails rows are this company's: at least `ERA_MIN_ROWS` of them, and guard G's row
+        test (`_fits_rows`). A weak first-pass answer must pass it to stand (`_resolve_issuers`): the resolver took
+        it although its name does not agree with the observed one, and most such answers are another company's
+        (US Bancorp's 8-K frequency answer was Prologis). A read that fails marks the era degraded, as the
+        passes' own reads do."""
+        self._reset()
+        fits = len(rows) >= ERA_MIN_ROWS and self._fits_rows(cik, rows)
+        self._mark(era)
+        return fits
+```
+
+- [ ] **Step 3: The fallback loop**
+
+In `_resolve_issuers`, replace the loop Task 4 added
+
+```python
+    for key, f in first.items():                 # a weak answer stands only where no pass inferred an issuer
+        if answers[key].cik is None and f.fallback is not None:
+            answers[key] = f.fallback
+```
+
+with
+
+```python
+    by_key = {e.key: e for e in eras}
+    dropped = []
+    for key, f in first.items():      # a weak answer stands only where no pass inferred an issuer and its rows fit
+        if answers[key].cik is not None or f.fallback is None:
+            continue
+        if passes.rows_fit(by_key[key], f.fallback.cik, era_rows(by_key[key], ftd, last_seen[key])):
+            answers[key] = f.fallback
+        else:
+            dropped.append(key)
+    if dropped:
+        log(f"weak answers dropped: {len(dropped)} whose company the era's own fails rows do not fit "
+            f"({', '.join(sorted(dropped))})")
+```
+
+`passes.degraded` is read after this loop where `_Issuers` is built, so a failed read here
+reaches the review rows as the passes' do; check that the `set(passes.degraded)` in the return
+statement comes after the loop. Update the docstrings of `_resolve_issuers` and
+`choose_first_pass` where they say a weak answer "stands only when no pass infers an issuer":
+add "and the era's own fails rows fit it (`EraIssuers.rows_fit`)".
+
+Run: `PYTHONPATH=src ~/miniconda3/envs/rdagent4qlib/bin/python -m pytest tests/test_resolver_renamed.py tests/test_security_master.py tests/test_issuer_code.py -q -o addopts=""`
+Expected: all pass.
+
+- [ ] **Step 4: Run everything**
+
+Run: `PYTHONPATH=src ~/miniconda3/envs/rdagent4qlib/bin/python -m pytest -q -o addopts=""`
+Expected: 3,921 passed and 44 xfailed before this task, plus the new tests. The golden replay
+stays green; a case that changes stops the task. An existing test whose era ended on a weak
+answer and now has none is reported with its old and new value, not edited to pass, unless the
+weak answer in it is plainly another company's.
+
+- [ ] **Step 5: Docs and commit**
+
+`docs/architecture.md`: in the sentence Task 4 added about a weak answer, add that it must also
+fit the era's own fails rows.
+
+```bash
+git add src/delist_detection/identity/identity.py tests/test_resolver_renamed.py docs/architecture.md
+git commit -m "A weak answer stands only when the era's own fails rows fit its company"
+```
+
+---
+
 ## S2: The line after a CUSIP change is a line of the run
 
 Its step-by-step plan is written after Task 3, from that checkpoint's case lists. The outcome is
@@ -1247,6 +1374,58 @@ says the 8-K12B search returned nothing for ANAT in the seeds-only run and did n
 
 Choose after step zero. Prefer A unless step zero shows the existing stages cannot see these
 steps.
+
+**Step zero's outcome (2026-10-10; evidence in the session's scratch folder, summarized here).**
+
+- The full run gets the line after a CUSIP change as an observed era of its own in all but about
+  four cases. The old line's ending then becomes a continuation by a handoff (the successor's
+  8-K12B or 8-K12G3: 12 cases; timing and the same CIK: 6) or by R1's terms check on the in-run
+  line (8). No full-run case rests on `line_followed`.
+- In the seeds run stage 4b was asked about 21 of the 22 cases a continuation reads as a merger.
+  It refused 14 as `merged_out` (another registrant took over: the refusal is right) and nothing
+  after it picks the new line up: the merger row is not searched for a successor
+  (`successors.py:166`), and the handoff pairs read observed securities only
+  (`pipeline.py:935`). It followed 5 (TEAM, LSXMA, LSXMK, FWONA, FWONK) and the link is skipped
+  because the row is a merger (`_line_successor_links`, `pipeline.py:719`). FERG was refused
+  `name`, APO `other_registrant`; AMSG's new line trades under another ticker.
+- The new line is an added acquirer with no history and no ending in 11 cases and is nowhere in
+  8. STE, DTV and AMSG have no 8-K12B: only an in-run line can carry them.
+- C5 is confirmed: an added successor's ending is created after the valuation stage, gets no
+  value and reads `confirmed` at an assumed par (NLSN, NRF, XL in the seeds run).
+- How many eras design B would derive, by what stage 4b decides on the same step today:
+
+  | Stage 4b today | Seeds | Full |
+  | --- | --- | --- |
+  | followed, the same security | 127 | 57 |
+  | followed, a line successor | 21 | 4 |
+  | refused `merged_out` | 37 | 8 |
+  | refused `name` | 12 | 0 |
+  | refused `other_registrant` | 3 | 0 |
+  | refused `no_filing`, `bankruptcy`, `unsettled` | 11 | 6 |
+  | not asked | 60 | 37 |
+  | all | 271 | 112 |
+
+  Design B as written would take over 148 steps stage 4b follows today in a seeds run and 61 in
+  the full run (32 passing diagnosis cases and 8 golden cases are on those securities), and would
+  add 43 securities to the full run, one of them a reused ticker (SE).
+
+**The design chosen.** Neither A nor B as written. A line is derived only for a step stage 4b
+refuses because another registrant took over, and it is made an era-born security so the later
+stages treat it as they treat an observed second line in a full run. Stage 4b keeps every step
+it follows. In order:
+
+1. Task 6: a weak issuer answer must fit the era's own fails rows (checkpoint 2's finding; a
+   derived line is looked up under a fails description).
+2. The link of a followed line successor also takes a merger row (TEAM, LSXMA, LSXMK, FWONA, FWONK).
+3. C5: the endings of added successors are valued.
+4. The derived line for a step refused as `merged_out`, `other_registrant`, or `name` when the
+   new line's description names the old issuer by more than a generic word.
+5. The parity checkpoint again.
+
+The step-by-step tasks for 2 to 5 follow Task 6 below once written. The text under "The rule, if
+B is chosen" and "What the rough version got wrong" still binds the derived line: its own name
+and issuer, no pin copied, no echo-table row, `observed=false`, takeover against continuation
+(WEN, TCF) tested first, and a parity number for the `observed` flag.
 
 **The rule, if B is chosen.** A part of the ticker's fails rows with no observation in it becomes
 an era when all of these hold:
