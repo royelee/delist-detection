@@ -34,6 +34,11 @@ def _rows(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(fh))
 
 
+def _has_column(path: Path, column: str) -> bool:
+    with path.open(newline="", encoding="utf-8-sig") as fh:
+        return column in (next(csv.reader(fh), None) or [])
+
+
 def _kind(row: dict[str, str]) -> str:
     """The contract's exit kind, with a continuation told apart from a plain exchange."""
     cont = (row.get("continuation") or "").strip().lower() not in ("", "0", "false")
@@ -72,6 +77,11 @@ def parity(full: Path, seeds: Path) -> dict:
     f_obs = {r["sec_id"]: r.get("observed", "") for r in _rows(full / "securities.csv")}
     s_obs = {r["sec_id"]: r.get("observed", "") for r in _rows(seeds / "securities.csv")}
     f_sec, s_sec = set(f_obs), set(s_obs)
+    no_flag = [name for name, folder in (("full", full), ("seeds", seeds))
+               if not _has_column(folder / "securities.csv", "observed")]
+    for name in no_flag:      # the flag cannot be compared: say so, count nothing
+        print(f"seeds_parity: the {name} run's securities.csv has no observed column; "
+              "observed_flag_differs was not computed", file=sys.stderr)
     f_seed = {(r["ticker"], r["as_of"]): r["sec_id"] for r in _rows(full / "contract" / "seeds.csv")}
     s_seed = {(r["ticker"], r["as_of"]): r["sec_id"] for r in _rows(seeds / "contract" / "seeds.csv")}
     f_card = json.loads((full / "scorecard.json").read_text())
@@ -105,7 +115,7 @@ def parity(full: Path, seeds: Path) -> dict:
         "securities_gained": [{"sec_id": k, "seeds_ending": _kind(s_end[k]) if k in s_end else ""}
                               for k in sorted(s_sec - f_sec)],
         "observed_flag_differs": [{"sec_id": k, "full_observed": f_obs[k], "seeds_observed": s_obs[k]}
-                                  for k in sorted(f_sec & s_sec) if f_obs[k] != s_obs[k]],
+                                  for k in sorted(f_sec & s_sec) if not no_flag and f_obs[k] != s_obs[k]],
         "seeds_placed_differently": [{"ticker": t, "as_of": d, "full_sec_id": f_seed.get((t, d), ""),
                                       "seeds_sec_id": sid}
                                      for (t, d), sid in sorted(s_seed.items()) if f_seed.get((t, d), "") != sid],

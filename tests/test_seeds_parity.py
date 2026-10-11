@@ -77,14 +77,21 @@ def test_a_folder_that_is_not_a_run_exits_2(tmp_path, capsys):
     assert "cannot read the runs" in capsys.readouterr().err
 
 
-def test_a_security_file_without_an_observed_column_counts_no_difference(tmp_path):
+def test_a_run_without_an_observed_column_leaves_the_number_not_computed(tmp_path, capsys):
     full, seeds = _two_runs(tmp_path)
     (seeds / "securities.csv").write_text("\n".join(["sec_id", "A", "B", "C", "D", "F"]) + "\n")
     got = seeds_parity.parity(full, seeds)
-    assert got["numbers"]["observed_flag_differs"] == 4          # "true" in full against "" in seeds, A to D
+    assert got["numbers"]["observed_flag_differs"] == 0 and got["cases"]["observed_flag_differs"] == []
+    assert "the seeds run's securities.csv has no observed column; observed_flag_differs was not computed" \
+        in capsys.readouterr().err
     (full / "securities.csv").write_text("\n".join(["sec_id", "A", "B", "C", "D", "E"]) + "\n")
     got = seeds_parity.parity(full, seeds)
-    assert got["numbers"]["observed_flag_differs"] == 0          # neither run has the column: nothing differs
+    assert got["numbers"]["observed_flag_differs"] == 0
+    err = capsys.readouterr().err
+    assert "the full run's securities.csv has no observed column" in err and "the seeds run's" in err
+    (seeds / "securities.csv").write_text("\n".join(["sec_id,observed", "A,true", "B,false"]) + "\n")
+    assert seeds_parity.parity(full, seeds)["numbers"]["observed_flag_differs"] == 0      # the full run lacks it
+    assert "the full run's" in capsys.readouterr().err
 
 
 def test_write_floor_writes_the_committed_floors_eight_keys_and_check_still_holds_them(tmp_path):
