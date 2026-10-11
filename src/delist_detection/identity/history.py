@@ -23,7 +23,7 @@ from typing import NamedTuple
 from .added_securities import AddedSecurity
 from ..vocabulary.crsp_codes import CrspBucket
 from ..vocabulary.exit_kind import LastTrade, end_day
-from ..sources.ftd import FtdIndex, is_deleted_symbol, is_trading_symbol, is_unassigned_symbol
+from ..sources.ftd import FtdIndex, is_deleted_symbol, is_trading_symbol, is_unassigned_symbol, settled_last
 from ..vocabulary.identifiers import bare_ticker
 from ..vocabulary.names import description_matches, description_names
 from ..vocabulary.trading_calendar import add_trading_days
@@ -303,8 +303,39 @@ def filtered_ticker_sightings(sightings: Sequence[Sighting], cusips: Sequence[st
     range under that spelling (Yahoo stays YHOO in 2012; the Chubb line loses
     its backfilled CB 2012-14 ranges). FTD sightings are untouched -- they are
     the evidence a backfilled ticker lacks -- and so is the delisting search's
-    own copy of `ticker_sightings`, which never calls this."""
-    return [s for s in sightings if not (s.source == "observation" and is_backfilled(s.day, s.value, cusips, ftd))]
+    own copy of `ticker_sightings`, which never calls this.
+
+    A fails row of a CUSIP that is the old line's settling tail is no sighting either (`_settling_tail`; Kraft's
+    KFT rows of 2012-10-15, after the rename's new CUSIP began under MDLZ), unless another row of the CUSIPs
+    sights the same ticker on the same day."""
+    tail = _settling_tail(cusips, ftd)
+    return [s for s in sightings
+            if not (s.source == "observation" and is_backfilled(s.day, s.value, cusips, ftd))
+            and not (s.source == FTD and (s.day, bare_ticker(s.value)) in tail)]
+
+
+def _settling_tail(cusips: Sequence[str], ftd: FtdIndex) -> set[tuple[str, str]]:
+    """The (day, bare ticker) of the fails rows that are an old CUSIP's settling tail: rows of a CUSIP from the row
+    that opens its last one-price run (`settled_last`: the fails still settling at its last close) on, dated once
+    another CUSIP of the security, begun after it, has begun. A day and ticker any other row of the security's
+    CUSIPs also shows is not in it."""
+    rows = ftd.trading_rows(cusips)
+    by_cusip: dict[str, list] = defaultdict(list)
+    for r in rows:
+        by_cusip[r.cusip].append(r)
+    if len(by_cusip) < 2:
+        return set()
+    began = {c: rs[0].date for c, rs in by_cusip.items()}
+    dropped, kept = set(), set()
+    for c, rs in by_cusip.items():
+        settled = settled_last(rs).date
+        for r in rs:
+            key = (r.date, bare_ticker(r.symbol))
+            if r.date >= settled and any(began[c] < b <= r.date for o, b in began.items() if o != c):
+                dropped.add(key)
+            else:
+                kept.add(key)
+    return dropped - kept
 
 
 # -- where a security's history ends ---------------------------------------------------------------------------------

@@ -714,7 +714,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   (`is_backfilled`: no fails-to-deliver row of the security's CUSIPs under the
   observed ticker within 30 days, but at least one under another symbol) from
   the ticker_history-building sightings only — the delisting search's own
-  copy is untouched
+  copy is untouched; it also drops an old CUSIP's settling tail (`_settling_tail`: its fails rows from the one that
+  opens its last one-price run on, dated once another CUSIP of the security, begun after it, has begun; Kraft's KFT
+  rows of 2012-10-15 after MDLZ's CUSIP began) unless another row sights the same ticker that day.
   `observation_map_rows(eras, sec_id_of, issuer_cik_of, history, conflicts)` builds
   `observation_map.csv` from the history's own answer (`Histories`):
   one row per observation, its era, `sec_id`, issuer CIK, `ticker_history`

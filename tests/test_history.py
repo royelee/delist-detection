@@ -176,6 +176,48 @@ def test_filtered_ticker_sightings_keeps_everything_with_no_cusips_to_check():
     assert filtered_ticker_sightings(sig, [], FtdIndex()) == sig
 
 
+def _rename_fails(old_tail_prices=(27.22, 27.22)):
+    """Kraft's rename (batch 3 gate, MDLZ 2012): the old CUSIP trades under KFT to 10-04, the new one under MDLZ from
+    10-05, and the old CUSIP's fails keep settling at its last close on 10-15 and 10-16."""
+    old = [("2012-10-02", 42.5), ("2012-10-03", 28.0), ("2012-10-04", 27.83), ("2012-10-15", old_tail_prices[0]),
+           ("2012-10-16", old_tail_prices[1])]
+    new = [("2012-10-05", 28.07), ("2012-10-09", 27.55), ("2012-10-19", 27.41)]
+    rows = [FtdRow(d, "50075N104", "KFT", "KRAFT FOODS INC CL-A", p) for d, p in old] + \
+           [FtdRow(d, "609207105", "MDLZ", "MONDELEZ INTL INC;COM USD0.01", p) for d, p in new]
+    return FtdIndex(rows)
+
+
+def test_an_old_cusips_settling_tail_under_the_old_ticker_is_no_sighting_once_the_new_cusip_began():
+    """The ticker ranges must not return to KFT on 10-15 and 10-16: those rows are the old CUSIP's fails still
+    settling at its last close, dated after the rename's new CUSIP began (as `cusip_sightings` drops MSG's)."""
+    ftd = _rename_fails()
+    cusips = ["50075N104", "609207105"]
+    sec = Security("BBGKFT", 1, "COMMON", "KRAFT", "Common Stock", True, "cusip", eras=[])
+    sig = ticker_sightings(sec, ftd, cusips)
+    out = filtered_ticker_sightings(sig, cusips, ftd)
+    assert [(s.day, s.value) for s in out if s.value == "KFT"] == [
+        ("2012-10-02", "KFT"), ("2012-10-03", "KFT"), ("2012-10-04", "KFT")]
+    assert [(s.day, s.value) for s in out if s.value == "MDLZ"] == [
+        ("2012-10-05", "MDLZ"), ("2012-10-09", "MDLZ"), ("2012-10-19", "MDLZ")]
+
+
+def test_the_old_ticker_stays_while_the_old_cusip_still_trades_at_changing_prices():
+    """Only the row that opens the CUSIP's last one-price run, and those after it, are the tail."""
+    ftd = _rename_fails(old_tail_prices=(27.5, 27.0))
+    cusips = ["50075N104", "609207105"]
+    sec = Security("BBGKFT", 1, "COMMON", "KRAFT", "Common Stock", True, "cusip", eras=[])
+    out = filtered_ticker_sightings(ticker_sightings(sec, ftd, cusips), cusips, ftd)
+    assert ("2012-10-15", "KFT") in {(s.day, s.value) for s in out}
+
+
+def test_a_tail_before_any_other_cusip_began_is_the_securitys_last_trade_not_a_tail():
+    ftd = FtdIndex([FtdRow("2012-10-02", "50075N104", "KFT", "KRAFT", 42.5),
+                    FtdRow("2012-10-03", "50075N104", "KFT", "KRAFT", 42.5)])
+    sec = Security("BBGKFT", 1, "COMMON", "KRAFT", "Common Stock", True, "cusip", eras=[])
+    out = filtered_ticker_sightings(ticker_sightings(sec, ftd, ["50075N104"]), ["50075N104"], ftd)
+    assert [s.day for s in out] == ["2012-10-02", "2012-10-03"]
+
+
 def test_pin_columns_carry_the_observations_own_cik_and_sec_id_pins():
     obs = Observation("X", "2020-01-02", "X CORP", cusip="000000000", cik=42, sec_id="BBGPIN")
     era = TickerEra("X", "2020-01-02", "2020-01-02", [obs])
