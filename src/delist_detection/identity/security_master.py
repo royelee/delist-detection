@@ -568,10 +568,12 @@ class FigiResolver:
                 def own(c: str, got: FigiCandidate | None, cands: list[FigiCandidate]) -> bool:
                     if got is not None and got.composite == composite:
                         return True
-                    # Resolved by ticker, name or handoff: the era's own FTD CUSIP stays
-                    # unless OpenFIGI maps it to another composite (it often has no
-                    # record of an old CUSIP at all).
-                    return source != "cusip" and c in era.ftd_cusips and not cands
+                    # The era's own FTD CUSIP stays unless OpenFIGI maps it to another
+                    # composite (it often has no record of an old CUSIP at all): for an era
+                    # resolved by ticker, name or handoff, and for one a later CUSIP of its
+                    # chain confirmed (Alcoa's 2016 reverse split names the line of the CUSIP
+                    # before it, which it joined as an unobserved part of the era).
+                    return c in era.ftd_cusips and not cands
                 out[era.key] = EraResolution(era.key, composite, source, cand, (),
                                              tuple(c for c, got, f in zip(tried, by_cusip, found) if own(c, got, f)))
                 continue
