@@ -4574,3 +4574,62 @@ finding, and a rerun answers it — if wrong, a fold that R1 would refuse stays 
 **Ruling: the fixture's filings are extended, not the fixture rebuilt** — a rebuild reads the current `output/` and moved
 `cases.json` and `figi.json`; only the added filings were taken — if wrong, `build_identity_fixtures.py` run from scratch
 gives other fixture rows than the committed ones.
+
+## Run time: warm start and stage 4b reuse (2026-10-11)
+
+Two run-time savings, from `a9f0135`, on branch `run-time-savings`. No table changed: a warm full run on a fresh clone of
+`cache-full5` (`ticker_resolution.json` deleted, run date 2026-09-25, `claude-sonnet-5-5`, `--sec-workers 1`) wrote every CSV,
+the `contract/` tables and `scorecard.json` byte-identical to the reference `foldgate/out-full`; the seeds run on
+`foldgate/seeds-fixed.csv` is byte-identical to `foldgate/passes/run-4`.
+
+**The warm start** (`seeds_from_observations.py --fixed-point DIR --warm-start SEEDS.csv`, commit `3758d4d`). Pass 1 starts
+from the seeds without a history and every row of the file; each row must be a row of `--observations` on all columns (else
+exit 2, one stderr line `FILE:LINE: not a row of the observations`). The loop is the same after that. `passes.csv` gets a
+`warm_start` column and the closing line says `WARM-STARTED from FILE: a development file, not an acceptance one`; without the
+option nothing changes. From `foldgate/seeds-fixed.csv` pass 1 added no seed, so the check was one run (421 s, 7.0 minutes,
+including the script's start) against the four passes of the cold start (27 minutes); its seed file is the same bytes and its
+run-1 tables equal `passes/run-4`.
+
+**Stage 4b reuse** (`line_follow.LineMemo`, `follow_lines(..., memo=)`, `derived_lines.identify_with_lines`). The
+profile first: in each `follow_lines` call 108 of 132 profiled seconds (80 %) were the renamed-CUSIP pass
+(`renamed_cusips`, one pass over the window's fails rows, run for about 800 lines whose 8-Ks name nothing). The hoist
+the plan names (the names by first word, computed once) was already in place, so the pass itself stays as it is. The
+loop now makes one `LineMemo`; stage 4b takes the reads of a line's end (the 8-K texts and that pass) from it when the line
+is what the round before read, and asks again when it is not. Touched means the stamp differs: the security (issuer, class,
+name, eras with observations, line tickers: a derived era that joined it, or a line ticker, changes it), its eras' resolutions,
+its CUSIPs (the new CUSIP of a step now a derived line's), the line's end in the fails index (rows the index gained in the
+round before), or whether it is the call's first round (the pass is read there only). A read that rested on a failed request
+or a stale copy is never kept.
+
+| Run (alone on the machine, warm caches) | Before | After |
+| --- | --- | --- |
+| Full input, wall | 344 s | 268 s |
+| Full: identify, follow (round 0) | 70.4 s, 67.8 s | 73.2 s, 66.2 s |
+| Full: identify, follow (round 1) | 40.1 s, 66.3 s | 33.2 s, 6.3 s |
+| Seeds input (`seeds-fixed.csv`), wall | 430 s | 411 s |
+| Seeds: identify, follow (round 0) | 162.4 s, 88.5 s | 181.5 s, 100.3 s |
+| Seeds: identify, follow (round 1) | 27.2 s, 62.5 s | 29.2 s, 7.6 s |
+
+Both inputs make two rounds. The repeat round's stage 4b went from 66 s to 6 s (full) and from 62 s to 8 s (seeds): 902 of
+911 and 898 of 908 line ends were taken from the round before. The round 0 times and the seeds run's wall time differ
+between runs by more than the saving (the seeds run's round 0 was 19 s slower in the second run, with nothing else running
+on the machine that I know of), so the seeds run's own saving is the round 1 line, 54 s; the full run's wall time fell by 76 s.
+A seeds-only check is now one warm-started run, 7 minutes, against 27.
+
+**Ruling: reuse the reads of a line's end, not a whole security's stage 4b answer** — a security's step, R1 check, R2
+decision, fold and `taken` depend on the other securities of the round (holders, the composite's holder, the CUSIPs
+taken first in sec_id order), which cannot be reused without proving each of those unchanged, and they cost 6 to 8 s
+per round; the two reads that cost the time are pure in the stamp — if wrong, a stamp that misses an input of a read
+would hand a repeat round a stale answer: the byte-identity runs above are the check, not a proof.
+**Ruling: the stamp holds the whole security, its resolutions and its CUSIPs, though the reads use only the issuer, the
+tickers, the CUSIPs and the end** — "if in doubt, touched" — if wrong, a line is read again that did not need to be, a
+cost of seconds.
+**Ruling: a read is kept only when its issuer's reads in the stage did not degrade** — a failed or stale read is no
+finding, and a repeat round must read it again — if wrong, a degraded read would be taken as an answer in the next
+round and its `resolution_degraded` row lost.
+**Ruling: the rename pass itself is not made faster** — the brief asks for the reuse between rounds, and the first round's
+pass (about 60 s per run) is a first reading — if wrong, a run still pays 60 s once; sharing the pass between lines of one
+window is the next saving.
+**Ruling: the warm start is a development check, never the acceptance file** — a seed once kept stays even if the code under
+test would not add it — if wrong, a stale seed hides a regression until the cold start is run; the script says so in
+`passes.csv` and on its last line.

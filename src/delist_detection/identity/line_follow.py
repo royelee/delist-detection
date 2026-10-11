@@ -743,8 +743,36 @@ def _quiet(*_: Any) -> None:
     return None
 
 
+class LineMemo:
+    """What an earlier `follow_lines` call read about the end of each line, kept for a repeat call of the derived-line
+    loop (`derived_lines.identify_with_lines`) over the same issuer record and fails files. Reading a line's end is the
+    stage's one costly per-security question: the issuer's 8-Ks around it (`_Reads.text_sources`) and, when they name
+    nothing, the pass over the fails files that finds a renamed CUSIP (`renamed_cusips`). Both are pure in what the
+    stamp holds, so a repeat call takes the answer when the stamp is equal and asks again when it is not.
+
+    The stamp of a line (the security `sec_id` at the time of the read) is everything those two reads, and the round
+    around them, read: the security itself (issuer, class, name, eras with their observations, line tickers, so a
+    derived era that joined it changes it), its eras' resolutions, its CUSIPs, the line's end in the fails index
+    (a CUSIP now a derived line's, or rows the index gained in the round before, move it) and whether the read is the
+    call's first round (the rename pass is read in the first round only). A read that rested on a failed request or
+    a stale copy is never kept."""
+
+    def __init__(self) -> None:
+        self._answers: dict[tuple[str, str], tuple[Any, frozenset[str], frozenset[str]]] = {}
+
+    def recall(self, sec_id: str, cusip: str, stamp: Any) -> tuple[set[str], set[str]] | None:
+        got = self._answers.get((sec_id, cusip))
+        if got is None or got[0] != stamp:
+            return None
+        return set(got[1]), set(got[2])
+
+    def keep(self, sec_id: str, cusip: str, stamp: Any, symbols: Collection[str], cusips: Collection[str]) -> None:
+        self._answers[(sec_id, cusip)] = (stamp, frozenset(symbols), frozenset(cusips))
+
+
 def follow_lines(identity: "Identity", clients: LineSources, *, as_of: date,
-                 log: Callable[[str], None] = _quiet, meter: StageMeter | None = None) -> Lines:
+                 log: Callable[[str], None] = _quiet, meter: StageMeter | None = None,
+                 memo: LineMemo | None = None) -> Lines:
     """Stage 4b: each security of `identity` followed past its observations (module docstring), as of the run date
     `as_of`; `log` takes the stage's tally, `meter` its SEC traffic ("line follow"). The fails rows it reads, it
     asks the identity's index to follow (`FtdIndex.follow`: their rows over the run's fails window, to the run
@@ -767,7 +795,11 @@ def follow_lines(identity: "Identity", clients: LineSources, *, as_of: date,
     failed request or a stale copy, or of a CIK one of whose reads in the stage did, gets a `resolution_degraded`
     one, and so does a security with no such step whose CIK's read did. A refusal (`fatal.FATAL`) or an OpenFIGI
     outage stops it. `identity` is left as it was (final review M7): a security the follow changes is a copy in
-    `Lines`; only its fails index, which the stage asks to follow, holds more rows after."""
+    `Lines`; only its fails index, which the stage asks to follow, holds more rows after.
+
+    `memo` (a `LineMemo`, given by the derived-line loop to each of its rounds): the reads of a line's end (8-K texts,
+    the renamed-CUSIP pass) are taken from it when the line, as the memo stamps it, is what an earlier call read, and
+    asked again, then kept, when it is not. The answer of the call is the same with or without it."""
     meter = meter if meter is not None else StageMeter(log)
     mark = meter.start()
     reads = _Reads(clients)
@@ -794,6 +826,7 @@ def follow_lines(identity: "Identity", clients: LineSources, *, as_of: date,
     counts: Counter[str] = Counter()
     flagged: set[str] = set()            # securities whose step already got a resolution_degraded item
     texted: set[tuple[str, str]] = set()  # (security, its line's last CUSIP) whose end's 8-Ks were read
+    reused = asked = 0                   # with a memo: line ends taken from an earlier call, and read again
     for round_no in range(1, MAX_ROUNDS + 1):
         if round_no > 1:        # the tickers a line took last round (CEB beside EXBD): their rows are held now too
             ftd.follow(symbols=spellings_of(todo))
@@ -817,11 +850,22 @@ def follow_lines(identity: "Identity", clients: LineSources, *, as_of: date,
             if end is None or end.last >= stopped or (sid, end.cusip) in texted:
                 continue
             texted.add((sid, end.cusip))
-            symbols, cusips = reads.text_sources(out.securities[sid], end)
-            # no filing names the new ticker or CUSIP: the rows' names may, read in the first round only (a pass
-            # over every fails row of the window, anchored on the one rename EDGAR dates)
-            if not symbols and not cusips and round_no == 1:
-                cusips = reads.renamed_cusips(out.securities[sid], end, out.cusips.get(sid, []), ftd)
+            s, held = out.securities[sid], out.cusips.get(sid, [])
+            stamp = (s, tuple(held), tuple(out.resolutions.get(e.key) for e in s.eras), end, round_no == 1)
+            known = memo.recall(sid, end.cusip, stamp) if memo is not None else None
+            if known is not None:
+                symbols, cusips = known
+                reused += 1
+            else:
+                symbols, cusips = reads.text_sources(s, end)
+                # no filing names the new ticker or CUSIP: the rows' names may, read in the first round only (a pass
+                # over every fails row of the window, anchored on the one rename EDGAR dates)
+                if not symbols and not cusips and round_no == 1:
+                    cusips = reads.renamed_cusips(s, end, held, ftd)
+                if memo is not None:
+                    asked += 1
+                    if not reads.degraded(s.issuer_cik):
+                        memo.keep(sid, end.cusip, stamp, symbols, cusips)
             extra.setdefault(sid, set()).update(symbols)
             named[sid] |= cusips
             new_symbols |= symbols
@@ -909,5 +953,7 @@ def follow_lines(identity: "Identity", clients: LineSources, *, as_of: date,
                   if not (r.flag == "no_figi" and r.sec_id in out.renames)]
     log(f"line follow: {dict(sorted(counts.items()))}; {len(out.renames)} placeholders folded, "
         f"{len(out.successors)} line successors")
+    if reused:
+        log(f"line follow: {reused} line ends taken from the round before, {asked} read again")
     meter.done("line follow", mark)
     return out

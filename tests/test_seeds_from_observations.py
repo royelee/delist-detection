@@ -286,3 +286,68 @@ def test_the_cli_refuses_a_fixed_point_with_a_history_or_with_the_runs_own_paths
         monkeypatch.setattr("sys.argv", argv)
         assert mod.main() == 2
     assert not out.exists()
+
+
+# The warm start: pass 1 also starts with the rows of an earlier fixed point's seed file.
+
+def _warm_cli(tmp_path, monkeypatch, warm_rows, histories):
+    import csv
+    obs, out, work, warm = tmp_path / "obs.csv", tmp_path / "seeds.csv", tmp_path / "fp", tmp_path / "warm.csv"
+    _write_obs(obs)
+    with warm.open("w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=list(FOXA[0]), lineterminator="\n")
+        w.writeheader()
+        w.writerows(warm_rows)
+    calls = []
+    monkeypatch.setattr(mod, "run_classify", _fake_classify(histories, calls))
+    monkeypatch.setattr("sys.argv", ["seeds_from_observations.py", "--observations", str(obs), "--out", str(out),
+                                     "--fixed-point", str(work), "--warm-start", str(warm)])
+    return out, work, warm, calls
+
+
+WARM_ROWS = [FOXA[0], FOXA[2]]
+
+
+def test_a_warm_start_from_a_fixed_points_file_stops_after_one_pass(tmp_path, monkeypatch, capsys):
+    import csv
+    out, work, warm, calls = _warm_cli(tmp_path, monkeypatch, WARM_ROWS, {1: SWITCH})
+    assert mod.main() == 0
+    assert [c[1] for c in calls] == ["run-1"]
+    with (work / "passes.csv").open(newline="") as fh:
+        assert list(csv.DictReader(fh)) == [{"pass": "1", "seeds": "2", "added": "0", "exit": "3",
+                                             "warm_start": str(warm)}]
+    said = capsys.readouterr().out
+    assert f"fixed point after 1 passes (WARM-STARTED from {warm}" in said and "not an acceptance one" in said
+
+
+def test_the_warm_starts_rows_are_kept_when_the_history_does_not_call_for_them(tmp_path, monkeypatch):
+    import csv
+    out, work, warm, calls = _warm_cli(tmp_path, monkeypatch, WARM_ROWS, {1: ONE})
+    assert mod.main() == 0
+    with out.open(newline="") as fh:
+        assert _keys(list(csv.DictReader(fh))) == [("FOXA", "2018-06-30"), ("FOXA", "2019-06-30")]
+    cold, _ = mod.fixed_point(FOXA, lambda seed_rows, k: ONE)
+    assert _keys(cold) == [("FOXA", "2018-06-30")]          # the cold start would not have kept the second row
+
+
+def test_a_warm_start_row_that_is_not_an_observation_exits_2_naming_file_and_line(tmp_path, monkeypatch, capsys):
+    other = {**FOXA[2], "name": "FOX CORP CLASS B"}
+    out, work, warm, calls = _warm_cli(tmp_path, monkeypatch, [FOXA[0], other], {1: ONE})
+    assert mod.main() == 2
+    assert capsys.readouterr().err.strip().splitlines() == [f"{warm}:3: not a row of the observations"]
+    assert calls == [] and not out.exists()
+
+
+def test_the_cold_start_is_unchanged(tmp_path, monkeypatch, capsys):
+    import csv
+    obs, out, work, calls = tmp_path / "obs.csv", tmp_path / "seeds.csv", tmp_path / "fp", []
+    _write_obs(obs)
+    monkeypatch.setattr(mod, "run_classify", _fake_classify({1: SWITCH, 2: SWITCH}, calls))
+    monkeypatch.setattr("sys.argv", ["seeds_from_observations.py", "--observations", str(obs), "--out", str(out),
+                                     "--fixed-point", str(work)])
+    assert mod.main() == 0
+    assert [c[1] for c in calls] == ["run-1", "run-2"]
+    with (work / "passes.csv").open(newline="") as fh:
+        assert list(csv.DictReader(fh)) == [{"pass": "1", "seeds": "1", "added": "1", "exit": "3"},
+                                            {"pass": "2", "seeds": "2", "added": "0", "exit": "0"}]
+    assert "WARM" not in capsys.readouterr().out
