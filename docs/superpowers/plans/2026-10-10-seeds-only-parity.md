@@ -3321,6 +3321,9 @@ own join stays as it is).
 
 ### Task 18: Parity checkpoint after the rework of S2 (network)
 
+**Outcome (2026-10-11):** run on `6395c78` after Task 17's two fix rounds (the second narrowed rule X to two
+composites, found by this checkpoint's first seeds run). The floor was written. See "Checkpoint 4".
+
 The controller runs it, as Tasks 3, 5 and 15, on the head after Task 17. The reference for the full run is the full
 run before S2 (`pout-full3`, commit `0ec338f`); the reference for the numbers is `data/seeds_parity.json`.
 
@@ -3382,6 +3385,146 @@ its date differs from the one holding it on the ticker's previous snapshot. With
 script behaves as today. Test with FOXA: holder BBG of Twenty-First Century Fox to 2019-03-19,
 the Fox Corp line after; the 2019-06-30 row becomes a seed. This depends on S2, which is what
 puts the new holder's line into `security_history`.
+
+### Task 19: A seed where the ticker's holder changed (S3, decision A)
+
+**Why.** `scripts/seeds_from_observations.py` reduces the caller's observations to seeds: a ticker's first snapshot, a
+return after a snapshot it was missing from, or a new name. It cannot see a ticker that passed to another security
+while the caller kept holding it under a name that still agrees: FOXA 2019 (Twenty-First Century Fox to Fox Corp;
+`names_agree` accepts the pair), IR 2020 (Ingersoll-Rand plc to the former Gardner Denver), CFFN 2010. No filing says
+this; it is a fact about what the caller holds. Decision A's recommendation, applied here as a ruling: a caller whose
+snapshots carry an identifier gets a seed when the identifier changes; a caller without one gives the seed builder a
+previous run's `contract/security_history.csv`, and a row becomes a seed when the security holding its ticker on its
+date is not the one that held it on the ticker's previous snapshot. The second route needs two passes for a first
+run: seeds, a run, seeds again with that run's history.
+
+**The rules.** Both are additions: a row that is a seed today stays one.
+
+1. *An identifier changed.* For each of the columns `cusip`, `cik` and `sec_id` (the caller's pins; a column the file
+   lacks is skipped): a row whose value is not blank and differs from the last non-blank value the ticker carried in an
+   earlier row is a seed. Blank values never make a seed and never reset the remembered value.
+2. *The holder changed* (`--security-history PATH`). The holders of a ticker on a day are the set of `sec_id`s whose
+   history row has that ticker and a span containing the day (`start_date <= day`, and `end_date` blank or `>= day`).
+   A row is a seed when the ticker's holders on its date differ from the holders on the date of the ticker's previous
+   row and the two sets are not both empty. A ticker the history never names gets no seed from this rule. Without the
+   option the script reads no history and behaves as today.
+
+**Files:**
+- Modify: `scripts/seeds_from_observations.py`
+- Test: `tests/test_seeds_from_observations.py`
+- Docs: `docs/commands.md` (the script's entry: the option, the two passes), the script's own docstring
+
+**Interfaces:**
+- Consumes: `contract/security_history.csv` with the columns `sec_id,issuer_id,start_date,end_date,ticker,security_name,share_class`
+  (ISO dates; `end_date` blank for a line that has not ended). Only `sec_id`, `start_date`, `end_date` and `ticker` are read.
+- Produces: `seeds(rows, history=None)` where `history` is the list of that file's rows as dicts (None: rule 2 off);
+  `holders(history, ticker, day) -> frozenset[str]` (or the same thing behind an index built once; the rule above is
+  the contract); the CLI option `--security-history PATH`. The output file keeps the input's columns and row order
+  as today (by ticker, then date).
+
+- [ ] **Step 1: Write the failing tests** in `tests/test_seeds_from_observations.py` (the file loads the script as
+  `mod`; `_o(ticker, as_of, name)` builds a row with blank pins):
+
+```python
+def _h(sec_id, ticker, start, end=""):
+    return {"sec_id": sec_id, "issuer_id": "1", "start_date": start, "end_date": end, "ticker": ticker,
+            "security_name": "", "share_class": "COMMON"}
+
+
+def _keys(rows):
+    return [(r["ticker"], r["as_of"]) for r in rows]
+
+
+FOXA = [_o("FOXA", "2018-06-30", "TWENTY FIRST CENTURY FOX INC CLASS"),
+        _o("FOXA", "2018-12-31", "TWENTY FIRST CENTURY FOX INC CLASS"),
+        _o("FOXA", "2019-06-30", "FOX CORP CLASS A"), _o("FOXA", "2019-12-31", "FOX CORP CLASS A")]
+
+
+def test_without_a_history_the_fox_rows_give_one_seed():
+    assert _keys(mod.seeds(FOXA)) == [("FOXA", "2018-06-30")]
+    assert _keys(mod.seeds(FOXA, history=None)) == [("FOXA", "2018-06-30")]
+
+
+def test_a_row_is_a_seed_when_another_security_holds_its_ticker_than_on_the_previous_snapshot():
+    """FOXA 2019: Twenty-First Century Fox to 2019-03-19, the Fox Corp line after."""
+    history = [_h("BBGOLD", "FOXA", "2013-07-03", "2019-03-19"), _h("BBGNEW", "FOXA", "2019-03-20")]
+    assert _keys(mod.seeds(FOXA, history=history)) == [("FOXA", "2018-06-30"), ("FOXA", "2019-06-30")]
+
+
+def test_a_row_after_its_tickers_line_ended_is_a_seed_once():
+    """The previous run ended the line and has no line after it: the first snapshot past the end is a seed, the
+    next is not (no holder before, no holder now)."""
+    history = [_h("BBGOLD", "FOXA", "2013-07-03", "2019-03-19")]
+    assert _keys(mod.seeds(FOXA, history=history)) == [("FOXA", "2018-06-30"), ("FOXA", "2019-06-30")]
+
+
+def test_one_security_under_the_ticker_all_along_gives_no_extra_seed():
+    history = [_h("BBGONE", "FOXA", "2013-07-03", "2018-12-31"), _h("BBGONE", "FOXA", "2019-01-01")]
+    assert _keys(mod.seeds(FOXA, history=history)) == [("FOXA", "2018-06-30")]
+    assert _keys(mod.seeds(FOXA, history=[_h("BBGX", "ZZZ", "2000-01-03")])) == [("FOXA", "2018-06-30")]
+
+
+def test_the_span_ends_are_inside_and_two_holders_are_a_set():
+    rows = [_o("AAA", "2010-06-30", "ALPHA"), _o("AAA", "2010-12-31", "ALPHA"), _o("AAA", "2011-06-30", "ALPHA")]
+    exact = [_h("S1", "AAA", "2010-06-30", "2010-12-31"), _h("S2", "AAA", "2011-01-01")]
+    assert _keys(mod.seeds(rows, history=exact)) == [("AAA", "2010-06-30"), ("AAA", "2011-06-30")]
+    both = [_h("S1", "AAA", "2010-01-04"), _h("S2", "AAA", "2010-01-04")]
+    assert _keys(mod.seeds(rows, history=both)) == [("AAA", "2010-06-30")]
+    joins = [_h("S1", "AAA", "2010-01-04"), _h("S2", "AAA", "2011-01-03")]
+    assert _keys(mod.seeds(rows, history=joins)) == [("AAA", "2010-06-30"), ("AAA", "2011-06-30")]
+
+
+def test_a_changed_identifier_is_a_seed_and_a_blank_one_is_not():
+    def row(as_of, **pins):
+        return {**_o("AAA", as_of, "ALPHA"), **pins}
+    rows = [row("2010-06-30", cusip="111111111"), row("2010-12-31"), row("2011-06-30", cusip="111111111"),
+            row("2011-12-31", cusip="222222222"), row("2012-06-30", cik="5"), row("2012-12-31", cik="6"),
+            row("2013-06-30", sec_id="BBG1"), row("2013-12-31", sec_id="BBG1")]
+    assert _keys(mod.seeds(rows)) == [("AAA", "2010-06-30"), ("AAA", "2011-12-31"), ("AAA", "2012-12-31")]
+    bare = [{"ticker": "AAA", "as_of": d, "name": "ALPHA"} for d in ("2010-06-30", "2010-12-31")]
+    assert _keys(mod.seeds(bare)) == [("AAA", "2010-06-30")]            # a file without pin columns
+
+
+def test_the_cli_reads_the_history_file(tmp_path, monkeypatch, capsys):
+    import csv
+    obs, hist, out = tmp_path / "obs.csv", tmp_path / "security_history.csv", tmp_path / "seeds.csv"
+    with obs.open("w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=list(FOXA[0]))
+        w.writeheader()
+        w.writerows(FOXA)
+    with hist.open("w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=list(_h("x", "x", "x")))
+        w.writeheader()
+        w.writerows([_h("BBGOLD", "FOXA", "2013-07-03", "2019-03-19"), _h("BBGNEW", "FOXA", "2019-03-20")])
+    monkeypatch.setattr("sys.argv", ["seeds_from_observations.py", "--observations", str(obs), "--out", str(out),
+                                     "--security-history", str(hist)])
+    assert mod.main() == 0
+    with out.open(newline="") as fh:
+        assert _keys(list(csv.DictReader(fh))) == [("FOXA", "2018-06-30"), ("FOXA", "2019-06-30")]
+    assert "2 seeds from 4 observations" in capsys.readouterr().out
+```
+
+- [ ] **Step 2: Run them and see them fail** (`seeds()` takes no `history`; the pin rule does not exist):
+  `PYTHONPATH=src ~/miniconda3/envs/rdagent4qlib/bin/python -m pytest tests/test_seeds_from_observations.py -q -p no:cacheprovider`.
+- [ ] **Step 3: Implement.** Build the history index once (ticker to its spans); keep `seeds()` a pure function of its
+  arguments; the existing condition stays as the first test and the two rules are `or`-ed onto it. A history file with
+  a missing column is a bad input: exit 2 with one stderr line naming the file and the column, as the project's CLIs do
+  for bad input files (add a test for it if the script gains that branch).
+- [ ] **Step 4:** the existing test and the new ones pass; run the whole suite once
+  (`PYTHONPATH=src ~/miniconda3/envs/rdagent4qlib/bin/python -m pytest -q -p no:cacheprovider`; expected 4,042 passed
+  plus the new tests, 44 xfailed).
+- [ ] **Step 5: Try it on the real files** (offline, no run of the pipeline). `E` is
+  `/private/tmp/claude-501/-Users-royeli-repo-github-com-delist-detection/a6c3c0f4-120e-40f6-9019-80889ff3e772/scratchpad/exec`.
+  - `PYTHONPATH=src <python> scripts/seeds_from_observations.py --observations data/observations.csv --out E/task19/seeds-plain.csv`:
+    2,589 seeds, and the file equals `E/seeds.csv` byte for byte.
+  - the same with `--security-history E/pout-seeds5/contract/security_history.csv --out E/task19/seeds-history.csv`:
+    report the number of seeds and list every added seed (ticker, date, the holders before and on the date), at most
+    80 lines; say how many are "the line ended and nothing holds the ticker" and how many "another security holds it".
+  Put both in the report. Do not judge the added seeds; the controller measures them with a run.
+- [ ] **Step 6:** docs, then commit: "The seed builder cuts a seed where the ticker's holder changed", with the
+  trailer lines the dispatch gives.
+
+**Not in this task:** anything in `src/`, `classify_universe.py`, the parity script, the floor.
 
 ## S4: Smaller causes
 
@@ -3667,3 +3810,82 @@ a continuation by filing; not traced) and TMA 2008.
 
 **Run time.** The identity stage and stage 4b run once per round: about 130 s a round in the full run. The task that
 makes a repeat round recompute only what a derived pair touches (decision (e)) is still to do.
+
+### Checkpoint 4: S2 reworked, the floor (Task 18, 2026-10-11)
+
+Code `6395c78` (Tasks 7 to 17), run date 2026-09-25, `claude-sonnet-5-5`, `--sec-workers 8`. The full run on a copy of
+the cache the last full run left; the seeds run on a copy of the cache the full run left. Both exit 0 with no degraded
+answer.
+
+| Run | Wall | SEC requests | Identity rounds | Eras | Rows of `securities.csv` |
+|---|---|---|---|---|---|
+| full, `0ec338f` (before S2) | 251 s | 0 | 1 | 2,615 | 2,225 |
+| full, `6395c78` | 396 s | 0 | 2 (13 pairs) | 2,621 | 2,229 |
+| seeds, `0ec338f` | 355 s | 390 | 1 | 2,448 | 2,205 |
+| seeds, `6395c78` | 546 s | 437 | 3 (55 pairs, then 1) | 2,493 | 2,218 |
+
+**The full run against the run before S2** (`pout-full3`). No observed era has another issuer (0 of 2,615). No ending
+lost or gained, no seed placed differently, no truth case that fails only in the new run. `D.mismatches` 149 to 148,
+`D.cases_matching` 275 to 276, `D.known_wrong_now_right` 2 to 3, `V.audit.confirmed_but_wrong` 21 to 20.
+
+| Step | Before S2 | Now | Verdict |
+|---|---|---|---|
+| CCE 2016 | merger at assumed par | merger priced through the derived CCEP line (issuer 1650107, rule X): 14.50 cash plus one share, dlret 0.034 | better; its `known_wrong` case is right now |
+| GCI 2019 | merger, no value | 6.25 cash plus 0.5427 of the derived acquirer line, dlret 0.022 | better |
+| ODP 2025 | merger, no value | cash 28.00, dlret 0 (C5) | better |
+| NWS-A 2013 | continuation into the spin-off that took the ticker | a transfer with no successor (the price fell to 0.46, Task 16) | the wrong link is gone; the row is still not the truth set's "no ending" |
+| SDRL 2018, UNIT 2025, WE 2023 | | as before S2 (Task 16; rule J leaves UNIT's and WE's derived eras unmade) | same |
+| AAN 2020 | merger 1:1 into Aaron's Holdings | the same, one `handoff_conflict`; Aaron's Holdings is a line with no issuer and no ending | same |
+| WCN 2016, BXS 2017 | merger 1:1 | the same, one `handoff_conflict` each | same |
+
+Four new securities, all `observed=false`: the GCI acquirer line, the CCEP line, new Seadrill, BancorpSouth Bank. Two
+new `unexplained_ending` rows, both honest: BancorpSouth Bank 2021-10-28 (it became Cadence Bank and files with the
+FDIC) and new Seadrill 2022-02-22 (its second bankruptcy). Counts that got worse: `R2.2.unknown_reason` 9 to 11 and
+review rows 540 to 542 (those two rows); `L1.tickers_covered` 2,168 to 2,167, `left_view` 4 to 5 and
+`transfer_no_successor` 4 to 5 (NWS-A).
+
+**The seeds run against the full run.**
+
+| Number | Floor of checkpoint 2 | Now (the new floor) |
+|---|---|---|
+| endings_lost | 2 | 0 |
+| endings_gained | 13 | 8 |
+| kind_changed | 35 | 16 |
+| value_or_date_changed | 17 | 10 |
+| securities_lost | 27 | 17 |
+| securities_gained | 8 | 6 |
+| seeds_placed_differently | 19 | 18 |
+| truth_cases_failing_only_in_seeds | 25 | 16 |
+| observed_flag_differs (not floored) | | 40 |
+
+Coverage: tickers 0.9725 (full 0.9766), securities 0.9752 (full 0.9804), `left_view` 8 (full 5), `closed_no_event` 0.
+
+**The rules' verdicts.** Full run: not made UNIT, WE; asked without the old line's issuer AAN Holdings, CCE 2016.
+Seeds run: not made CFFN, ENR, IR, UNIT, WE; asked without the old issuer AAN Holdings, IGT 2015, CCE 2016. IGT's
+derived era now has IGT plc as issuer and the old IGT row is the merger the full run has. The cost of rule J in the
+seeds run: CFFN's old line ends 2010-12-22 at assumed par where the full run joins the 2.26-for-1 conversion; IR's and
+ENR's old lines end at the ticker change where the full run follows the rename inside one observed security (before
+rule J the seeds run joined each to the company that took the ticker, which was wrong). Rule X first also fired on
+Thornburg Mortgage 2008, whose origin is a placeholder; it now needs two composites (`6395c78`).
+
+**Acceptance (Task 15's list, 40 tickers).** In no case list, 23: ARRS, STE, BG, AVGO, MRVL, APO, DKNG, NCNO, AZPN,
+DTV, CLWR, DOW, MRK, EVHC, AMSG, ANAT, MYL, ENDP, FERG, WFT, NLSN, WEN, TWC. Still listed, 17: CR (the 2023 Crane
+line is not in the seeds run), CI and SPB (a merger in seeds, a continuation by filing in the full run), FWONA and
+FWONK (the 2023 reclassification: another kind, and the new lines are missing), ALEX (no kind in seeds), CIT, ANN and
+TCF (a security of the full run is missing), FOXA (S3), TEAM, ATVI, NRF, MIR, LVNTA (the same kind with another verdict
+or value), MNST and NE (another last trade date). Which stage did not produce each line is not traced; it is S4's
+first step, after S3 is measured.
+
+**Other names in the case lists.** kind_changed: NFS, MEL, VIACA, DISCA, CEG, WRK, LSXMA, LSXMK, GDI, QRTEA, SUNW.
+securities_lost: RRI, ABI, LMCA 2013, GCI twice (the 2015 Gannett line and, following from it, the derived acquirer
+line), HTZ, WLL, LSXMA and LSXMK 2023, Z class A, QRTEA series A. securities_gained (placeholders): UAG, WPO, RRI,
+ABI, CBS, DDR. endings_gained: CFFN, GHC, GM, IR, ENR, Z class C, FOXA, FOX.
+
+**Run time.** The derived lines cost the full run 145 s and the seeds run 190 s: one or two repeat rounds of the
+identity stage and stage 4b, plus the verdict passes. The equal-result task of decision (e) is still to do.
+
+**Still open from S2.** A price test on a continuation by filing was measured and not added (a new CUSIP's first fails
+row can carry a price that is not a close: AVGO 2016); the same bad row could switch off a right continuation by
+timing, none known. An observed second era that joins by composite at a price that did not carry over (CFFN in the
+full run) is left as it is. The old seed file dropped 26 rows on which the caller pins another issuer (Task 19 found
+it): those pins reached every full run and no seeds run, so part of the numbers above is the seed builder's.
