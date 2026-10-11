@@ -1634,8 +1634,26 @@ def test_a_part_before_the_first_observation_or_after_a_hole_is_no_derived_line(
     late = _era("X", ("2020-09-15", "X CO"), ("2020-12-31", "X CO"))
     assert all(not e.derived for e in refine_eras([late], FtdIndex(_x_rows()), {("X", "AAA")}))   # AAA precedes it
     hole = _rows("X", "EEE", ["2023-03-01", "2023-04-03", "2023-05-01"])         # more than 400 days after the last row
-    got = refine_eras([_era("X", *X_OBS)], FtdIndex(_x_rows() + hole), {("X", "EEE")})
-    assert all(not e.derived for e in got)
+    got = refine_eras([_era("X", *X_OBS)], FtdIndex(_x_rows() + hole), {("X", "CCC"), ("X", "EEE")})
+    assert [(e.first, e.derived) for e in got] == [("2020-01-15", False), ("2020-12-31", False), ("2021-03-01", True)]
+    # CCC follows an era and is derived; EEE follows the hole, a new gap group with no era before it: not derived
+
+
+def test_a_class_ticker_derives_under_the_spelling_the_observations_use():
+    """The pair names the ticker as the era spells it ("BF-B", as the caller observed it), not the fails way ("BFB")."""
+    rows = [FtdRow(r.date, r.cusip, "BF-B", r.description, r.price) for r in _x_rows()]
+    era = _era("BF-B", *X_OBS)
+    got = refine_eras([era], FtdIndex(rows), {("BF-B", "CCC")})
+    assert [e.derived for e in got] == [False, False, True]
+    assert [e.derived for e in refine_eras([era], FtdIndex(rows), {("BFB", "CCC")})] == [False, False]
+
+
+def test_no_derived_era_starts_on_the_day_another_era_of_the_ticker_starts():
+    """By construction: an era sees the ticker's rows only up to the day before the next era's first observation."""
+    first = _era("X", *X_OBS)
+    second = _era("X", ("2021-03-01", "Y CORP"), ("2021-12-31", "Y CORP"))
+    got = refine_eras([first, second], FtdIndex(_x_rows()), {("X", "CCC")})
+    assert [e.first for e in got if e.derived] == []
 
 
 def test_refine_reads_the_fails_index_it_is_given_and_derives_from_it():

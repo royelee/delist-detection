@@ -203,15 +203,15 @@ def _refine(index: ObservationIndex, ftd_client: Any, as_of: date, limit: int | 
     if not eras:
         raise ObservationError("no observations to process")
 
-    lo = max(FTD_START, min(date.fromisoformat(e.first) for e in eras) - timedelta(days=30))
-    hi = as_of        # an era is followed along its own fails rows for as long as they run (`era_last_seen`)
-    class_names: dict[str, list[str]] = defaultdict(list)     # BF-B's names: checks FTD's "BFB" rows
-    first_seen: dict[str, str] = {}                            # each ticker's first day (rule A's base-symbol bound)
-    for e in eras:
-        first_seen[e.ticker] = min(e.first, first_seen.get(e.ticker, e.first))
-        if "-" in e.ticker:
-            class_names[e.ticker] += e.names
     if ftd is None:
+        lo = max(FTD_START, min(date.fromisoformat(e.first) for e in eras) - timedelta(days=30))
+        hi = as_of        # an era is followed along its own fails rows for as long as they run (`era_last_seen`)
+        class_names: dict[str, list[str]] = defaultdict(list)     # BF-B's names: checks FTD's "BFB" rows
+        first_seen: dict[str, str] = {}                           # each ticker's first day (rule A's base-symbol bound)
+        for e in eras:
+            first_seen[e.ticker] = min(e.first, first_seen.get(e.ticker, e.first))
+            if "-" in e.ticker:
+                class_names[e.ticker] += e.names
         ftd = FtdIndex.opened(ftd_client, lo, hi, through=as_of, symbols={e.ticker for e in eras},
                               cusips={c for e in eras for c in e.cusips}, names=class_names, first_seen=first_seen)
     eras = refine_eras(eras, ftd, derive)
@@ -534,6 +534,8 @@ def _derived_era(era: TickerEra, part_rows: Sequence[FtdRow], kept: tuple[str, .
 
 def _split_era(era: TickerEra, rows: list[FtdRow], *, contested: bool,
                derive: Collection[str] = ()) -> list[TickerEra]:
+    """The era split on its rows. `derive`: CUSIPs approved for the era's ticker (as the era spells it), already
+    without any CUSIP that has rows under the ticker from the next era's first day on (`refine_eras`)."""
     out: list[TickerEra] = []
     for g_obs, g_rows in _cut(era.observations, rows, _gap_cuts(era.observations, rows)):
         follows = False                   # the part before is an era of this group: a line is derived only after one
@@ -595,8 +597,9 @@ def refine_eras(eras: Sequence[TickerEra], ftd: FtdIndex,
     same FIGI.
 
     `derive`: (ticker, CUSIP) pairs the caller approved (`derived_lines.derivable`): a part of the ticker's rows with
-    no observation whose kept CUSIP is approved, that follows an era of its gap group and whose CUSIP the ticker's
-    next era does not trade, is an era with one derived observation (`_derived_era`).
+    no observation whose kept CUSIP is approved, that follows an era of its gap group and whose CUSIP has no rows
+    under the ticker from the next era's first day on, is an era with one derived observation (`_derived_era`). A
+    pair names the ticker as the era spells it ("BF-B", as the caller observed it, not the fails way "BFB").
     """
     spans: dict[str, list[tuple[str, str]]] = defaultdict(list)
     seen_on: Counter[tuple[str, str]] = Counter()
