@@ -91,7 +91,9 @@ settle a doubt the rules above would otherwise raise; none changes a table row, 
   wind-down whose distributions are not read (`value_pending:distributions`, FB-002: no measured value and no fill,
   the spec's invariant), or, as a security reason, when an observed security has a FIGI and no issuer CIK
   (`issuer_unresolved`, FB-006: its seeds and endings are uncertain, so a blank `issuer_id` never rides on a
-  confirmed seed; an acquirer the run adds is no claim and is left alone).
+  confirmed seed; an acquirer the run adds is no claim and is left alone), or when an observed security's open
+  interval carries an OTC bankruptcy symbol, five letters ending in Q (`open_under_bankruptcy_ticker:<ticker>`,
+  FB-014: SandRidge's old stock stayed open under SDOCQ with no ending; it left its exchange and nothing says how).
 
 `uncertain_rows` is uncertain.csv: every uncertain security and ending, and
 every seed uncertain for a reason of its own; a seed whose only problem is
@@ -272,6 +274,15 @@ def _closed_without_ending(security: Mapping[str, str], intervals: Sequence[Mapp
     return f"closed_no_event:{max(r['valid_to'] for r in intervals)}"
 
 
+def _open_under_bankruptcy_ticker(security: Mapping[str, str], intervals: Sequence[Mapping[str, str]]) -> list[str]:
+    """G (FB-014): `open_under_bankruptcy_ticker:<ticker>` for each open interval of an observed security whose
+    ticker is an OTC bankruptcy symbol (five letters ending in Q)."""
+    if security.get("observed") != "true":
+        return []
+    return [f"open_under_bankruptcy_ticker:{t}" for t in sorted({r["ticker"] for r in intervals if not r["valid_to"]})
+            if len(t) == 5 and t.endswith("Q") and t.isalpha()]
+
+
 # -- the verdicts ---------------------------------------------------------------------------------------------------
 def _security_verdicts(tables: RunSnapshot, evidence: Mapping[str, str],
                        settled: Mapping[str, tuple[Mapping[str, str], bool]] | None = None) -> dict[str, Verdict]:
@@ -315,6 +326,7 @@ def _security_verdicts(tables: RunSnapshot, evidence: Mapping[str, str],
         reasons += [f"ticker_overlap:{ticker}" for ticker in sorted(set(overlaps[sid].values()))]
         if closed := _closed_without_ending(s, intervals[sid], endings[sid]):
             reasons.append(closed)
+        reasons += _open_under_bankruptcy_ticker(s, intervals[sid])
         out[sid] = Verdict(tuple(reasons), tuple(sorted(overlaps[sid])))
     return out
 

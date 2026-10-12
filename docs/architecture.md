@@ -739,9 +739,17 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   confirmed security of the run (same CIK and class, begun after the line and no later than the confirmed era: Trane
   beside the new Ingersoll Rand). A redomicile with no CUSIP link in the fails rows stays one line. The eras of one
   such line go where its last era did (a placeholder of its issuer, or the line it joined: old IR joins Trane), and a
-  switch to an era confirmed on the composite a detached era left does not take it back;
+  switch to an era confirmed on the composite a detached era left does not take it back; and (FB-014, SandRidge
+  2016) a weak era whose line a bankruptcy left behind while its ticker went on as other shares, though no era of
+  the run is confirmed on the composite (`weak_lines_left_behind`, over `identity._LeftBehind`: after the last day the
+  era's own CUSIPs traded under the ticker the ticker's fails rows are another CUSIP's, the own CUSIPs have no
+  trading row later than `LEFT_BEHIND_SETTLE_DAYS` after that CUSIP's first, and `_went_bankrupt` between them; the
+  old stock, only observed in 2014, had taken the id of the stock issued under the plan, and becomes
+  `CIK1349436-COMMON`; a new CUSIP with no bankruptcy, Equinix 2015 or Thomson Reuters 2018, changes nothing);
   `superseded_placeholders` marks a placeholder a later FIGI line of its
-  issuer and class holds the ticker for (not listed today). Its era-level
+  issuer and class holds the ticker for (not listed today), and `identity.left_behind_placeholders` one a
+  bankruptcy left behind that way (EDGAR's listing under the ticker is the later shares': stage 5 takes it as not
+  listed, so the exchange's Form 25 is its ending). Its era-level
   review rows: `ticker_unconfirmed_review` (`ticker_unconfirmed`) and
   `observation_conflict_review` (`observation_conflict:<date>`). `Security.line_tickers`/`own_tickers()` (the era
   tickers and the ones stage 4b found; every own-ticker check reads it); `cusip_handoffs` times a switch from

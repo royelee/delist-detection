@@ -750,19 +750,70 @@ def weak_eras_on_another_line(resolutions: Mapping[str, EraResolution], eras: Ma
     return out
 
 
+LEFT_BEHIND = ""        # a detached era's "crossed" value when a bankruptcy left its line behind (`detached_review`)
+
+
+def weak_lines_left_behind(resolutions: Mapping[str, EraResolution], eras: Mapping[str, TickerEra],
+                           issuers: Mapping[str, Issuer], handoffs: Sequence[Handoff] = (),
+                           bankrupt_between: Callable[[str, str, int | None], bool] | None = None,
+                           left_behind: Callable[[str, Collection[str], int | None], bool] | None = None
+                           ) -> list[list[str]]:
+    """FB-014: the weak eras (`WEAK_SOURCES`) whose line a bankruptcy left behind while the ticker went on as other
+    shares (`left_behind(ticker, the era's own CUSIPs, its issuer)`, `identity._LeftBehind`): each list is the eras
+    of one line, earliest first. The ticker and name tiers answer with today's holder, which here is the stock
+    issued after the bankruptcy, whether or not the caller ever observed it (SandRidge 2016: only the old stock's
+    2014 sighting is in the run, so `weak_eras_on_another_line` has no confirmed era to set it against). The eras
+    of a composite that one CUSIP line joins (`_carrying_links`) are one line, taken out together when any of them
+    was left behind; a line that reaches an era confirmed on the composite by a pin or a CUSIP is that composite's
+    own and stays."""
+    if left_behind is None:
+        return []
+    carrying = _carrying_links(eras, handoffs, issuers, bankrupt_between)
+    by_composite: dict[str, list[str]] = defaultdict(list)
+    for key, res in resolutions.items():
+        if res.sec_id is not None and res.source in CONFIRMED_SOURCES + WEAK_SOURCES:
+            by_composite[res.sec_id].append(key)
+    out: list[list[str]] = []
+    for members in by_composite.values():
+        chain = {k: k for k in members}
+
+        def root(k: str) -> str:
+            while chain[k] != k:
+                k = chain[k]
+            return k
+
+        for a, b in carrying:
+            if a in chain and b in chain:
+                chain[root(b)] = root(a)
+        lines: dict[str, list[str]] = defaultdict(list)
+        for k in members:
+            lines[root(k)].append(k)
+        anchored = {root(k) for k in members if resolutions[k].source in CONFIRMED_SOURCES}
+        for r, line in lines.items():
+            if r in anchored:
+                continue
+            line.sort(key=lambda k: (eras[k].first, k))
+            if any((own := set(eras[k].ftd_cusips) | set(eras[k].cusips))
+                   and left_behind(eras[k].ticker, own, cik_of(issuers, k)) for k in line):
+                out.append(line)
+    return out
+
+
 def resolve_with_identity_guard(resolver: "FigiResolver", eras: Sequence[TickerEra], *,
                                 issuers: Mapping[str, Issuer], cusips: Mapping[str, list[str]],
                                 handoffs: Sequence[Handoff] = (), unconfirmed: Collection[str] = (),
-                                bankrupt_between: Callable[[str, str, int | None], bool] | None = None
+                                bankrupt_between: Callable[[str, str, int | None], bool] | None = None,
+                                left_behind: Callable[[str, Collection[str], int | None], bool] | None = None
                                 ) -> tuple[dict[str, EraResolution], dict[str, tuple[str, str]]]:
     """`resolver.resolve_many`, then each weak era whose merge would cross another
     security's confirmed range (`crossing_weak_eras`), or that took a composite another
-    line's CUSIP confirms (`weak_eras_on_another_line`), taken back out and resolved
+    line's CUSIP confirms (`weak_eras_on_another_line`), or whose line a bankruptcy left behind while its ticker
+    went on as other shares (`weak_lines_left_behind`), taken back out and resolved
     again without its ticker or name pick, until none does. The eras of one such line
     that end on placeholders go where the line's last era did: the placeholder of its
     issuer, or the line it joined (a redomicile changes the issuer, not the security). Returns the resolutions and the detached
     eras (era key -> (the sec_id its weak pick gave, the sec_id it crossed, the same one
-    for a line off its composite)), for the review."""
+    for a line off its composite, `LEFT_BEHIND` for a line a bankruptcy left behind)), for the review."""
     by_key = eras_by_key(eras)
     detached: dict[str, tuple[str, str]] = {}
     lines: list[list[str]] = []
@@ -789,6 +840,14 @@ def resolve_with_identity_guard(resolver: "FigiResolver", eras: Sequence[TickerE
                 new[k] = (res[k].sec_id or "", res[k].sec_id or "")
                 resolver.log(f"FIGI {res[k].source} pick withdrawn: {k} took {res[k].sec_id}, which another line's "
                              f"CUSIP confirms, and no CUSIP carries the line on")
+            if fresh:
+                lines.append(fresh)
+        for line in weak_lines_left_behind(res, by_key, issuers, handoffs, bankrupt_between, left_behind):
+            fresh = [k for k in line if k not in new]
+            for k in fresh:
+                new[k] = (res[k].sec_id or "", LEFT_BEHIND)
+                resolver.log(f"FIGI {res[k].source} pick withdrawn: {k} took {res[k].sec_id}, today's holder of "
+                             f"{by_key[k].ticker}; its own CUSIP ended in a bankruptcy and another holds the ticker")
             if fresh:
                 lines.append(fresh)
         if not new:
@@ -910,10 +969,15 @@ def detached_review(detached: Mapping[str, tuple[str, str]], eras: Mapping[str, 
     for key, (sid, crossed) in sorted(detached.items()):
         e = eras[key]
         now = resolutions[key].sec_id or "unresolved"
-        why = (f"its ticker or name pick {sid} would carry that security's {e.ticker} range across {crossed}'s "
-               f"confirmed one" if crossed != sid else
-               f"its ticker or name pick {sid} is a composite another line's CUSIP confirms, and no CUSIP carries "
-               f"the line on")
+        if crossed == LEFT_BEHIND:
+            why = (f"its ticker or name pick {sid} is today's holder of {e.ticker}: the era's own CUSIP ended in a "
+                   f"bankruptcy and another CUSIP holds the ticker since")
+        elif crossed != sid:
+            why = (f"its ticker or name pick {sid} would carry that security's {e.ticker} range across {crossed}'s "
+                   f"confirmed one")
+        else:
+            why = (f"its ticker or name pick {sid} is a composite another line's CUSIP confirms, and no CUSIP "
+                   f"carries the line on")
         out.append(ReviewItem(resolutions[key].sec_id or "", e.ticker, cik_of(issuers, key), "identity_detached",
                               f"{key} {e.name or ''}: {why}; resolved again as {now}", last_seen=e.last))
     return out

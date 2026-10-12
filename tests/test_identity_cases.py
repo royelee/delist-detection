@@ -52,6 +52,10 @@ MOVES = {
     # its dead line's stale tail, not a placeholder that no Form 25 can end
     "BSC@2008-11-18": ("BBG000BDRQ10", "backfill"),
     "CCU@2008-11-18": ("BBG000BF8BH2", "backfill"),
+    # FB-014: SandRidge's pre-bankruptcy stock (CUSIP 80007P307, no FIGI of its own) took BBG000RKR4R8 by the ticker
+    # SD, which is the stock issued under the 2016 plan (CUSIP 80007P869, SD from 2016-10-07); the old CUSIP left SD
+    # for SDOC and SDOCQ and stopped. Only the old stock is observed, so no confirmed era sets the two apart
+    "SD@2014-12-31": ("CIK1349436-COMMON", "placeholder"),
 }
 
 # era key -> (sec_id, FIGI source), unchanged by 5h
@@ -190,6 +194,20 @@ def test_a_ticker_listed_under_a_company_that_never_carried_the_name_changes_not
     edgar = cases.backend.edgar
     monkeypatch.setattr(edgar, "company_tickers", lambda: {"GHC": {"cik_str": 48898, "ticker": "GHC"}})
     assert _ghc_seed(cases).issuers[GHC_KEY].cik == 716314
+
+
+def test_a_line_a_bankruptcy_left_behind_is_not_the_one_listed_under_its_ticker_today(cases, stage3):
+    """FB-014, SandRidge: the old stock's placeholder is not the SD that EDGAR lists for the issuer today, so the
+    delisting search takes it as not listed (`left_behind_placeholders`) and NYSE's Form 25 of 2016 ends it. The
+    review row says why the ticker pick was withdrawn. No other placeholder of the fixture is one."""
+    from delist_detection.identity.identity import left_behind_placeholders
+    from delist_detection.identity.issuer_record import IssuerRecord
+    record = IssuerRecord(cases.backend.edgar, today=ic.AS_OF, name_index=cases.backend.index)
+    assert left_behind_placeholders(stage3.securities, stage3.cusips, stage3.ftd, record) == (
+        {"CIK1349436-COMMON"}, set())
+    [row] = [i for i in stage3.review if i.flag == "identity_detached" and i.reason.startswith("SD@")]
+    assert "BBG000RKR4R8 is today's holder of SD" in row.reason and "bankruptcy" in row.reason
+    assert "BBG000RKR4R8" not in stage3.securities
 
 
 def _hubbell_ranges(cases, pins):

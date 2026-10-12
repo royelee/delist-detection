@@ -176,3 +176,103 @@ def test_a_security_with_its_cusip_keeps_the_continued_filings_ending(fake_edgar
     assert [(e.delist_date, e.record.crsp_code) for e in events] == [("2013-12-31", 304)]
 
 
+
+
+# --- FB-014, SandRidge 2016: a line a bankruptcy left behind while its ticker went on as other shares ------------
+
+SD_OLD, SD_NEW, SD_CIK = "80007P307", "80007P869", 1349436
+
+
+def _sd_rows(*, old_tail=(("SDOC", "2016-01-12"), ("SDOC", "2016-05-16"), ("SDOCQ", "2016-05-19"),
+                          ("SDOCQ", "2016-10-13")), new_from=("2016-10-07", "2020-01-02", "2026-08-19")):
+    """SandRidge's fails rows: the old CUSIP under SD to 2016-01-11, then under the OTC symbols `old_tail`; the
+    post-bankruptcy CUSIP under SD from `new_from`."""
+    rows = [FtdRow(d, SD_OLD, "SD", "SANDRIDGE ENERGY, INC.", 1.0) for d in ("2014-12-01", "2015-06-30", "2016-01-11")]
+    rows += [FtdRow(d, SD_OLD, sym, "SANDRIDGE ENERGY, INC.", 0.03) for sym, d in old_tail]
+    rows += [FtdRow(d, SD_NEW, "SD", "SANDRIDGE ENERGY INC COM NEW", 20.0) for d in new_from]
+    return rows
+
+
+class _Filings:
+    """An EDGAR client that knows one issuer's filings."""
+
+    def __init__(self, filings=()):
+        self._filings = list(filings)
+
+    def submissions(self, cik, fresh_after=None):
+        return {"name": "SANDRIDGE ENERGY INC", "formerNames": []}
+
+    def recent_filings(self, cik):
+        return list(self._filings)
+
+
+def _left_behind(rows, filings=()):
+    from delist_detection.identity.identity import _LeftBehind, _went_bankrupt
+    ftd = FtdIndex(rows)
+    return _LeftBehind(ftd, _went_bankrupt(ftd, IssuerRecord(_Filings(filings))))
+
+
+def test_a_line_whose_cusip_ended_under_a_bankruptcy_symbol_as_another_took_its_ticker_is_left_behind():
+    """SandRidge: the old CUSIP left SD for SDOC and SDOCQ and stopped on 2016-10-13; the post-bankruptcy stock's
+    CUSIP holds SD from 2016-10-07. The old line is not the one that trades as SD today."""
+    assert _left_behind(_sd_rows())("SD", [SD_OLD], SD_CIK) is True
+
+
+def test_a_new_cusip_with_no_bankruptcy_leaves_no_line_behind():
+    """Equinix 2015, Thomson Reuters 2018: the shares went on under a new CUSIP the line follow could not confirm.
+    The old CUSIP stopped and another holds the ticker, but nothing says the old shares were cancelled."""
+    rows = _sd_rows(old_tail=())
+    assert _left_behind(rows)("SD", [SD_OLD], SD_CIK) is False
+
+
+def test_an_item_1_03_8k_before_the_new_cusip_is_a_bankruptcy_without_a_q_symbol():
+    """No OTC symbol in the fails rows (the old stock never failed over the counter): the issuer's Item 1.03 8-K in
+    the year before the new CUSIP's first row, no earlier than 60 days before the old CUSIP's last, says it."""
+    rows = _sd_rows(old_tail=(("SD", "2016-05-10"),))
+    eightk = EdgarSubmission("0001193125-16-591230", "8-K", "2016-05-16", "2016-05-16", "1.01,1.03,2.04", "k.htm")
+    assert _left_behind(rows, [eightk])("SD", [SD_OLD], SD_CIK) is True
+    assert _left_behind(rows)("SD", [SD_OLD], SD_CIK) is False
+
+
+def test_a_line_whose_own_cusip_still_trades_is_not_left_behind():
+    """The old CUSIP trades on long after another CUSIP took the ticker (two securities side by side, or equity
+    that survived the bankruptcy under its own symbol): the line was not cancelled."""
+    rows = _sd_rows(old_tail=(("SDOC", "2016-01-12"), ("SDOCQ", "2016-05-19"), ("SDOCQ", "2017-03-01")))
+    assert _left_behind(rows)("SD", [SD_OLD], SD_CIK) is False
+
+
+def test_a_bankrupt_line_whose_ticker_nobody_took_is_not_left_behind():
+    """Seventy Seven Energy: the ticker did not go on as other shares, so EDGAR lists nothing under it for the
+    listed answer to mistake for the old line. The delisting search ends it without this rule."""
+    assert _left_behind(_sd_rows(new_from=()))("SD", [SD_OLD], SD_CIK) is False
+    assert _left_behind(_sd_rows())("SD", [SD_NEW], SD_CIK) is False       # the new line itself: nobody after it
+
+
+class _ListedFigi:
+    """OpenFIGI has nothing to say of a placeholder; any composite it is asked about trades on a US venue."""
+
+    def map(self, jobs, use_cache=True):
+        return [{"data": [{"exchCode": "UN"}]} for _ in jobs]
+
+
+def _sd_stage5(fake_edgar, rows):
+    """Stage 5 over old SandRidge's placeholder, EDGAR listing SD on the NYSE for the issuer today."""
+    sid = "CIK1349436-COMMON"
+    fake_edgar.listings[SD_CIK] = [("SD", "NYSE")]
+    fake_edgar.submissions_by_cik[SD_CIK] = []
+    sec = Security(sid, SD_CIK, "COMMON", "SANDRIDGE ENERGY INC.", "", True, "placeholder", "common",
+                   split_eras([Observation("SD", "2014-12-31", "SANDRIDGE ENERGY INC.")]))
+    clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))
+    clients = SimpleNamespace(edgar=fake_edgar, classifier=clf, midas=None, halts=None, figi=_ListedFigi(),
+                              issuers=IssuerRecord(fake_edgar), full_text_search=None)
+    ctx = SimpleNamespace(clients=clients, log=lambda *a: None, sec_workers=1, as_of=date(2026, 9, 25),
+                          meter=StageMeter(lambda *a: None))
+    return pipeline._find_delistings(ctx, {sid: sec}, {sid: [SD_OLD]}, FtdIndex(rows), lambda s: "security_master").listed[sid]
+
+
+def test_stage_5_takes_a_placeholder_a_bankruptcy_left_behind_as_not_listed_today(fake_edgar):
+    """FB-014: EDGAR lists SD for SandRidge today, and that is the stock issued under the 2016 plan. The old stock's
+    placeholder, whose CUSIP ended under SDOCQ as another took SD, is not listed; one nobody took the ticker from
+    still reads EDGAR's listing as its own."""
+    assert _sd_stage5(fake_edgar, _sd_rows()) is False
+    assert _sd_stage5(fake_edgar, _sd_rows(new_from=())) is True

@@ -19483,6 +19483,9 @@
     }
    ]
   },
+  "{\"idType\": \"ID_CUSIP\", \"idValue\": \"80007P307\", \"includeUnlistedEquities\": true}": {
+   "data": []
+  },
   "{\"idType\": \"ID_CUSIP\", \"idValue\": \"85571Q102\", \"includeUnlistedEquities\": true}": {
    "data": [
     {
@@ -20132,6 +20135,21 @@
   },
   "{\"idType\": \"TICKER\", \"idValue\": \"QVCA\", \"includeUnlistedEquities\": true}": {
    "data": []
+  },
+  "{\"idType\": \"TICKER\", \"idValue\": \"SD\", \"includeUnlistedEquities\": true}": {
+   "data": [
+    {
+     "compositeFIGI": "BBG000RKR4R8",
+     "exchCode": "US",
+     "figi": "BBG000RKR4R8",
+     "marketSector": "Equity",
+     "name": "SANDRIDGE ENERGY INC",
+     "securityDescription": "SD",
+     "securityType": "Common Stock",
+     "securityType2": "Common Stock",
+     "ticker": "SD"
+    }
+   ]
   },
   "{\"idType\": \"TICKER\", \"idValue\": \"STRZA\", \"includeUnlistedEquities\": true}": {
    "data": [

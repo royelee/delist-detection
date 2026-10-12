@@ -325,6 +325,23 @@ def test_an_observed_figi_security_with_no_issuer_is_uncertain():
     assert "issuer_unresolved" not in added.securities["B"].reasons
 
 
+def test_an_observed_security_open_under_a_bankruptcy_ticker_is_uncertain():
+    """FB-014: SandRidge's old stock stayed open under SDOCQ with no ending. A five-letter ticker ending in Q is an
+    OTC bankruptcy symbol, so an observed security whose open interval carries one has left its exchange and
+    nothing says how. A closed interval under one, an open ticker of another length and a security the run added
+    are left alone."""
+    estate = [iv("A", "AAA", "2010-01-04", "2016-05-18"), iv("A", "AAAAQ", "2016-05-19")]
+    assert "open_under_bankruptcy_ticker:AAAAQ" in _verdicts(history=estate).securities["A"].reasons
+    closed = [iv("A", "AAA", "2010-01-04", "2016-05-18"), iv("A", "AAAAQ", "2016-05-19", "2016-10-03")]
+    listed = [iv("A", "AAA", "2010-01-04", "2016-05-18"), iv("A", "AAAQ", "2016-05-19")]
+    for history in (closed, listed):
+        assert not any(r.startswith("open_under_bankruptcy_ticker")
+                       for r in _verdicts(history=history).securities["A"].reasons)
+    added = _verdicts(securities=[sec("A"), sec("B", observed=False)],
+                      history=[iv("A", "AAA", "2010-01-04"), iv("B", "BBBBQ", "2016-05-19")])
+    assert added.securities["B"].reasons == ()
+
+
 def test_a_form25_filed_name_check_needs_an_observed_name():
     # member_name_mismatch is raised against an observed name only: a nameless seed gets no name check at all
     nameless = _verdicts(_mapped(), observations=[obs("AAA", "2010-06-30", "A")])

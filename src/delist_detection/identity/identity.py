@@ -45,7 +45,9 @@ from typing import Any, Protocol
 from ..outputs.degraded import degraded_item
 from ..filings.evidence import bankruptcy_8ks, names_between, parse_day, renamed_near
 from ..sources.ftd import FTD_START, FtdIndex, FtdRow
-from ..vocabulary.identifiers import is_placeholder, name_class_letter, placeholder_id, share_class_from_name
+from ..vocabulary.identifiers import (
+    bare_ticker, is_placeholder, name_class_letter, placeholder_id, share_class_from_name,
+)
 from .carried_price import price_carried, step_price_ratio
 from .issuer_record import IssuerRecord
 from ..outputs.manifest import StageMeter
@@ -589,6 +591,59 @@ def _went_bankrupt(ftd: FtdIndex, record: IssuerRecord) -> _WentBankrupt:
     return _WentBankrupt(ftd, record)
 
 
+LEFT_BEHIND_SETTLE_DAYS = 30   # an old CUSIP's fails rows this long after another CUSIP took its ticker are still settling
+
+
+class _LeftBehind:
+    """Whether a line was left behind by its issuer's bankruptcy while its ticker went on as other shares (FB-014;
+    decision 9: post-bankruptcy equity is a new security). `own` are the line's CUSIPs and `ticker` one it traded
+    under. All of these hold:
+
+    - after the last day the line's own CUSIPs traded under the ticker, the ticker's fails rows are another CUSIP's;
+    - the line's own CUSIPs have no trading row later than `LEFT_BEHIND_SETTLE_DAYS` after that CUSIP's first row
+      (the old stock stopped; a line that trades on beside the ticker's new holder was not cancelled);
+    - the line went through a bankruptcy between its CUSIPs and that one (`_WentBankrupt`).
+
+    SandRidge Energy 2016: the old CUSIP left SD for SDOC and SDOCQ and stopped on 2016-10-13, and the stock issued
+    under the plan holds SD from 2016-10-07. OpenFIGI names today's composite for the new CUSIP only, so a ticker
+    pick for the old line is the new stock's id (`security_master.weak_lines_left_behind`), and EDGAR's listing of
+    SD is the new stock's (`left_behind_placeholders`). A new CUSIP with no bankruptcy (Equinix 2015, Thomson
+    Reuters 2018: shares that went on under a CUSIP the line follow could not confirm) leaves nothing behind."""
+
+    def __init__(self, ftd: FtdIndex, went_bankrupt: Callable[[str, str, int | None], bool]) -> None:
+        self.ftd, self.went_bankrupt = ftd, went_bankrupt
+
+    def __call__(self, ticker: str, own: Collection[str], cik: int | None) -> bool:
+        own = set(own)
+        rows = self.ftd.trading_rows(sorted(own))
+        bare = bare_ticker(ticker)
+        under = [r.date for r in rows if bare_ticker(r.symbol) == bare]
+        if not under:
+            return False
+        left = max(under)
+        later = [r for r in self.ftd.by_symbol(ticker) if r.cusip not in own and r.date > left]
+        if not later:
+            return False
+        took = min(later, key=lambda r: r.date)
+        settled = (date.fromisoformat(took.date) + timedelta(days=LEFT_BEHIND_SETTLE_DAYS)).isoformat()
+        if max(r.date for r in rows) > settled:
+            return False
+        return any(self.went_bankrupt(old, took.cusip, cik) for old in sorted(own))
+
+
+def left_behind_placeholders(securities: Mapping[str, Security], cusips: Mapping[str, Sequence[str]], ftd: FtdIndex,
+                             record: IssuerRecord) -> tuple[set[str], set[int]]:
+    """The placeholder securities a bankruptcy left behind while their ticker went on as other shares (`_LeftBehind`,
+    over each of their eras' tickers and their own CUSIPs), and the issuer CIKs whose filings read failed or was
+    stale while asking (counted as no bankruptcy). Such a placeholder is not the line EDGAR lists under its ticker
+    today: the listing is the later shares'."""
+    went_bankrupt = _went_bankrupt(ftd, record)
+    left = _LeftBehind(ftd, went_bankrupt)
+    out = {s.sec_id for s in securities.values() if is_placeholder(s.sec_id) and cusips.get(s.sec_id)
+           and any(left(t, cusips[s.sec_id], s.issuer_cik) for t in sorted({e.ticker for e in s.eras}))}
+    return out, set(went_bankrupt.degraded)
+
+
 def _resolve_securities(eras: list[TickerEra], era_by_key: dict[str, TickerEra], ftd: FtdIndex,
                         handoffs: Sequence[Handoff], found: _Issuers, clients: Sources, log: Callable[[str], None]
                         ) -> tuple[dict[str, EraResolution], dict[str, Security], list[ReviewItem]]:
@@ -612,7 +667,7 @@ def _resolve_securities(eras: list[TickerEra], era_by_key: dict[str, TickerEra],
         FigiResolver(clients.figi, log=log, cusip_span=lambda c: _trading_span(ftd, c),
                      foreign=foreign_ticker_eras(eras, ftd, issuers)),
         eras, issuers=issuers, cusips=cusips, handoffs=handoffs, unconfirmed=guarded_eras(eras, ftd),
-        bankrupt_between=went_bankrupt)
+        bankrupt_between=went_bankrupt, left_behind=_LeftBehind(ftd, went_bankrupt))
     securities = build_securities(resolutions, era_by_key, issuers)
     review: list[ReviewItem] = detached_review(detached, era_by_key, resolutions, issuers)
     for key, res in resolutions.items():

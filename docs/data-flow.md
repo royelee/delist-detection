@@ -644,6 +644,13 @@ answer with whoever holds the ticker or the name *today*, so:
   observation (`superseded_placeholders`): EDGAR's ticker list names the
   issuer's current line, which would otherwise keep an old placeholder's range
   open over every later line.
+- Nor is it when a bankruptcy left its line behind while its ticker went on as
+  other shares, observed or not (`left_behind_placeholders`, FB-014): its own
+  CUSIPs stopped, another CUSIP holds the ticker since, and the issuer went
+  through a bankruptcy between them (SandRidge 2016: the SD that EDGAR lists
+  today is the stock issued under the plan). A ticker or name pick for such a
+  line is withdrawn first (`weak_lines_left_behind`), so the old stock is a
+  placeholder and never carries the new stock's FIGI.
 
 **The placeholder-splitting guard** (controller ruling, superseding the
 original all-or-none-withdrawal design): an issuer's placeholder holds every

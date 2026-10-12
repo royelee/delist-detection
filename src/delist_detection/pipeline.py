@@ -51,6 +51,7 @@ from .identity.history import (
 from .identity.line_follow import LineSuccessor, composites, is_line_symbol, text_cusips
 from .vocabulary.identifiers import is_placeholder, normalize_ticker, share_class_from_name
 from .identity.derived_lines import identify_with_lines
+from .identity.identity import left_behind_placeholders
 from .filings.listing_status import issuer_exchange, listed_on_run_date, listed_today, listing_answers
 from .identity.observations import ObservationIndex, TickerEra, observation_conflicts
 from .endings.exchange_terms import one_share_no_cash
@@ -362,11 +363,19 @@ def _find_delistings(ctx: _RunContext, securities: dict[str, Security], sec_cusi
     # later line of the issuer may hold today. Its own CUSIP failing only under
     # a deleted symbol at the end says it is not the line listed today, and so
     # does a later FIGI line of its issuer and class under its ticker
-    # (`superseded_placeholders`).
+    # (`superseded_placeholders`), and so does a bankruptcy that left it behind
+    # while its ticker went on as other shares (`left_behind_placeholders`,
+    # FB-014: old SandRidge, whose SD today is the stock issued under the plan).
     behind_clock = ctx.as_of < date.today()      # today's listing answers postdate the run date
+    left_behind, unread = left_behind_placeholders(securities, sec_cusips, ftd, clients.issuers)
+    for s in ordered:        # the filings read for that bankruptcy failed: the placeholder may be listed in error
+        if is_placeholder(s.sec_id) and s.issuer_cik in unread and s.sec_id not in left_behind:
+            review.append(degraded_item(s.sec_id, s.eras[-1].ticker if s.eras else "", s.issuer_cik,
+                                         "the check for a bankruptcy that left its line behind",
+                                         "; run again once SEC answers"))
     retired = frozenset(s.sec_id for s in ordered
                         if is_placeholder(s.sec_id) and ftd.symbol_deleted(sec_cusips[s.sec_id])) \
-        | superseded_placeholders(securities) | frozenset(moved_on)
+        | superseded_placeholders(securities) | frozenset(moved_on) | frozenset(left_behind)
     if ctx.sec_workers > 1:
         _warm_delisting_search(clients, ordered, listing, contexts, ftd, ctx.sec_workers, retired, behind_clock)
     for i, s in enumerate(ordered, 1):
