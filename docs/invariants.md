@@ -575,6 +575,14 @@
   `run_snapshot` refuse every older commit's file. An election whose cash and stock legs together reconcile,
   when neither does alone, is its default package (`llm_election_package`, sub-plan 5e); either-or legs are never
   summed.
+- **A closing dividend declared before the closing 8-K is looked for only where the value is short (FB-023).**
+  After a gate pass, a merger whose kept value is more than 1% under its last close, with no dividend read and no
+  caller's terms, has its target's 8-Ks of the 60 days before the delisting asked the dividend question
+  (`LLMMergerTermsExtractor.earlier_dividend`, `merger_value._EarlierDividends`; Plains Exploration 2013). A
+  dividend counts only when it is less than twice the gap between the value and the close, so a merger not asked
+  can be short by less than 2% of its close. What is read joins the run's dividends before the gate runs again,
+  and every later pass decides on its own closes whether it counts. A merger only the caller's answers value (its
+  stock leg, its close) is asked after the answered pass, so the first pass is the same in both runs.
 - **A closing dividend is read apart from the package and counts in the value only (FB-021).** It is cash the
   target paid its holders because the deal closed (Extended Stay 2021: $1.75 a share beside the merger's $18.75).
   `LLMMergerTermsExtractor.closing_dividend` reads it with a question of its own, for a merger either reader gave

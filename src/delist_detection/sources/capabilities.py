@@ -14,10 +14,11 @@ what the run goes without; production's adapters (`pipeline.default_clients`) of
 
 Every other read a stage makes of a client is required of each of its adapters, with nothing to state: EDGAR's
 `submissions`, `recent_filings`, `fetch_filing_text`, `fetch_filing_raw` and `company_tickers`; the resolver's
-`flush` and `shadow`; the classifier's `shadow`; the Nasdaq halt feed's `failed_days`; the LLM extractor's three
+`flush` and `shadow`; the classifier's `shadow`; the Nasdaq halt feed's `failed_days`; the LLM extractor's four
 calls, each `(record, security_name=...)`: `extract` (stage 8 names the target security and fills the calls ahead on
-the worker threads), `extract_offer_terms` (FB-016: the offer's own documents, when no reader found terms) and
-`closing_dividend` (FB-021: asked of a merger with terms). The resolver and the
+the worker threads), `extract_offer_terms` (FB-016: the offer's own documents, when no reader found terms),
+`closing_dividend` (FB-021: asked of a merger with terms) and `earlier_dividend` (FB-023: asked of a merger valued
+under its last close for which the closing filings named no dividend). The resolver and the
 classifier state the issuer record they read through as `issuers` (None: none of their own), and an LLM client the
 model it calls as `model` (None: it names none); neither is a capability a stage goes without."""
 from __future__ import annotations

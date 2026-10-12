@@ -1438,6 +1438,11 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   around each "dividend" and its own question (`DIVIDEND_PROMPT`, `DIVIDEND_SCHEMA`), cached as
   `{accession}_{model}_div1_{ticker}`. Stage 8 asks it for a merger with terms and the payout gate decides whether
   it counts. The proxy and the exhibits are never opened for it.
+  `earlier_dividend(record, security_name=)` (FB-023) is the fourth call: the same question put to the target's
+  8-Ks filed in the 60 days before the delisting, newest first, the closing search's own filings left out, the
+  first that states a closing dividend answering and `max_filings` questions at most (Plains Exploration 2013:
+  $3.00 declared a week before the closing 8-K, which does not restate it). Stage 8 asks it only for a merger the
+  gate valued more than 1% under its last close with no dividend read (`merger_value._EarlierDividends`).
 - `terms/payout_gate.py` — every merger payout checked against the last trade before it reaches the table
   (`reconcile`, `gate_payouts` -> `GatedPayouts`); the payout rule's entry has the gate's reading of an LLM answer.
   A closing dividend as read (`dividends`, FB-021) counts beside a value when the total is nearer the last close

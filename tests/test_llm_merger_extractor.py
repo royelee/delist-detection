@@ -600,3 +600,86 @@ def test_a_closing_dividend_is_a_mergers_only_and_a_failed_read_is_a_miss(tmp_pa
     watch = DegradedWatch()
     assert failing.closing_dividend(_merger_rec()) is None and llm.calls == 1
     assert watch.tripped() and not list((tmp_path / "f").glob("*.json"))         # the row says so; nothing is cached
+
+
+# --------------------------------------------------------------------------- #
+# FB-023: a closing dividend declared in an 8-K before the closing one
+# --------------------------------------------------------------------------- #
+
+_PXP_TEXT = (
+    "On May 20, 2013, PXP's Board of Directors declared a special one-time cash dividend of $3.00 per share, payable "
+    "to PXP stockholders as of May 30, 2013, the dividend record date. The payment of the dividend is conditioned "
+    "upon the completion of the Merger and will be made immediately prior to or upon such completion."
+)
+
+
+def _earlier_8k(accession, filed, items="8.01,9.01", form="8-K"):
+    return EdgarSubmission(accession=accession, form=form, filing_date=filed, report_date=filed, items=items,
+                           primary_doc="d.htm")
+
+
+def _earlier_ext(tmp_path, answers, filings, texts, **kw):
+    llm = _FakeLlm(answers, **kw)
+    return LLMMergerTermsExtractor(_FakeEdgarText(filings, texts), llm, model="m1", cache_dir=tmp_path), llm
+
+
+def test_a_dividend_declared_in_an_earlier_8k_is_read_when_the_closing_filing_names_none(tmp_path):
+    """Plains Exploration 2013: the closing 8-K restates the consideration and no dividend; the 8-K of a week before
+    declares $3.00 a share conditioned on the merger's completion."""
+    filings = [_closing_8k(), _earlier_8k("E1", "2018-11-21"), _earlier_8k("E0", "2018-10-15")]
+    answer = {"closing_dividends": [_dividend(3.0, quote="a special one-time cash dividend")]}
+    ext, llm = _earlier_ext(tmp_path, [answer], filings,
+                            {"C1": _USABLE_TEXT, "E1": _PXP_TEXT, "E0": "Results of operations."})
+    assert ext.closing_dividend(_merger_rec()) is None and llm.calls == 0
+    d = ext.earlier_dividend(_merger_rec(), security_name="Plains Exploration")
+    assert d == ClosingDividend(3.0, "8-K:E1", "a special one-time cash dividend")
+    assert llm.systems == [DIVIDEND_PROMPT] and "Plains Exploration (ticker AET)" in llm.users[0]
+    assert ext.earlier_dividend(_merger_rec()) == d and llm.calls == 1           # the second read is the cache's
+    assert [p.name for p in Path(tmp_path).glob("*.json")] == [f"E1_m1_{DIVIDEND_VERSION}_AET.json"]
+
+
+def test_the_earlier_search_leaves_out_the_closing_documents_and_filings_outside_its_sixty_days(tmp_path):
+    # delisting 2018-11-28: the closing 8-K and one that reports the closing without Item 2.01 are the closing
+    # search's; an 8-K filed 61 days before, one filed after the delisting and another form are not read
+    closing_301 = _earlier_8k("C2", "2018-11-27", items="3.01,5.01")
+    filings = [_closing_8k(), closing_301, _earlier_8k("OLD", "2018-09-28"), _earlier_8k("LATE", "2018-11-29"),
+               _earlier_8k("P1", "2018-11-20", form="425")]
+    texts = {a: _PXP_TEXT for a in ("C1", "C2", "OLD", "LATE", "P1")}
+    ext, llm = _earlier_ext(tmp_path, [{"closing_dividends": [_dividend(3.0)]}], filings, texts)
+    assert ext.earlier_dividend(_merger_rec()) is None and llm.calls == 0
+    edge = [_earlier_8k("EDGE", "2018-09-29"), _earlier_8k("DAY", "2018-11-28")]     # both ends are inside
+    ext, llm = _earlier_ext(tmp_path / "edge", [{"closing_dividends": []}], edge, {"EDGE": _PXP_TEXT, "DAY": _PXP_TEXT})
+    assert ext.earlier_dividend(_merger_rec()) is None and llm.calls == 2
+
+
+def test_the_earlier_8ks_are_asked_newest_first_and_the_first_that_states_a_dividend_answers(tmp_path):
+    filings = [_earlier_8k("E1", "2018-11-01"), _earlier_8k("E3", "2018-11-21"), _earlier_8k("E2", "2018-11-10"),
+               _earlier_8k("QUIET", "2018-11-25")]
+    texts = {"E1": _PXP_TEXT, "E2": _PXP_TEXT, "E3": _PXP_TEXT, "QUIET": "The annual meeting was held."}
+    ext, llm = _earlier_ext(tmp_path, [{"closing_dividends": []}, {"closing_dividends": [_dividend(3.0)]},
+                                       {"closing_dividends": [_dividend(9.0)]}], filings, texts)
+    assert ext.earlier_dividend(_merger_rec()).source == "8-K:E2" and llm.calls == 2   # E3 named none; QUIET unsent
+
+
+def test_the_earlier_search_asks_at_most_max_filings_questions(tmp_path):
+    filings = [_earlier_8k(f"E{i}", f"2018-11-{10 + i:02d}") for i in range(5)]
+    ext, llm = _earlier_ext(tmp_path, [{"closing_dividends": []}], filings, {f"E{i}": _PXP_TEXT for i in range(5)})
+    assert ext.earlier_dividend(_merger_rec()) is None and llm.calls == ext.max_filings == 3
+
+
+def test_an_earlier_dividend_is_a_mergers_only_and_a_failed_read_is_a_miss(tmp_path):
+    from delist_detection.outputs.degraded import DegradedWatch
+    filings, texts = [_earlier_8k("E1", "2018-11-21")], {"E1": _PXP_TEXT}
+    ext, llm = _earlier_ext(tmp_path, [{"closing_dividends": [_dividend(3.0)]}], filings, texts)
+    assert ext.earlier_dividend(_merger_rec(bucket=CrspBucket.LIQUIDATION)) is None
+    assert ext.earlier_dividend(_merger_rec(cik=None)) is None and llm.calls == 0
+
+    class _Down:
+        def recent_filings(self, cik):
+            raise requests.ConnectionError("down")
+    assert LLMMergerTermsExtractor(_Down(), llm, model="m1", cache_dir=tmp_path).earlier_dividend(_merger_rec()) is None
+
+    failing, llm = _earlier_ext(tmp_path / "f", [], filings, texts, raises=True)
+    watch = DegradedWatch()
+    assert failing.earlier_dividend(_merger_rec()) is None and llm.calls == 1
+    assert watch.tripped() and not list((tmp_path / "f").glob("*.json"))         # the row says so; nothing is cached

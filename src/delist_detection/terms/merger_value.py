@@ -326,8 +326,8 @@ def value_mergers(delistings: Sequence[Delisting], index: acquirer_line.LineInde
     own = closes if own_closes is None else own_closes
     st = _Stage(clients, index, ftd_lo, workers, workers if llm_workers is None else llm_workers, log)
     mergers = [e for e in delistings if e.record.bucket is CrspBucket.MERGER]
-    raw, llm_terms, dividends, review = _read_terms(st, mergers, own,
-                                                    {sid: s.name or "" for sid, s in st.securities.items()})
+    names = {sid: s.name or "" for sid, s in st.securities.items()}
+    raw, llm_terms, dividends, review = _read_terms(st, mergers, own, names)
     trade_day = {e.key: e.last_trade.day for e in delistings}
     lines, line_review = _acquirer_lines(st, mergers, llm_terms, caller_terms)
     llm_terms, name_review = _name_acquirer_tickers(st, mergers, llm_terms, lines, caller_terms)
@@ -338,6 +338,10 @@ def value_mergers(delistings: Sequence[Delisting], index: acquirer_line.LineInde
     # so a second run with the requests answered keeps them all and changes values only (`--price-answers`).
     first, lagged = _gate(st, mergers, trade_day, raw, llm_terms, own, caller_terms, tol, lines, wins,
                           dividends=dividends)
+    earlier = _EarlierDividends(st, mergers, caller_terms, names, review)
+    if earlier.read(first, own, dividends):                 # FB-023: the gate again, with the dividends it found
+        first, lagged = _gate(st, mergers, trade_day, raw, llm_terms, own, caller_terms, tol, lines, wins,
+                              dividends=dividends)
     acquirer_ids, added, acquirer_review = _add_acquirers(st, mergers, trade_day, first, lines, wins, found)
     price_tickers = _price_tickers(acquirer_ids, lines, index.fresh() if lines else None)
     asked = {e.key: request for e in mergers
@@ -348,6 +352,9 @@ def value_mergers(delistings: Sequence[Delisting], index: acquirer_line.LineInde
         # the values: the answered closes, each received close through the request it answers
         gated, lagged = _gate(st, mergers, trade_day, raw, llm_terms, closes, caller_terms, tol, lines, wins, answered,
                               dividends)
+        if earlier.read(gated, closes, dividends):          # a merger only the answers value (its leg, its close)
+            gated, lagged = _gate(st, mergers, trade_day, raw, llm_terms, closes, caller_terms, tol, lines, wins,
+                                  answered, dividends)
     for e in mergers:
         if e.key in lagged:
             e.add_flag("acquirer_close_lagged")
@@ -430,6 +437,71 @@ def _read_terms(st: _Stage, mergers: list[Delisting], closes: Mapping[DelistingK
                                      delist_date=e.delist_date))
         watch.report_delisting(review, e, "payout extraction")
     return raw, llm_terms, dividends, review
+
+
+EARLIER_DIVIDEND_GAP = 0.01     # FB-023: a kept value more than this share under the last close asks the earlier 8-Ks
+
+
+def _kept_value(gated: GatedPayouts, key: DelistingKey) -> float | None:
+    """What one share became by the gate's kept answer, without a dividend: the cash, and the stock leg at the price
+    that settled it. None when the gate kept nothing for the merger."""
+    payout, terms = gated.payouts.get(key), gated.merged_terms.get(key)
+    if terms is not None and terms.get("stock_ratio") is not None:
+        if terms.get("acquirer_price") is None:
+            return None
+        return (terms.get("cash_per_share", payout) or 0.0) + terms["stock_ratio"] * terms["acquirer_price"]
+    return payout
+
+
+class _EarlierDividends:
+    """FB-023: the closing dividend of a merger whose closing filings name none, read from the target's 8-Ks of the
+    weeks before (the LLM extractor's `earlier_dividend`; Plains Exploration 2013). A merger is asked once, after a
+    gate pass that kept it a value more than `EARLIER_DIVIDEND_GAP` under its last close: a dividend counts only
+    when it is less than twice that gap (`payout_gate._counted`), so a merger not asked can be short by less than
+    two percent of its close. A merger with a dividend read already, or whose terms the caller gave, is not asked.
+    What is read joins the run's dividends, which every later gate pass decides on its own closes."""
+
+    def __init__(self, st: _Stage, mergers: list[Delisting], caller_terms: Mapping, names: Mapping[str, str],
+                 review: list[ReviewItem]) -> None:
+        self.st, self.mergers, self.caller_terms, self.names, self.review = st, mergers, caller_terms, names, review
+        self.asked: set[DelistingKey] = set()
+
+    def read(self, gated: GatedPayouts, closes: Mapping[DelistingKey, float],
+             dividends: dict[DelistingKey, float]) -> bool:
+        """Ask for each merger `gated` values under its close in `closes`; adds what is read to `dividends`.
+        Whether any was."""
+        llm = self.st.clients.llm_extractor
+        if llm is None:
+            return False
+        asked = found = 0
+        for e in self.mergers:
+            key = e.key
+            close, value = for_delisting(closes, key), _kept_value(gated, key)
+            if (key in dividends or key in self.asked or for_delisting(self.caller_terms, key) is not None
+                    or value is None or not close or close <= 0 or value >= close * (1 - EARLIER_DIVIDEND_GAP)):
+                continue
+            self.asked.add(key)
+            asked += 1
+            watch = DegradedWatch()
+            try:
+                d = llm.earlier_dividend(e.record, security_name=self.names.get(e.sec_id, ""))
+            except FATAL:
+                raise
+            except Exception as exc:  # as in `_read_terms`: one bad read is a row, not the run's end
+                self.st.log(f"{e.sec_id} {e.delist_date}: earlier dividend ERROR {type(exc).__name__}: {exc}")
+                self.review.append(ReviewItem(e.sec_id, e.ticker, e.cik, "error", f"{type(exc).__name__}: {exc}",
+                                              delist_date=e.delist_date))
+                d = None
+            watch.report_delisting(self.review, e, "payout extraction")
+            if d is not None:
+                dividends[key] = d.amount
+                found += 1
+                self.st.log(f"{e.sec_id} {e.delist_date}: closing dividend {d.amount:g} read from {d.source}, "
+                            "an 8-K before the closing")
+        if asked:
+            self.st.log(f"earlier 8-Ks: {asked} mergers valued more than {EARLIER_DIVIDEND_GAP:.0%} under their last "
+                        f"close and with no dividend read were asked, {found} closing dividends read")
+        return bool(found)
 
 
 # --- 2. the acquirer line and an unnamed leg's ticker --------------------------------------------------------------

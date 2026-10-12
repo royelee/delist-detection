@@ -468,6 +468,10 @@ DIVIDEND_SCHEMA: dict = {
 _DIVIDEND_AMOUNT = re.compile(r"(?i)\bdividend[^.]{0,300}?\$\s?\d|\$\s?\d[\d,]*(?:\.\d+)?[^.]{0,300}?\bdividend")
 _DIVIDEND_KEYWORDS = ["dividend"]
 _DIVIDEND_BUDGET = 15000
+# FB-023: a closing dividend declared before the closing 8-K is in one of the target's 8-Ks of these days before the
+# delisting (Plains Exploration 2013: a week before); the newest `_EARLIER_MAX` of them are read
+_EARLIER_DAYS = timedelta(days=60)
+_EARLIER_MAX = 20
 
 
 _EXCERPT_KEYWORDS = [
@@ -709,13 +713,31 @@ class LLMMergerTermsExtractor:
         cached under its own key (`dividend_cache_path`); the first that states a dividend answers. A dividend the
         stated consideration already includes is left out. Same contract as `extract`: None for another bucket or
         a missing CIK and when EDGAR cannot be read, and a failed call counts itself degraded."""
+        return self._stated_dividend(record, security_name, self._closing_documents, count_unsent=True)
+
+    def earlier_dividend(self, record: DelistRecord, security_name: str = "") -> ClosingDividend | None:
+        """FB-023: a closing dividend the target declared in an 8-K before the closing one (Plains Exploration
+        2013: $3.00 a share "conditioned upon the completion of the Merger", in an 8-K a week before the closing
+        8-K, which does not restate it). The target's 8-Ks filed in the `_EARLIER_DAYS` before the delisting and
+        no later than it, newest first, the closing documents left out (`closing_dividend` asked those). As there,
+        only a text that names a dividend with a dollar amount is sent, with the same question and cache key, and
+        the first that states a closing dividend answers; `max_filings` questions at most. The caller asks it
+        only for a merger valued under its last close with no dividend read (`merger_value`). Same contract as
+        `closing_dividend`."""
+        return self._stated_dividend(record, security_name, self._earlier_8ks, count_unsent=False)
+
+    def _stated_dividend(self, record: DelistRecord, security_name: str, pick: Callable, *,
+                         count_unsent: bool) -> ClosingDividend | None:
+        """The first closing dividend one of `pick(filings, delist)`'s filings states, in their order. At most
+        `max_filings` filings count: every text read when `count_unsent` (the closing search reads few), else only
+        those sent to the model."""
         if record.bucket is not CrspBucket.MERGER or record.cik is None:
             return None
         try:
             filings = self.edgar.recent_filings(record.cik) or []
             delist = parse_date(record.observed_delist_date or "")
             tried, seen = 0, set()
-            for f in closing_8k(filings, delist) + self._closing_without_201(filings, delist):
+            for f in pick(filings, delist):
                 if tried >= self.max_filings:
                     break
                 if f.accession in seen:
@@ -724,8 +746,10 @@ class LLMMergerTermsExtractor:
                 text = self.edgar.fetch_filing_text(record.cik, f.accession, f.primary_doc)
                 if not text:
                     continue
-                tried += 1
-                if not _DIVIDEND_AMOUNT.search(text):
+                sent = bool(_DIVIDEND_AMOUNT.search(text))
+                if sent or count_unsent:
+                    tried += 1
+                if not sent:
                     continue
                 excerpt = self._relevant_excerpts(text, _DIVIDEND_KEYWORDS, _DIVIDEND_BUDGET)
                 try:
@@ -856,6 +880,23 @@ class LLMMergerTermsExtractor:
             seen.add(f.accession)
             out.append(f)
         return out
+
+    def _closing_documents(self, filings, delist) -> list[EdgarSubmission]:
+        """The closing search's filings, in its order: the closing 8-K, then an 8-K that reports the closing
+        without Item 2.01."""
+        return closing_8k(filings, delist) + self._closing_without_201(filings, delist)
+
+    def _earlier_8ks(self, filings, delist) -> list[EdgarSubmission]:
+        """FB-023: the target's 8-Ks filed in the `_EARLIER_DAYS` before the delisting and no later than it, newest
+        first, without the closing search's own (`_closing_documents`); `_EARLIER_MAX` at most. None without a
+        delisting date."""
+        if delist is None:
+            return []
+        closing = {f.accession for f in self._closing_documents(filings, delist)}
+        dated = [(d, f) for f in filings if f.form == "8-K" and f.accession not in closing
+                 and (d := parse_date(f.filing_date)) and delist - _EARLIER_DAYS <= d <= delist]
+        dated.sort(key=lambda x: x[0], reverse=True)           # stable: EDGAR's own order within a day
+        return [f for _, f in dated[:_EARLIER_MAX]]
 
     @staticmethod
     def _closing_without_201(filings, delist) -> list[EdgarSubmission]:

@@ -876,6 +876,9 @@ def _two_stock_mergers(fake_edgar, monkeypatch):
         def closing_dividend(self, record, security_name=""):
             return None
 
+        def earlier_dividend(self, record, security_name=""):
+            return None
+
     clients.llm_extractor = _LLMByKey({
         ("BBGSEC001", "2020-06-15"): terms1,
         ("BBGSEC002", "2020-06-15"): terms2,
@@ -1323,6 +1326,9 @@ def test_a_lagged_acquirer_close_flags_the_delisting(fake_edgar, tmp_path, monke
             return MergerTerms("stock", None, 1.0, "ACQUIRER CO", "ACQ", "high", "8-K:X", "")
 
         def closing_dividend(self, record, security_name=""):
+            return None
+
+        def earlier_dividend(self, record, security_name=""):
             return None
 
     clients.llm_extractor = _LLM()
@@ -2613,6 +2619,9 @@ def test_a_closing_dividend_is_in_the_value_of_a_merger_and_named_in_its_formula
         def closing_dividend(self, record, security_name=""):
             return ClosingDividend(2.50, "8-K:X", "a special dividend of $2.50 per share")
 
+        def earlier_dividend(self, record, security_name=""):
+            return None
+
     index, clients = _clients(fake_edgar)
     clients.llm_extractor = _LLM()
     run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
@@ -2756,6 +2765,9 @@ def _stock_merger_whose_gate_reads_the_close(fake_edgar, monkeypatch):
             return MergerTerms("stock", None, 2.0, "ACQUIRER CO", "ACQ", "high", "8-K:X1", "", package_basis="fixed")
 
         def closing_dividend(self, record, security_name=""):
+            return None
+
+        def earlier_dividend(self, record, security_name=""):
             return None
 
     clients.llm_extractor = _LLM()
@@ -3064,6 +3076,9 @@ class _CashLLM:
         return MergerTerms("cash", 40.9, None, "ACQUIRER CO", None, "high", "8-K:0000004242-14-000020", "")
 
     def closing_dividend(self, record, security_name=""):
+        return None
+
+    def earlier_dividend(self, record, security_name=""):
         return None
 
 

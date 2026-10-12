@@ -106,6 +106,9 @@ class CaseExtractor:
     def closing_dividend(self, record, security_name=""):
         return None             # the cases were built before FB-021: none of them read a dividend
 
+    def earlier_dividend(self, record, security_name=""):
+        return None             # FB-023, the same
+
 
 def _security(sec_id: str) -> Security:
     d = DATA["securities"][sec_id]
