@@ -823,8 +823,11 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   rather than dropping it — `after_delisting`, `conflict`, `backfilled_ticker`,
   `mapped`) — the caller's join surface:
   membership from this table, ticker look-ups through contract/security_history.csv (the
-  `ticker_history` ranges, which are not written) by `history_ticker`. A first-day `…ZZZZ` row is no ticker sighting;
-  an observation is a sighting of its era's ticker. Sub-plan 5h: `cusip_sightings` drops an old CUSIP's `…ZZZZ`
+  `ticker_history` ranges, which are not written) by `history_ticker`. A row from before the fails files give a new
+  CUSIP its symbol (`…ZZZZ`, or the CUSIP's own first six characters: `_no_symbol_yet`) is no ticker of its own; it
+  dates the ticker's first day when the CUSIP's first row under the ticker follows on the next trading day
+  (`_first_days`, FB-022: a fails row carries the close of the trading day before its date, so the security traded
+  on the unassigned row's day; Liberty Media 2016, Monster 2015). An observation is a sighting of its era's ticker. Sub-plan 5h: `cusip_sightings` drops an old CUSIP's `…ZZZZ`
   settle rows dated once another CUSIP of the security, begun after it, has begun (MSG 2015: the new CUSIP's range
   starts on its first row). What the sightings say of the security's trading (the ticker on a day, the last
   own-ticker sighting) is the trading record's (`endings/trading_record.py`).
@@ -1099,8 +1102,12 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   closing day never comes before the last day its own fails rows show it trading (`TradingRecord.trades_until`,
   `trading_record.last_row_trade_day`: the trading day before `ftd.settled_last`'s row of the CUSIP it held last; AVGO 2018, Z
   2015) unless the text dated the closing before the open (Imclone 2008's 8:28 A.M.). `at_handoff` (stage 9b): a row
-  the handoff writes, or a kept row with no day, takes A's last sighting before B's first (`handoff_day`, source
-  `last_sighting`); a worked-out closing day never reaches B's first sighting. `anchor_day` (the day an ending is
+  the handoff writes, or a kept row with no day, takes A's last sighting, and never a day later than the trading day
+  before B's first (`handoff_day`, source `last_sighting`). `before_successor` (FB-022): a day no exchange print gave
+  (a worked-out closing day, a last sighting, an unsourced fallback) never reaches B's first day under the ticker;
+  from that day on it becomes the trading day before it. It applies to a continuation's kept row, to a takeover's
+  row and to a row that stands against the handoff (old Charter 2016), and A's own last fails row is no cap (old
+  Caesars 2020). `anchor_day` (the day an ending is
   read around: its last trade, else its Form 25's filing date, else the anchor 8-K's, else its delisting date;
   `Delisting.anchor`: the successor searches and links, the R1 reading, the handoff pairs, stage 5b) and
   `first_day_after` (an added successor's first day after a last trade: the next trading day, at all three sites

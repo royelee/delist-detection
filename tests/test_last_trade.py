@@ -16,7 +16,7 @@ from delist_detection.sources.ftd import FtdIndex, FtdRow
 from delist_detection.identity.history import Sighting
 from delist_detection.endings.last_trade import (
     CLOSING_DAY, EIGHTK_301, EX99_NOTICE, FAILS_ROWS, LAST_SIGHTING, MIDAS, NASDAQ_HALT, NO_DAY, UNCONFIRMED, UNSOURCED,
-    Dating, LastTrade, anchor_day, at_handoff, closing_day, decide_last_trade, eightk_last_trade,
+    Dating, LastTrade, anchor_day, at_handoff, before_successor, closing_day, decide_last_trade, eightk_last_trade,
     first_day_after, handoff_day, sections_3_01,
 )
 from delist_detection.sources.nasdaq_halts import Halt
@@ -391,6 +391,9 @@ def test_a_handoff_rows_day_is_the_last_sighting_before_the_successors_first():
     # ST 2018: the fails rows meet (B's first row carries A's last close): the day before B's first
     assert at_handoff(None, "2018-03-02", "2018-03-02").day == date(2018, 3, 1)
     assert handoff_day("2018-03-02", "2018-03-02") == date(2018, 3, 1)
+    # FB-022 (Liberty Media 2016): B's first day is a Monday, so A's last trading day is the Friday, not the Sunday
+    assert handoff_day("2016-04-18", "2016-04-18") == date(2016, 4, 15)
+    assert handoff_day("2022-10-03", "2022-10-03") == date(2022, 9, 30)
 
 
 def test_a_kept_rows_day_at_a_handoff():
@@ -405,6 +408,32 @@ def test_a_kept_rows_day_at_a_handoff():
     assert at_handoff(early, "2026-01-02", "2026-01-05") is early
     measured = LastTrade(date(2026, 1, 6), MIDAS, ())
     assert at_handoff(measured, "2026-01-02", "2026-01-05") is measured
+
+
+def test_a_day_no_exchange_print_gave_never_reaches_the_first_day_of_the_tickers_taker():
+    """FB-022. Old Charter 2016: the closing day worked out from the filings is 05-18, the day New Charter first
+    traded under CHTR, so the old stock's last trading day is 05-17. FNF 2014: an unsourced last sighting on the
+    new FNF Group's first day. A day an exchange print gave stands, and so does a day before the taker's first."""
+    closing = LastTrade(date(2016, 5, 18), CLOSING_DAY, (UNCONFIRMED,))
+    assert before_successor(closing, "2016-05-18") == LastTrade(date(2016, 5, 17), LAST_SIGHTING, (UNCONFIRMED,))
+    unsourced = LastTrade(date(2014, 7, 1), UNSOURCED, (UNCONFIRMED,))
+    assert at_handoff(unsourced, "2014-07-01", "2014-07-01") == LastTrade(date(2014, 6, 30), LAST_SIGHTING,
+                                                                         (UNCONFIRMED,))
+    printed = LastTrade(date(2016, 5, 18), MIDAS, ())
+    assert before_successor(printed, "2016-05-18") is printed
+    early = LastTrade(date(2016, 5, 17), CLOSING_DAY, (UNCONFIRMED,))
+    assert before_successor(early, "2016-05-18") is early
+    undated = LastTrade(None, UNSOURCED, (NO_DAY,))
+    assert before_successor(undated, "2016-05-18") is undated      # the cap dates nothing
+
+
+def test_the_cap_is_the_takers_first_day_and_never_the_old_securitys_last_fails_row():
+    """FB-022. Old Caesars 2020: its last fails row is dated 07-07 and its closing day is 07-20, the trading day
+    before Eldorado first traded as CZR (07-21). The closing day stands: thin fails rows of the old security say
+    nothing about the day it stopped trading. The same day stands in a continuation the handoff stage keeps."""
+    closing = LastTrade(date(2020, 7, 20), CLOSING_DAY, (UNCONFIRMED,))
+    assert before_successor(closing, "2020-07-21") is closing
+    assert at_handoff(closing, "2020-07-07", "2020-07-21") is closing
 
 
 # -- stage 9c: the re-dating from a notice ------------------------------------------------------------------------

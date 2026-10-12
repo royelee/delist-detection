@@ -27,7 +27,7 @@ from ..vocabulary.exit_kind import LastTrade, end_day
 from ..sources.ftd import FtdIndex, FtdRow, is_deleted_symbol, is_trading_symbol, is_unassigned_symbol, settled_last
 from ..vocabulary.identifiers import bare_ticker
 from ..vocabulary.names import description_matches, description_names
-from ..vocabulary.trading_calendar import add_trading_days
+from ..vocabulary.trading_calendar import add_trading_days, next_trading_day
 from .observations import TickerEra
 from ..outputs.review_triage import ReviewItem
 from .security_master import Security
@@ -141,9 +141,9 @@ def _sightings(seen: list[Sighting], tickers: Iterable[str], ftd: FtdIndex, cusi
     separator first (`ticker_sightings`), and the bare one from the day the line lost the separator
     (`_bare_since`, which `figi_ticker`, OpenFIGI's ticker for the line, must bear out)."""
     # SEC's 2007 fails files mask some symbols (**********), and a new CUSIP's first rows carry the ticker with
-    # "ZZZZ" appended (FMDZZZZ): neither is a ticker
-    rows = [r for r in ftd.trading_rows(cusips)
-            if any(ch.isalpha() for ch in r.symbol) and not is_unassigned_symbol(r.symbol)]
+    # "ZZZZ" appended (FMDZZZZ) or the CUSIP's own first characters (61174X): none is a ticker
+    listed = ftd.trading_rows(cusips)
+    rows = [r for r in listed if any(ch.isalpha() for ch in r.symbol) and not _no_symbol_yet(r)]
     tickers = set(tickers)
     label: dict[str, str] = {}
     for t in sorted(tickers, key=lambda t: ("-" not in t, t)):
@@ -155,7 +155,41 @@ def _sightings(seen: list[Sighting], tickers: Iterable[str], ftd: FtdIndex, cusi
         return bare if day >= since.get(bare, "~") else label.get(bare, value)
 
     return sorted({Sighting(s.day, spelled(s.value, s.day), s.source) for s in seen}
-                  | {Sighting(r.date, spelled(r.symbol, r.date), FTD) for r in rows})
+                  | {Sighting(r.date, spelled(r.symbol, r.date), FTD) for r in rows}
+                  | {Sighting(day, spelled(ticker, day), FTD) for day, ticker in _first_days(listed)})
+
+
+def _no_symbol_yet(row: FtdRow) -> bool:
+    """A new CUSIP's fails row from before the files give it its symbol: the ticker with "ZZZZ" appended
+    (`is_unassigned_symbol`), or the CUSIP's own first six characters (Monster 2015: 61174X on 61174X109)."""
+    return is_unassigned_symbol(row.symbol) or row.symbol == row.cusip[:6]
+
+
+def _first_days(rows: Sequence[FtdRow]) -> list[tuple[str, str]]:
+    """FB-022: (day, ticker) of a CUSIP's first trading day under a ticker, where the fails rows show it: the row
+    with no symbol yet (`_no_symbol_yet`: `<ticker>ZZZZ`, or the CUSIP's own prefix) dated the trading day before
+    the CUSIP's first row under the ticker. A fails row carries the close of the trading day before its date, so
+    that first row is the close of the unassigned row's day and the security traded then (Liberty Media 2016: the
+    tracking stock's CUSIP has LMCAZZZZ on 04-18 and LMCA from 04-19, at the close of 04-18; the old stock's last
+    row, on 04-18, carries the close of 04-15). An unassigned row the ticker does not follow on the next trading
+    day is no sighting: an earlier unassigned day, a gap, another ticker's ZZZZ row, or an old CUSIP's settling
+    rows after it traded under the ticker (MSG 2015)."""
+    by_cusip: dict[str, list[FtdRow]] = {}
+    for r in rows:
+        by_cusip.setdefault(r.cusip, []).append(r)
+    out: list[tuple[str, str]] = []
+    for own in by_cusip.values():
+        own = sorted(own, key=lambda r: r.date)
+        under: set[str] = set()                        # the tickers the CUSIP's earlier rows were under
+        for z, nxt in zip(own, own[1:]):
+            ticker = bare_ticker(nxt.symbol)
+            if (_no_symbol_yet(z) and not _no_symbol_yet(nxt) and ticker not in under
+                    and (not is_unassigned_symbol(z.symbol) or bare_ticker(z.symbol[:-4]) == ticker)
+                    and nxt.date == next_trading_day(date.fromisoformat(z.date)).isoformat()):
+                out.append((z.date, nxt.symbol))
+            if not _no_symbol_yet(z):
+                under.add(bare_ticker(z.symbol))
+    return out
 
 
 def _bare_since(seen: Sequence[Sighting], rows: Sequence[FtdRow], tickers: Collection[str],

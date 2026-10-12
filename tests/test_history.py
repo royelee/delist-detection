@@ -270,16 +270,66 @@ def test_own_tickers_are_the_eras_and_the_lines():
     assert _hsc().own_tickers() == {"HSC"} and _hsc({"NVRI"}).own_tickers() == {"HSC", "NVRI"}
 
 
-def test_a_first_day_zzzz_row_is_no_ticker_sighting_but_still_a_cusip_sighting():
+def test_a_first_day_zzzz_row_is_no_ticker_of_its_own_but_dates_the_tickers_first_day():
     """A new CUSIP's first fails row carries the ticker with ZZZZ appended (FMDZZZZ): no ticker range opens under
-    it, while the CUSIP's own range starts that day."""
+    it, while the CUSIP's own range starts that day. FB-022: when the CUSIP's next row is under the ticker on the
+    next trading day, that row carries the close of the ZZZZ row's day, so the ticker was traded that day."""
     era = TickerEra("FMD", "2008-01-16", "2008-01-16", [Observation("FMD", "2008-01-16", "FIRST MARBLEHEAD")])
     sec = Security("BBG000BN6349", 1262279, "COMMON", "FIRST MARBLEHEAD", "Common Stock", True, "cusip", eras=[era])
     ftd = FtdIndex([FtdRow("2013-12-03", "320771207", "FMDZZZZ", "FIRST MARBLEHEAD CORP", 0.01),
                     FtdRow("2013-12-04", "320771207", "FMD", "FIRST MARBLEHEAD CORP", 5.41),
                     FtdRow("2013-12-05", "320771207", "FMD", "FIRST MARBLEHEAD CORP", 5.50)])
-    assert {s.value for s in ticker_sightings(sec, ftd, ["320771207"]) if s.source == "ftd"} == {"FMD"}
+    got = [s for s in ticker_sightings(sec, ftd, ["320771207"]) if s.source == "ftd"]
+    assert {s.value for s in got} == {"FMD"} and got[0] == Sighting("2013-12-03", "FMD", "ftd")
     assert cusip_sightings(sec, ftd, ["320771207"])[0] == Sighting("2013-12-03", "320771207", "ftd")
+
+
+def _first_days(*rows):
+    era = TickerEra("LMCA", "2016-06-30", "2016-06-30", [Observation("LMCA", "2016-06-30", "LIBERTY MEDIA")])
+    sec = Security("BBG00BFHDCV6", 1560385, "COMMON", "LIBERTY MEDIA", "Common Stock", True, "cusip", eras=[era])
+    ftd = FtdIndex([FtdRow(day, cusip, symbol, "LIBERTY MEDIA CORP", price) for day, cusip, symbol, price in rows])
+    return [s.day for s in ticker_sightings(sec, ftd, sorted({r[1] for r in rows})) if s.source == "ftd"]
+
+
+def test_a_new_cusips_first_trading_day_is_its_zzzz_row_only_when_the_ticker_follows_the_next_trading_day():
+    """FB-022 (Liberty Media 2016): the tracking stock's CUSIP has LMCAZZZZ on Monday 04-18 and LMCA from 04-19, at
+    the close of 04-18: it traded on 04-18. A ZZZZ row the ticker does not follow the next trading day says
+    nothing (several unassigned days, a gap, an old CUSIP's settling rows after its ticker: MSG 2015)."""
+    new = "531229870"
+    assert _first_days(("2016-04-18", new, "LMCAZZZZ", 9.77), ("2016-04-19", new, "LMCA", 19.03)) == [
+        "2016-04-18", "2016-04-19"]
+    assert _first_days(("2016-04-15", new, "LMCAZZZZ", 9.77), ("2016-04-18", new, "LMCA", 19.03)) == [
+        "2016-04-15", "2016-04-18"]                      # Friday, then Monday
+    assert _first_days(("2016-04-14", new, "LMCAZZZZ", 0.01), ("2016-04-18", new, "LMCAZZZZ", 9.77),
+                       ("2016-04-19", new, "LMCA", 19.03)) == ["2016-04-18", "2016-04-19"]
+    assert _first_days(("2016-04-13", new, "LMCAZZZZ", 9.77), ("2016-04-19", new, "LMCA", 19.03)) == ["2016-04-19"]
+    assert _first_days(("2016-04-15", new, "LMCA", 38.77), ("2016-04-18", new, "LMCAZZZZ", 39.06),
+                       ("2016-04-19", new, "LMCA", 39.06)) == ["2016-04-15", "2016-04-19"]
+
+
+def test_a_new_cusips_first_row_under_its_own_cusip_prefix_dates_the_first_day_like_a_zzzz_row():
+    """FB-022 (Monster 2015): the new holding company's CUSIP 61174X109 has a first row under `61174X` on Monday
+    06-15 and MNST from 06-16, and the old CUSIP's last row, on 06-15, carries the close of Friday 06-12. The
+    prefix row is the same "no symbol yet" row as a ZZZZ one, and it is no ticker of its own. With a ZZZZ row
+    between the two (Wendy's 2008) the ZZZZ row, the one the ticker follows, dates the day."""
+    new = "61174X109"
+    got = ticker_sightings(
+        Security("BBG008NVB1C0", 1418135, "COMMON", "MONSTER BEVERAGE", "Common Stock", True, "cusip",
+                 eras=[TickerEra("MNST", "2015-06-30", "2015-06-30", [Observation("MNST", "2015-06-30", "MONSTER")])]),
+        FtdIndex([FtdRow("2015-06-15", new, "61174X", "MONSTER BEVERAGE CORP NEW", 0.01),
+                  FtdRow("2015-06-16", new, "MNST", "MONSTER BEVERAGE CORP NEW", 126.91)]), [new])
+    assert [(s.day, s.value) for s in got if s.source == "ftd"] == [("2015-06-15", "MNST"), ("2015-06-16", "MNST")]
+    assert _first_days(("2015-06-12", new, "61174X", 0.01), ("2015-06-16", new, "LMCA", 126.91)) == ["2015-06-16"]
+    wen = "950587105"
+    assert _first_days(("2008-09-29", wen, "950587", 0.01), ("2008-09-30", wen, "LMCAZZZZ", 0.01),
+                       ("2008-10-01", wen, "LMCA", 5.3)) == ["2008-09-30", "2008-10-01"]
+    other = "531229870"                                    # digits that are not this CUSIP's own prefix date nothing
+    era = TickerEra("LMCA", "2016-06-30", "2016-06-30", [Observation("LMCA", "2016-06-30", "LIBERTY MEDIA")])
+    got = ticker_sightings(
+        Security("BBG00BFHDCV6", 1560385, "COMMON", "LIBERTY MEDIA", "Common Stock", True, "cusip", eras=[era]),
+        FtdIndex([FtdRow("2016-04-18", other, "61174X", "LIBERTY MEDIA CORP", 0.01),
+                  FtdRow("2016-04-19", other, "LMCA", "LIBERTY MEDIA CORP", 19.03)]), [other])
+    assert [(s.day, s.value) for s in got if s.value == "LMCA" and s.source == "ftd"] == [("2016-04-19", "LMCA")]
 
 
 # --- a class ticker that lost its separator at a CUSIP change (FB-013, HUB-B then HUBB) ---

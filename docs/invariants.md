@@ -283,7 +283,10 @@
   delistings hold one row per ended security, its last real ending; `last_trade_date` is the day the library holds
   for it, whatever its source (`exit_kind.published`; FB-019 and FB-020, which replaced decision 12's "blank when
   uncertain"), so it is the day the security's history ends on, and it is blank only when no source dates the
-  ending. A day that is not a confirmed exchange print no later than the Form 25 effective date
+  ending. A day no exchange print gave is never the first day of the security that took the ticker, nor later
+  (FB-022, `last_trade.before_successor`): a fails row is dated a trading day after the close it carries, so an old
+  security's last row falls on its successor's first day, and that first day is read from the successor's own
+  unassigned-symbol row (`history._first_days`). A day that is not a confirmed exchange print no later than the Form 25 effective date
   (`exit_kind.LastTrade.print_confirmed`; architecture step 4's ruling) makes the ending `uncertain`, with the
   failing part as its reason in `uncertain.csv`; a continuation's verdict does not judge its day. The price date and
   the price requests follow the published date; a continuation has no value and publishes no cash (cash paid to

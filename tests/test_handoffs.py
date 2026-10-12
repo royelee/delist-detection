@@ -342,6 +342,17 @@ def test_a_continuation_with_no_delisting_gets_an_exchange_transfer_row():
         "NEW", "8-K12B 0001104659-20-041234", "2020-04-01")
 
 
+def test_a_continuations_sentence_names_the_last_trading_day_and_not_the_date_of_the_last_fails_row():
+    """FB-022 (Liberty Media 2016): the old stock's last fails row and the tracking stock's first day are both
+    Monday 04-18; the row and its sentence say Friday 04-15."""
+    pair = HandoffPair("LMCA", "OLD", "NEW", "2016-04-18", "2016-04-18", "2016-04-18")
+    out = apply_handoffs([HandoffDecision(pair, "continuation", "timing:cik", False)], [],
+                         {"OLD": _sec("OLD"), "NEW": _sec("NEW")}, [])
+    (d,) = out.added
+    assert d.last_trade.day == date(2016, 4, 15)
+    assert "OLD last traded as LMCA on 2016-04-15 and NEW took the ticker from 2016-04-18" in d.record.reason
+
+
 def test_a_continuation_by_timing_with_no_form25_is_dated_the_day_after_and_is_medium():
     out = apply_handoffs([HandoffDecision(AON, "continuation", "timing:cik", False)], [],
                          {"OLD": _sec("OLD"), "NEW": _sec("NEW")}, [])
@@ -364,7 +375,7 @@ def test_the_old_line_ends_before_the_new_one_begins():
     p = HandoffPair("PNFP", "OLD", "NEW", "2026-01-12", "2026-01-05", "2026-01-05", "2026-01-12")
     apply_handoffs([HandoffDecision(p, "continuation", "8-K12B X", True)], [row],
                    {"OLD": _sec("OLD"), "NEW": _sec("NEW")}, [], payouts=MergerValues())
-    assert row.last_trade.day == date(2026, 1, 4) and "no_last_trade_date" not in row.flags
+    assert row.last_trade.day == date(2026, 1, 2) and "no_last_trade_date" not in row.flags    # Friday, not Sunday
 
 
 def test_a_worked_out_closing_day_never_reaches_the_successors_first_day():
@@ -464,6 +475,25 @@ def test_a_merger_row_stands_against_a_cusip_switch_between_two_issuers():
                          {"OLD": _sec("OLD"), "NEW": _sec("NEW")}, [], payouts=MergerValues())
     assert same.record.bucket is CrspBucket.EXCHANGE_TRANSFER and same.record.successor_sec_id == "NEW"
     assert [i.flag for i in out.review] == ["handoff_rebucketed"]
+
+
+def test_a_row_that_stands_against_the_handoff_keeps_its_kind_and_not_a_day_on_the_takers_first_day():
+    """FB-022 (old Charter 2016): a merger by rule 6 stands against New Charter's continuation, but its closing day
+    worked out from the filings, 05-18, is the day New Charter first traded as CHTR: the last trade is 05-17. A
+    day MIDAS gave stands."""
+    def run(lt):
+        row = _delisting("OLD", "2016-05-18", CrspBucket.MERGER, "2016-05-18", ticker="CHTR")
+        row.record.evidence["end_of_era"] = "successor_merger"
+        row.last_trade = lt
+        p = HandoffPair("CHTR", "OLD", "NEW", "2016-05-18", "2016-05-18", "2016-05-18", "2016-05-18")
+        out = apply_handoffs([HandoffDecision(p, "continuation", "8-K12B X", True)], [row],
+                             {"OLD": _sec("OLD"), "NEW": _sec("NEW")}, [])
+        assert row.record.bucket is CrspBucket.MERGER and [i.flag for i in out.review] == ["handoff_conflict"]
+        return row.last_trade.day, row.last_trade.source
+
+    assert run(LastTrade(date(2016, 5, 18), "closing_day", ("last_trade_date_unconfirmed",))) == (
+        date(2016, 5, 17), "last_sighting")
+    assert run(LastTrade(date(2016, 5, 18), "midas", ())) == (date(2016, 5, 18), "midas")
 
 
 def test_a_takeover_fills_the_ticker_successor_on_the_targets_row():

@@ -39,8 +39,9 @@ from typing import TYPE_CHECKING
 from ..filings.evidence import ITEM_MIN_SECTION, item_mention, own_filings
 # the last trade's sources, flags and facts are the row vocabulary's (exit_kind): this module dates an ending and
 # answers a `LastTrade`, the measurement side reads the same definitions back from a row
-from ..vocabulary.exit_kind import (CLOSING_DAY, CONFLICT, EIGHTK_301, EX99_NOTICE, FAILS_ROWS, LAST_SIGHTING, MIDAS,
-                                    NASDAQ_HALT, NO_DAY, UNCONFIRMED, UNSOURCED, LastTrade, effective_date)
+from ..vocabulary.exit_kind import (CLOSING_DAY, CONFLICT, EIGHTK_301, EX99_NOTICE, EXCHANGE_PRINTS, FAILS_ROWS,
+                                    LAST_SIGHTING, MIDAS, NASDAQ_HALT, NO_DAY, UNCONFIRMED, UNSOURCED, LastTrade,
+                                    effective_date)
 from ..filings.form25 import ISSUER_FORM25_FORMS, Form25, is_involuntary, notice_last_trade, parse_form25
 from ..sources.midas import MIDAS_START
 from ..sources.nasdaq_halts import last_trade_from_halt
@@ -647,23 +648,36 @@ class Dating:
 def handoff_day(a_last: str, b_first: str) -> date:
     """A's last trading day in a continuation (A hands its ticker to B): its last sighting under the ticker, but
     never on or after B's first (a fails row is dated the day after the close it carries, so the two can meet: ST
-    2018, AON 2020)."""
-    return min(date.fromisoformat(a_last), date.fromisoformat(b_first) - timedelta(days=1))
+    2018, AON 2020). The day before B's first is the trading day before it (FB-022: Liberty Media's tracking stock
+    first traded on Monday 2016-04-18, so the old stock's last day is Friday 04-15)."""
+    return min(date.fromisoformat(a_last), previous_trading_day(date.fromisoformat(b_first)))
+
+
+def before_successor(lt: LastTrade, b_first: str) -> LastTrade:
+    """FB-022: a day no exchange print gave (a worked-out closing day, a last sighting, an unsourced fallback) never
+    reaches the first day of the security that took the ticker, `b_first`: on or after it, the day becomes the
+    trading day before it, source `last_sighting`, its flags kept (old Charter 2016: the closing day read from the
+    filings is 05-18, the day New Charter first traded as CHTR). A day an exchange print gave stands, and so does a
+    row with no day: the cap dates nothing. The old security's own last fails row is no cap (old Caesars 2020: its
+    rows stop on 07-07, and its closing day 07-20 is the trading day before Eldorado's first as CZR)."""
+    day = previous_trading_day(date.fromisoformat(b_first))
+    if lt.day is not None and lt.source not in EXCHANGE_PRINTS and lt.day > day:
+        return replace(lt, day=day, source=LAST_SIGHTING)
+    return lt
 
 
 def at_handoff(lt: LastTrade | None, a_last: str, b_first: str) -> LastTrade:
     """The last trade of A's row in a continuation: a row the handoff stage writes (`lt` None) or a kept row with no
-    day takes `handoff_day`, source `last_sighting`, so A's range ends before B's begins (PNFP 2026); a worked-out
-    closing day (rule 4) never reaches B's first sighting under the ticker: past `handoff_day`, it becomes that day,
+    day takes `handoff_day`, source `last_sighting`, so A's range ends before B's begins (PNFP 2026); a day no
+    exchange print gave (a worked-out closing day, rule 4; an unsourced last sighting, FNF 2014) never reaches B's
+    first sighting under the ticker (`before_successor`): from that day on, it becomes the trading day before it,
     source `last_sighting`, still unconfirmed. Any other day stands."""
-    day = handoff_day(a_last, b_first)
     if lt is None:
-        return LastTrade(day, LAST_SIGHTING, ())
+        return LastTrade(handoff_day(a_last, b_first), LAST_SIGHTING, ())
     if lt.day is None:
-        return replace(lt, day=day, source=LAST_SIGHTING, flags=tuple(f for f in lt.flags if f != NO_DAY))
-    if lt.worked_out and lt.day > day:
-        return replace(lt, day=day, source=LAST_SIGHTING)
-    return lt
+        return replace(lt, day=handoff_day(a_last, b_first), source=LAST_SIGHTING,
+                       flags=tuple(f for f in lt.flags if f != NO_DAY))
+    return before_successor(lt, b_first)
 
 
 # -- the ending's anchor day ----------------------------------------------------------
