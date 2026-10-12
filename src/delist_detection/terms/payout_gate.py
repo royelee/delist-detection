@@ -32,6 +32,7 @@ class Reconciled:
     acquirer_price: float | None
     source: str
     flags: tuple[str, ...]
+    dividend: float | None = None    # the closing dividend that counts beside the legs (`_counted`), never in `cash`
 
 
 def _gap(value: float, last_close: float) -> float:
@@ -42,14 +43,37 @@ def _fits(value: float | None, last_close: float, tol: float) -> bool:
     return value is not None and value > 0 and _gap(value, last_close) <= tol
 
 
-def reconcile(regex_value, last_close, llm_terms, acquirer_price, tol) -> Reconciled:
+def _counted(value: float | None, dividend: float | None, last_close: float) -> float | None:
+    """FB-021: `dividend` when it counts beside `value`, else None. A closing dividend is cash the target paid its
+    holders because the deal closed (`llm_merger_extractor.ClosingDividend`). The filings state its record and
+    payment dates and no ex-date, so the last close is the witness: one day from a closing a share trades near what
+    its holder will receive. The dividend counts when the consideration with it is nearer the last close than the
+    consideration alone. When the consideration alone is nearer, the stock had gone ex-dividend, the price series
+    carries the payment, and it does not count (USG 2019)."""
+    if value is None or value <= 0 or not dividend or dividend <= 0:
+        return None
+    return dividend if _gap(value + dividend, last_close) < _gap(value, last_close) else None
+
+
+def _checked(value: float | None, dividend: float | None, last_close: float, tol: float) -> tuple[bool, float | None]:
+    """Whether `value` fits the last close, with the closing dividend when it counts, and the dividend that counted:
+    the gate checks the total it chose."""
+    d = _counted(value, dividend, last_close)
+    return _fits(value + d if d else value, last_close, tol), d
+
+
+def reconcile(regex_value, last_close, llm_terms, acquirer_price, tol, dividend=None) -> Reconciled:
+    """One merger's regex value and its cash or election LLM terms against the last close. `dividend` is the
+    merger's closing dividend as read (FB-021): each value is checked with it when it counts (`_counted`), and the
+    answer names it apart from the cash (`Reconciled.dividend`)."""
     if last_close is None or last_close <= 0:
         return Reconciled(regex_value, None, None, "regex" if regex_value is not None else "none",
                           ("no_last_close",))
     flags: list[str] = []
     if regex_value is not None:
-        if _fits(regex_value, last_close, tol):
-            return Reconciled(regex_value, None, None, "regex", ())
+        fits, d = _checked(regex_value, dividend, last_close, tol)
+        if fits:
+            return Reconciled(regex_value, None, None, "regex", (), d)
         flags.append(f"{GATE_FAILED}{regex_value:g}")
     if llm_terms is not None:
         cash, ratio = llm_terms.cash_per_share, llm_terms.stock_ratio
@@ -60,9 +84,10 @@ def reconcile(regex_value, last_close, llm_terms, acquirer_price, tol) -> Reconc
                 skip = llm_terms.skip_reason
                 if skip:
                     return Reconciled(None, None, None, "none", tuple(flags) + (f"{GATE_SKIPPED}{skip}",))
-                if _fits(cash, last_close, tol):
+                fits, d = _checked(cash, dividend, last_close, tol)
+                if fits:
                     return Reconciled(cash, None, None, ELECTION_CASH if llm_terms.deal_type == "election"
-                                      else "llm", tuple(flags))
+                                      else "llm", tuple(flags), d)
                 flags.append(LLM_GATE_FAILED)
             return Reconciled(None, None, None, "none", tuple(flags))
         skip = llm_terms.skip_reason
@@ -75,7 +100,8 @@ def reconcile(regex_value, last_close, llm_terms, acquirer_price, tol) -> Reconc
             return Reconciled(None, None, None, "none", tuple(flags))
         if llm_terms.deal_type == "election":
             stock = ratio * acquirer_price if ratio is not None and acquirer_price is not None else None
-            stock_fits, cash_fits = _fits(stock, last_close, tol), _fits(cash, last_close, tol)
+            stock_fits, stock_d = _checked(stock, dividend, last_close, tol)
+            cash_fits, cash_d = _checked(cash, dividend, last_close, tol)
             # A regex value within 1% of the deal's own cash leg read a real term
             # of the deal, even when the election ultimately settles by the other
             # leg -- the "failed the last close" flag would be spurious there.
@@ -86,19 +112,22 @@ def reconcile(regex_value, last_close, llm_terms, acquirer_price, tol) -> Reconc
             settled_flags = () if regex_matches_cash_leg else tuple(flags)
             # The legs are equal at signing, so both usually fit: take the one nearer
             # the last close; a tie goes to stock.
-            if stock_fits and (not cash_fits or _gap(stock, last_close) <= _gap(cash, last_close)):
-                return Reconciled(None, ratio, acquirer_price, "llm_election_stock", settled_flags)
+            if stock_fits and (not cash_fits or _gap(stock + (stock_d or 0.0), last_close)
+                               <= _gap(cash + (cash_d or 0.0), last_close)):
+                return Reconciled(None, ratio, acquirer_price, "llm_election_stock", settled_flags, stock_d)
             if cash_fits:
-                return Reconciled(cash, None, None, "llm_election_cash", settled_flags)
+                return Reconciled(cash, None, None, "llm_election_cash", settled_flags, cash_d)
             # Neither leg alone: the LLM read the default package (cash AND stock per share, which electing holders
             # could trade for all cash or all stock, prorated: NYX, EV, SUN). The two legs together are near the
             # close only then; an either-or election's legs together are twice it (sub-plan 5e).
-            if stock is not None and cash is not None and _fits(cash + stock, last_close, tol):
-                return Reconciled(cash, ratio, acquirer_price, PACKAGE, settled_flags)
-        elif ratio is None and not llm_terms.has_stock and _fits(cash, last_close, tol):
+            if stock is not None and cash is not None:
+                fits, d = _checked(cash + stock, dividend, last_close, tol)
+                if fits:
+                    return Reconciled(cash, ratio, acquirer_price, PACKAGE, settled_flags, d)
+        elif ratio is None and not llm_terms.has_stock and _checked(cash, dividend, last_close, tol)[0]:
             # A cash deal, including the cash + CVR deals the LLM labels "other" (never one whose stock leg is
             # a dollar value or a further security: its cash alone is not what a share became).
-            return Reconciled(cash, None, None, "llm", tuple(flags))
+            return Reconciled(cash, None, None, "llm", tuple(flags), _counted(cash, dividend, last_close))
         if llm_terms.deal_type == "election" or ratio is None:
             # Terms this function settles that did not reconcile: the row lands at
             # par, so flag it. Other stock-ratio terms go to the cash+stock gate.
@@ -117,6 +146,7 @@ class GatedPayouts:
     emitted: int = 0
     dropped: dict = field(default_factory=lambda: dict.fromkeys(DROP_REASONS, 0))
     priced_by: dict = field(default_factory=dict)    # key -> BY_TICKER | BY_LINE: the price that settled its stock leg
+    dividends: dict = field(default_factory=dict)    # key -> the closing dividend that counts in its value (FB-021)
 
 
 def gate_payouts(
@@ -131,6 +161,7 @@ def gate_payouts(
     tol: float,
     line_price: Callable[[tuple[str, str | None]], tuple[str, float] | None] | None = None,
     line_first: Collection = (),
+    dividends: Mapping | None = None,
 ) -> GatedPayouts:
     """Route every merger payout through the last-close check. Inputs are not mutated.
 
@@ -146,15 +177,20 @@ def gate_payouts(
     leg. A ticker price that reconciles is never replaced, except for a key in `line_first` (its terms' ticker's
     rows are those of another line of the issuer: Charter before the closing for Time Warner Cable's New Charter,
     CBS class B for Viacom class A), whose line price is tried first.
+    dividends: each merger's closing dividend per share as read (FB-021), by key. One that counts (`_counted`) is
+    named in the answer's `dividends` and is never added to `payouts` or `merged_terms`: those stay the package one
+    share became, which the run's decisions read (ruling 2026-10-04: a special dividend is no consideration), and
+    the value adds the dividend (`MergerValues.table_terms`). A --merger-terms row takes none.
 
     Pass 1 reconciles each key's regex value (and its cash or election LLM terms).
     Pass 2 is the cash+stock gate for the other LLM terms that carry a stock ratio:
     it emits full terms when cash + ratio x acquirer price reconciles.
     """
     out = GatedPayouts(dict(payouts), dict(sources), dict(confidences), dict(csv_terms), {})
+    dividends = dividends or {}
 
     def drop_payout(key) -> None:
-        for m in (out.payouts, out.sources, out.confidences):
+        for m in (out.payouts, out.sources, out.confidences, out.dividends):    # a dividend counted beside it too
             m.pop(key, None)
 
     def prices(ticker: str, key) -> list[tuple[str, str, float]]:
@@ -177,13 +213,14 @@ def gate_payouts(
         terms = None if has_csv else llm_terms.get(key)
         regex, close = out.payouts.get(key), for_delisting(last_closes, key)
         ticker = (terms.acquirer_ticker or "") if terms is not None else ""
+        div = None if has_csv else dividends.get(key)
         if terms is not None and terms.deal_type == "election" and not terms.is_package:
-            tried = [(how, t, reconcile(regex, close, terms, p, tol)) for how, t, p in prices(ticker, key)]
+            tried = [(how, t, reconcile(regex, close, terms, p, tol, div)) for how, t, p in prices(ticker, key)]
             how, used, r = next(((h, t, x) for h, t, x in tried if x.source.startswith("llm")), None) \
-                or (tried[0] if tried else (BY_TICKER, ticker or None, reconcile(regex, close, terms, None, tol)))
+                or (tried[0] if tried else (BY_TICKER, ticker or None, reconcile(regex, close, terms, None, tol, div)))
         else:
             how, used = BY_TICKER, (ticker or None) if terms else None
-            r = reconcile(regex, close, terms, acquirer_price(ticker, key) if ticker else None, tol)
+            r = reconcile(regex, close, terms, acquirer_price(ticker, key) if ticker else None, tol, div)
         if r.flags:
             out.flags[key] = r.flags
         if terms is not None and terms.no_default:
@@ -201,6 +238,8 @@ def gate_payouts(
             d = {"stock_ratio": r.stock_ratio, "acquirer_price": r.acquirer_price, "acquirer_ticker": used}
             out.merged_terms[key] = {"cash_per_share": r.cash, **d} if r.cash is not None else d
             out.priced_by[key] = how
+        if r.dividend:
+            out.dividends[key] = r.dividend
 
     def flag_terms_gate_drop(key, reason: str) -> None:
         # Every drop reason but csv_override gets a flag: a merger row the rules
@@ -260,13 +299,15 @@ def gate_payouts(
             flag_terms_gate_drop(key, "no_last_close")
             continue
         cash = terms.cash_per_share
-        fit = next(((how, t, p) for how, t, p in tried
-                    if _gap((cash or 0.0) + terms.stock_ratio * p, last_close) <= tol), None)
+        div = dividends.get(key)
+        fit = next(((how, t, p, d) for how, t, p in tried
+                    for fits, d in [_checked((cash or 0.0) + terms.stock_ratio * p, div, last_close, tol)] if fits),
+                   None)
         if fit is None:
             out.dropped["fail_sanity"] += 1
             flag_terms_gate_drop(key, "fail_sanity")
             continue
-        how, acq, acq_price = fit
+        how, acq, acq_price, counted = fit
         out.priced_by[key] = how
         d = {"stock_ratio": terms.stock_ratio, "acquirer_price": acq_price, "acquirer_ticker": acq}
         if cash is not None:
@@ -278,6 +319,9 @@ def gate_payouts(
             # fallback would re-add that phantom cash (e.g. MRD 65x).
             drop_payout(key)
         out.merged_terms[key] = d
+        out.dividends.pop(key, None)       # pass 1 counted it beside a value these terms replace
+        if counted:
+            out.dividends[key] = counted
         out.emitted += 1
         if package:
             out.sources[key] = PACKAGE if terms.deal_type == "election" else "llm"

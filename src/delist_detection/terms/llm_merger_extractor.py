@@ -50,6 +50,16 @@ the key, so editing ``SYSTEM_PROMPT`` / ``RESULT_SCHEMA`` (and bumping the
 version) cleanly invalidates stale cached extractions rather than silently
 reusing them; the target's ticker is part of it because the user prompt names
 the target security (two classes of one issuer can get different terms).
+
+A closing dividend (FB-021)
+---------------------------
+The package never holds a special dividend (operator ruling 2026-10-04: it
+decides an ending's kind). ``closing_dividend`` reads it apart, with a question
+of its own (``DIVIDEND_PROMPT``, cached under ``DIVIDEND_VERSION`` in place of
+the prompt version): the cash the target paid its holders because the deal
+closed, from a closing filing whose text names a dividend with a dollar amount.
+The payout gate decides whether it counts in the value
+(``payout_gate._counted``).
 """
 
 from __future__ import annotations
@@ -58,6 +68,7 @@ import json
 import os
 import re
 import threading
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from pathlib import Path
@@ -232,10 +243,22 @@ class MergerTerms:
         return out
 
 
+@dataclass(frozen=True)
+class ClosingDividend:
+    """FB-021: the cash per share the target paid the holders of its security because the deal closed (`amount`:
+    every such dividend the filing names, summed; Nordstrom 2025 paid a special and a stub-period one), the filing
+    it was read from (`source`, form:accession) and the sentences that state it (`quote`). It is no part of the
+    package (`MergerTerms`); whether it counts in the ending's value is the payout gate's decision."""
+    amount: float
+    source: str = ""
+    quote: str = ""
+
+
 # --------------------------------------------------------------------------- #
 # Prompt constants — calibration will iterate these. Bump PROMPT_VERSION on edit
 # so the disk cache key changes and stale extractions are not silently reused.
 # --------------------------------------------------------------------------- #
+
 
 PROMPT_VERSION = "v3"
 # The prompt version whose cached answers read an election as its alternatives (cash OR stock): the either-or reading
@@ -367,6 +390,85 @@ RESULT_SCHEMA: dict = {
 # --------------------------------------------------------------------------- #
 # Excerpt selection
 # --------------------------------------------------------------------------- #
+
+# --------------------------------------------------------------------------- #
+# The closing-dividend question (FB-021)
+# --------------------------------------------------------------------------- #
+
+DIVIDEND_VERSION = "div1"       # in the answer's cache key, where a package answer has PROMPT_VERSION
+
+DIVIDEND_PROMPT = """\
+You read an excerpt of an SEC filing that reports the closing of a merger or \
+acquisition. Report every CLOSING DIVIDEND in it: cash the TARGET company \
+paid, per share, to the holders of the target security because the deal \
+closed. Return ONLY a JSON object matching the schema.
+
+A closing dividend meets both of these:
+- The target company declared it (not the acquirer, the combined or successor \
+company, a new holding company or a subsidiary), on the target security the \
+prompt names, in cash, as an amount per share.
+- The filing ties it to the deal: a special or one-time dividend declared under \
+the merger agreement or in connection with the merger, a dividend conditional \
+on the closing, or a "closing", "pre-closing", "stub period", "pro rata" or \
+"make-up" dividend for the period up to the closing date.
+
+Never report:
+- a regular quarterly or other periodic dividend the filing does not tie to the \
+deal, even when it says holders keep the right to receive it;
+- a dividend holders could elect to take in cash or in shares, unless the \
+excerpt states the cash every share received after proration;
+- a dividend on preferred stock or depositary shares, on partnership or \
+operating-partnership units, on the acquirer's, the combined company's or a \
+successor's shares, or one a company paid to its parent or to another company;
+- dividend equivalents and accrued dividends on options, restricted stock units \
+or other equity awards;
+- dividend rates, limits or amounts in covenants, in the terms of a security, \
+or in a statement of future policy;
+- a distribution of shares (a spin-off or a stock dividend).
+
+For each closing dividend:
+- amount_per_share: the cash per share in US dollars, a number. null when the \
+excerpt states only a total amount.
+- included_in_consideration: true when the per-share merger consideration the \
+excerpt states ALREADY INCLUDES this dividend, so adding the dividend to it \
+would count it twice ("$6.48 per share in cash (including a make-up dividend \
+of $0.07)"). false when holders received the dividend in addition to the \
+stated consideration; that is so too when the filing says the consideration \
+was reduced by the dividend and states the reduced amount.
+- quote: the sentence that states it, verbatim from the excerpt, at most 400 \
+characters.
+
+Return {"closing_dividends": []} when the excerpt names none. Null anything \
+the excerpt does not state; never guess.
+"""
+
+DIVIDEND_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "closing_dividends": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "amount_per_share": {"type": ["number", "null"]},
+                    "included_in_consideration": {"type": "boolean"},
+                    "quote": {"type": "string"},
+                },
+                "required": ["amount_per_share", "included_in_consideration", "quote"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["closing_dividends"],
+    "additionalProperties": False,
+}
+
+# a closing filing is a candidate when a sentence of it names a dividend and a dollar amount (Six Flags 2024 states
+# the amount 230 characters after the word); the question's excerpt is the text around each "dividend"
+_DIVIDEND_AMOUNT = re.compile(r"(?i)\bdividend[^.]{0,300}?\$\s?\d|\$\s?\d[\d,]*(?:\.\d+)?[^.]{0,300}?\bdividend")
+_DIVIDEND_KEYWORDS = ["dividend"]
+_DIVIDEND_BUDGET = 15000
+
 
 _EXCERPT_KEYWORDS = [
     "merger consideration", "right to receive", "exchange ratio",
@@ -598,6 +700,49 @@ class LLMMergerTermsExtractor:
             return None
         return None
 
+    def closing_dividend(self, record: DelistRecord, security_name: str = "") -> ClosingDividend | None:
+        """FB-021: the cash the target paid its holders because the deal closed (Extended Stay 2021: $1.75 a share
+        just before the effective time, beside the $18.75 of the merger), None when the closing filings name none.
+        The closing documents are the package's (the closing 8-K, then an 8-K that reports the closing without
+        Item 2.01), `max_filings` of them at most. Only one whose text names a dividend with a dollar amount is
+        sent to the model, with the text around each "dividend" and a question of its own (`DIVIDEND_PROMPT`),
+        cached under its own key (`dividend_cache_path`); the first that states a dividend answers. A dividend the
+        stated consideration already includes is left out. Same contract as `extract`: None for another bucket or
+        a missing CIK and when EDGAR cannot be read, and a failed call counts itself degraded."""
+        if record.bucket is not CrspBucket.MERGER or record.cik is None:
+            return None
+        try:
+            filings = self.edgar.recent_filings(record.cik) or []
+            delist = parse_date(record.observed_delist_date or "")
+            tried, seen = 0, set()
+            for f in closing_8k(filings, delist) + self._closing_without_201(filings, delist):
+                if tried >= self.max_filings:
+                    break
+                if f.accession in seen:
+                    continue
+                seen.add(f.accession)
+                text = self.edgar.fetch_filing_text(record.cik, f.accession, f.primary_doc)
+                if not text:
+                    continue
+                tried += 1
+                if not _DIVIDEND_AMOUNT.search(text):
+                    continue
+                excerpt = self._relevant_excerpts(text, _DIVIDEND_KEYWORDS, _DIVIDEND_BUDGET)
+                try:
+                    raw = self._ask(self.dividend_cache_path(f, record), DIVIDEND_PROMPT,
+                                    self._dividend_prompt(excerpt, record, f, security_name), DIVIDEND_SCHEMA)
+                except FATAL:
+                    raise
+                except Exception:
+                    SEC_STATS.degraded("llm_call")      # as in `_extract`: never cached, and the row says so
+                    continue
+                found = self._to_dividend(raw, f)
+                if found is not None:
+                    return found
+        except requests.RequestException:
+            return None
+        return None
+
     # ------------------------------------------------------------------ #
     # Internals
     # ------------------------------------------------------------------ #
@@ -731,16 +876,18 @@ class LLMMergerTermsExtractor:
         out.sort(key=lambda f: abs((_day(f) - delist).days))
         return out
 
-    def _relevant_excerpts(self, text: str) -> str:
+    def _relevant_excerpts(self, text: str, keywords: Sequence[str] = _EXCERPT_KEYWORDS,
+                           budget: int = _EXCERPT_BUDGET) -> str:
         """Window the text around consideration keywords, merging overlaps.
 
         For each case-insensitive keyword hit take a ±1500-char window; merge
         overlapping windows; concatenate (joined by ``\\n...\\n``) up to a
         ~30000-char budget. Falls back to ``text[:30000]`` when no keyword hits.
+        The closing-dividend question passes its own `keywords` and `budget`.
         """
         spans: list[tuple[int, int]] = []
         lower = text.lower()
-        for kw in _EXCERPT_KEYWORDS:
+        for kw in keywords:
             start = 0
             while True:
                 i = lower.find(kw, start)
@@ -752,7 +899,7 @@ class LLMMergerTermsExtractor:
                 start = i + 1
 
         if not spans:
-            return text[:_EXCERPT_BUDGET]
+            return text[:budget]
 
         # Merge overlapping / adjacent windows (sorted by start).
         spans.sort()
@@ -767,11 +914,11 @@ class LLMMergerTermsExtractor:
         total = 0
         for lo, hi in merged:
             chunk = text[lo:hi]
-            if total + len(chunk) > _EXCERPT_BUDGET:
-                chunk = chunk[: _EXCERPT_BUDGET - total]
+            if total + len(chunk) > budget:
+                chunk = chunk[: budget - total]
             pieces.append(chunk)
             total += len(chunk)
-            if total >= _EXCERPT_BUDGET:
+            if total >= budget:
                 break
         return "\n...\n".join(pieces)
 
@@ -779,6 +926,12 @@ class LLMMergerTermsExtractor:
         """Where the answer for this filing and this target security is cached."""
         acc_key = filing.accession.replace("-", "")
         return self.cache_dir / (f"{acc_key}_{_sanitize_model(self.model)}_{PROMPT_VERSION}_"
+                                 f"{_sanitize_key(record.ticker or 'none')}.json")
+
+    def dividend_cache_path(self, filing: EdgarSubmission, record: DelistRecord) -> Path:
+        """Where the closing-dividend answer for this filing and this target security is cached (FB-021)."""
+        acc_key = filing.accession.replace("-", "")
+        return self.cache_dir / (f"{acc_key}_{_sanitize_model(self.model)}_{DIVIDEND_VERSION}_"
                                  f"{_sanitize_key(record.ticker or 'none')}.json")
 
     def _llm_extract(
@@ -790,7 +943,13 @@ class LLMMergerTermsExtractor:
         is called and its dict is written to the cache. Returns ``None`` when the
         (cached or fresh) payload is not a usable dict.
         """
-        cache_path = self.cache_path(filing, record)
+        raw = self._ask(self.cache_path(filing, record), SYSTEM_PROMPT,
+                        lambda: self._user_prompt(excerpt, record, filing, security_name), RESULT_SCHEMA)
+        return self._to_terms(raw, filing)
+
+    def _ask(self, cache_path: Path, system: str, user: str | Callable[[], str], schema: dict) -> object:
+        """One question's answer: the dict cached at `cache_path`, else the model's (cached there when it is a
+        dict). `user` is the user prompt, or a function that builds it, called only when the model is asked."""
         with self._path_lock(cache_path):
             raw = self._cached(cache_path)
             if isinstance(raw, dict):
@@ -798,9 +957,9 @@ class LLMMergerTermsExtractor:
                     asked = cache_path in self._asked
                 self._count("asked" if asked else "from_cache")
             else:
-                user_prompt = self._user_prompt(excerpt, record, filing, security_name)
+                user_prompt = user() if callable(user) else user
                 try:
-                    raw = self.llm.extract(SYSTEM_PROMPT, user_prompt, RESULT_SCHEMA)
+                    raw = self.llm.extract(system, user_prompt, schema)
                 except Exception:
                     self._count("failed")
                     raise
@@ -815,8 +974,7 @@ class LLMMergerTermsExtractor:
                     # itself degraded, like a failed call, and the delisting's row carries `resolution_degraded`
                     SEC_STATS.degraded("llm_call")
                     self._count("failed")
-
-        return self._to_terms(raw, filing)
+        return raw
 
     @staticmethod
     def _cached(cache_path: Path) -> object:
@@ -852,6 +1010,36 @@ class LLMMergerTermsExtractor:
             "----- FILING EXCERPT -----\n"
             f"{excerpt}"
         )
+
+    @staticmethod
+    def _dividend_prompt(excerpt: str, record: DelistRecord, filing: EdgarSubmission, security_name: str = "") -> str:
+        target = f"{security_name} (ticker {record.ticker})" if security_name else f"ticker {record.ticker}"
+        return (
+            f"Target company ticker: {record.ticker}\n"
+            f"Target security: {target}\n"
+            f"Observed delist date: {record.observed_delist_date or 'unknown'}\n"
+            f"Filing: {filing.form} filed {filing.filing_date}\n\n"
+            "Report the closing dividends the target paid the holders of the target security, from the filing "
+            "excerpt below.\n\n"
+            "----- FILING EXCERPT -----\n"
+            f"{excerpt}"
+        )
+
+    @staticmethod
+    def _to_dividend(raw: object, filing: EdgarSubmission) -> ClosingDividend | None:
+        """A closing-dividend answer as a `ClosingDividend`: the dividends it states an amount for, summed, without
+        those the stated consideration already includes; None when none is left."""
+        if not isinstance(raw, dict):
+            return None
+        parts = []
+        for d in raw.get("closing_dividends") or ():
+            amount = _tolerant_float(d.get("amount_per_share")) if isinstance(d, dict) else None
+            if amount and amount > 0 and not d.get("included_in_consideration"):
+                parts.append((amount, _text(d.get("quote"))))
+        if not parts:
+            return None
+        return ClosingDividend(round(sum(a for a, _ in parts), 6), f"{filing.form}:{filing.accession}",
+                               " | ".join(q for _, q in parts if q))
 
     @staticmethod
     def _to_terms(raw: object, filing: EdgarSubmission) -> MergerTerms | None:

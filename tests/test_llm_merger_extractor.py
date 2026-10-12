@@ -13,6 +13,9 @@ from delist_detection.outputs.reconstruction import DelistRecord
 from delist_detection.vocabulary.crsp_codes import CrspBucket
 from delist_detection.sources.edgar import EdgarSubmission
 from delist_detection.terms.llm_merger_extractor import (
+    DIVIDEND_PROMPT,
+    DIVIDEND_VERSION,
+    ClosingDividend,
     LLMMergerTermsExtractor,
     MergerTerms,
     PROMPT_VERSION,
@@ -38,10 +41,12 @@ class _FakeLlm:
         self._raises = raises
         self.calls = 0
         self.users = []
+        self.systems = []
 
     def extract(self, system, user, schema):
         self.calls += 1
         self.users.append(user)
+        self.systems.append(system)
         if self._raises:
             raise RuntimeError("LLM hard failure")
         if not self._responses:
@@ -506,3 +511,92 @@ def test_a_warm_pass_counts_nothing_and_the_sequential_read_after_it_counts_aske
     ext.extract(_merger_rec())
     u = ext.usage()
     assert (u["asked"], u["from_cache"], u["failed"]) == (1, 0, 0)
+
+
+# --------------------------------------------------------------------------- #
+# FB-021: a dividend the target paid because the deal closed
+# --------------------------------------------------------------------------- #
+
+_DIVIDEND_TEXT = (
+    "each Paired Share was converted into the right to receive $18.75 in cash. " + "x" * 4000 + " On June 15, 2021, "
+    "the Board of Directors of the Company declared a special dividend of $1.75 per share, payable immediately "
+    "prior to the effective time."
+)
+
+
+def _dividend(amount, included=False, quote="a special dividend of $1.75 per share"):
+    return {"amount_per_share": amount, "included_in_consideration": included, "quote": quote}
+
+
+def _dividend_ext(tmp_path, answers, text=_DIVIDEND_TEXT, filings=None, **kw):
+    llm = _FakeLlm(answers, **kw)
+    edgar = _FakeEdgarText([_closing_8k()] if filings is None else filings, {"C1": text, "A1": text, "C2": text})
+    return LLMMergerTermsExtractor(edgar, llm, model="m1", cache_dir=tmp_path), llm
+
+
+def test_a_closing_dividend_is_read_from_the_closing_filing_with_a_question_of_its_own(tmp_path):
+    ext, llm = _dividend_ext(tmp_path, [{"closing_dividends": [_dividend(1.75)]}])
+    d = ext.closing_dividend(_merger_rec(), security_name="Extended Stay paired shares")
+    assert d == ClosingDividend(1.75, "8-K:C1", "a special dividend of $1.75 per share")
+    assert llm.systems == [DIVIDEND_PROMPT]
+    # the excerpt is the text around the word, not the consideration sentence 4,000 characters before it
+    assert "special dividend of $1.75" in llm.users[0] and "$18.75 in cash" not in llm.users[0]
+    assert "Extended Stay paired shares (ticker AET)" in llm.users[0]
+    assert ext.closing_dividend(_merger_rec()) == d and llm.calls == 1          # the second read is the cache's
+    assert [p.name for p in Path(tmp_path).glob("*.json")] == [f"C1_m1_{DIVIDEND_VERSION}_AET.json"]
+    assert ext.usage() == {"model": "m1", "answers": 2, "from_cache": 0, "asked": 2, "failed": 0}
+
+
+def test_a_closing_filing_that_names_no_dividend_amount_is_never_sent(tmp_path):
+    for text in (_USABLE_TEXT, "The indenture limits the payment of dividends. Each share received $18.75."):
+        ext, llm = _dividend_ext(tmp_path, [], text=text)
+        assert ext.closing_dividend(_merger_rec()) is None and llm.calls == 0
+
+
+def test_a_dividend_whose_amount_ends_its_sentence_is_a_candidate(tmp_path):
+    # Six Flags 2024: the amount comes 230 characters after the word, in the same sentence
+    text = ("Former Six Flags declared a special dividend, payable to holders of record of Former Six Flags Common "
+            "Stock as of the close of business one Business Day prior to the Closing Date, June 28, 2024 who hold "
+            "their shares through the Closing Date, with a per share amount of $1.53")
+    ext, llm = _dividend_ext(tmp_path, [{"closing_dividends": [_dividend(1.53)]}], text=text)
+    assert ext.closing_dividend(_merger_rec()).amount == 1.53 and llm.calls == 1
+
+
+def test_only_the_closing_documents_are_asked_about_a_dividend(tmp_path):
+    ext, llm = _dividend_ext(tmp_path, [], filings=[_announce_8k()])
+    assert ext.closing_dividend(_merger_rec()) is None and llm.calls == 0
+
+
+def test_several_closing_dividends_are_summed_without_those_the_consideration_includes(tmp_path):
+    # Nordstrom 2025: a special dividend and a stub-period dividend; a make-up dividend inside the stated cash
+    answer = {"closing_dividends": [_dividend(0.25, quote="special"), _dividend(0.1462, quote="stub"),
+                                    _dividend(0.07, included=True), _dividend(None)]}
+    ext, _ = _dividend_ext(tmp_path, [answer])
+    assert ext.closing_dividend(_merger_rec()) == ClosingDividend(0.3962, "8-K:C1", "special | stub")
+
+
+def test_an_answer_that_names_no_closing_dividend_is_none_and_the_next_closing_document_is_asked(tmp_path):
+    second = EdgarSubmission(accession="C2", form="8-K", filing_date="2018-11-29", report_date="2018-11-29",
+                             items="3.01,5.01", primary_doc="d.htm")
+    ext, llm = _dividend_ext(tmp_path, [{"closing_dividends": []}, {"closing_dividends": [_dividend(2.0)]}],
+                             filings=[_closing_8k(), second])
+    assert ext.closing_dividend(_merger_rec()).source == "8-K:C2" and llm.calls == 2
+    ext, llm = _dividend_ext(tmp_path / "none", [{"closing_dividends": [_dividend(0.07, included=True)]}])
+    assert ext.closing_dividend(_merger_rec()) is None
+
+
+def test_a_closing_dividend_is_a_mergers_only_and_a_failed_read_is_a_miss(tmp_path):
+    from delist_detection.outputs.degraded import DegradedWatch
+    ext, llm = _dividend_ext(tmp_path, [{"closing_dividends": [_dividend(1.75)]}])
+    assert ext.closing_dividend(_merger_rec(bucket=CrspBucket.LIQUIDATION)) is None
+    assert ext.closing_dividend(_merger_rec(cik=None)) is None and llm.calls == 0
+
+    class _Down:
+        def recent_filings(self, cik):
+            raise requests.ConnectionError("down")
+    assert LLMMergerTermsExtractor(_Down(), llm, model="m1", cache_dir=tmp_path).closing_dividend(_merger_rec()) is None
+
+    failing, llm = _dividend_ext(tmp_path / "f", [], raises=True)
+    watch = DegradedWatch()
+    assert failing.closing_dividend(_merger_rec()) is None and llm.calls == 1
+    assert watch.tripped() and not list((tmp_path / "f").glob("*.json"))         # the row says so; nothing is cached

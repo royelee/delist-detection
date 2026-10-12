@@ -342,6 +342,7 @@ class MergerInputs:
     raw_currency: str = ""        # the regex read's currency (ruling R5)
     leg_sec_ids: Mapping[str, str] = field(default_factory=dict)   # a basket's further legs: ticker -> sec_id
     statement: StatementTerms | None = None       # stage 8b's restatement from the registrant's filings (FNFV)
+    dividend: float | None = None                 # the closing dividend counted in the row's cash (FB-021)
 
     @property
     def read(self) -> bool:
@@ -370,9 +371,11 @@ class Rule:
     """One ending's value rule (`name`, one of exit_kind.VALUE_RULES) and the terms it publishes, as read: `cash` and
     its `currency`, a stock `leg`, a `basket`'s terms (ruling R3: its legs, with `basket_ticker` its main leg's
     ticker), a liquidation's `recovery_ratio`, an OTC print's security and symbol (`print_sec_id`, `print_symbol`),
-    and where the terms came from (`terms_source`) and the payout gate's verdict (`terms_gate`)."""
+    and where the terms came from (`terms_source`) and the payout gate's verdict (`terms_gate`). `cash` is all the
+    cash one share received; `dividend` is the part of it that was a closing dividend (FB-021), None when none."""
     name: str
     cash: float | None = None
+    dividend: float | None = None
     currency: str = ""
     leg: StockLeg | None = None
     basket: MergerTerms | None = None
@@ -413,9 +416,11 @@ def _merger_rule(row: Mapping[str, str], inputs: MergerInputs) -> Rule:
     last close existed to check them), else from what the library read before the gate dropped them (the LLM terms,
     else the regex payout):
     `terms_gate` is `failed`, `skipped`, or blank (`_ungated`). An LLM answer (prompt v3) is the package one share
-    became (ruling R4); one of two or more securities is a basket (R3)."""
+    became (ruling R4); one of two or more securities is a basket (R3). The cash of terms the gate kept holds the
+    closing dividend the gate counted (FB-021), named apart in `Rule.dividend`; terms it did not keep take none."""
     llm, override = inputs.llm, inputs.override
     terms = _llm_published(row, inputs) if inputs.statement is None else None
+    dividend = None
     if override:
         cash, ratio = override.get("cash_per_share"), override.get("stock_ratio")
         ticker = override.get("acquirer_ticker") or (llm.acquirer_ticker if llm else "") or row["acquirer_ticker"]
@@ -426,11 +431,14 @@ def _merger_rule(row: Mapping[str, str], inputs: MergerInputs) -> Rule:
         source, gate, currency = STATEMENT_SOURCE, SKIPPED, "USD" if cash else ""
     elif row["payout_per_share"] or row["stock_ratio"]:
         cash, ratio = _num(row["payout_per_share"]), _num(row["stock_ratio"])
+        dividend = inputs.dividend       # counted by the gate that kept these terms, and in the row's cash
         ticker = row["acquirer_ticker"] or (llm.acquirer_ticker if llm else "")
         source = row["payout_source"] or "llm"
         gate = PASSED if row["last_trade_close"] else ""
         currency = (llm.cash_currency if llm is not None else "") if source.startswith("llm") \
             else inputs.raw_currency
+        if dividend and not currency:
+            currency = "USD"             # a dividend beside a stock leg alone: the gate counts only dollars
     elif terms is not None:
         cash, ratio, ticker = terms.cash_per_share, terms.stock_ratio, terms.acquirer_ticker or ""
         source, gate, currency = "llm", _ungated(row), terms.cash_currency
@@ -443,7 +451,7 @@ def _merger_rule(row: Mapping[str, str], inputs: MergerInputs) -> Rule:
     # symbol on the price date (the request's ticker), over the terms'
     ticker = (normalize_ticker(ticker) if ticker else "") if override else (
         inputs.price_ticker or (normalize_ticker(ticker) if ticker else ""))
-    common = dict(cash=cash, currency=currency or "", terms_source=source, terms_gate=gate)
+    common = dict(cash=cash, currency=currency or "", terms_source=source, terms_gate=gate, dividend=dividend)
     if terms is not None and terms.is_basket:
         return Rule("basket", basket=terms, basket_ticker=ticker, **common)
     value = terms.stock_value if terms is not None and not ratio else None

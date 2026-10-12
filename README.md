@@ -302,7 +302,13 @@ price(price_ticker, price_date)`, the acquirer's close the trading day after the
 last trade), `otc_print` (the security's own first off-exchange print from
 `price_date`), `recovery` (`recovery_ratio` × last close), `worthless`,
 `transfer` (same shares, 0), `continuation` (not an exit), `expiration` or
-`unknown`; `basket` is a package of two or more securities per share (the main
+`unknown`. `cash_per_share` is all the cash one share received. A dividend the
+target paid because the deal closed is in it when the last close still carried
+it (the consideration with the dividend is nearer the last close than the
+consideration alone), and `value_formula` names the parts:
+`(18.75 + 1.75 dividend) / last_close − 1`. A continuation publishes no cash:
+cash paid to the old security's holders at the step is a dividend of the price
+series, dated on the successor's first day. `basket` is a package of two or more securities per share (the main
 row keeps the cash and the first security, and `payout_legs.csv` has one row per
 security with its ratio, class and the security, ticker and date to price it on);
 a bankruptcy plan whose notice or 8-K states a ratio is `stock` on the new line.

@@ -83,7 +83,11 @@ class MergerValue:
     sec_id), None when it asks none). The acquirer, its price ticker and the request come from the gate's first pass,
     on the run's own closes; `own_verdict` is that pass's (payout, terms) when the caller's answers moved the values
     (None: the values are the first pass's), which the run's decisions read (`MergerValues.read_terms`,
-    `reconciled`), so an answer changes values only."""
+    `reconciled`), so an answer changes values only. `dividend` is the closing dividend that counts in the value
+    (FB-021: cash the target paid its holders because the deal closed, when the last close still carried it,
+    `payout_gate._counted`). It is no part of `payout` or `terms`: those are the package, which the run's decisions
+    read (operator ruling 2026-10-04: a special dividend is never consideration), and only the table's cash adds it
+    (`MergerValues.table_terms`)."""
     key: DelistingKey
     raw: Any = None
     read: bool = False
@@ -100,6 +104,7 @@ class MergerValue:
     request: tuple[str, str] | None = None
     own_verdict: tuple[float | None, Mapping[str, Any] | None] | None = None
     statement: StatementTerms | None = None       # stage 8b's restatement (`MergerValues.restate`)
+    dividend: float | None = None
 
 
 @dataclass(frozen=True)
@@ -163,7 +168,7 @@ class MergerValues:
         self.records[key] = replace(
             v, statement=terms, payout=terms.cash_per_share, source=STATEMENT_SOURCE, confidence="medium",
             terms=priced, flags=(*kept, f"{TERMS_GATE_SKIPPED}:own_statement"), priced_by="", acquirer_sec_id="",
-            price_ticker=terms.ticker, leg_sec_ids={}, request=(terms.ticker, ""), own_verdict=None)
+            price_ticker=terms.ticker, leg_sec_ids={}, request=(terms.ticker, ""), own_verdict=None, dividend=None)
 
     def _decided(self, key: DelistingKey) -> tuple[float | None, Mapping[str, Any] | None]:
         """(payout, terms) as the run's decisions read them: the caller's --merger-terms row, else the gate's verdict
@@ -215,12 +220,16 @@ class MergerValues:
     def table_terms(self, key: DelistingKey) -> TableTerms:
         """What delistings.csv carries of the delisting's merger terms (stage 10a), for any delisting: the stock leg
         the gate priced, else the caller's --merger-terms row (by delisting, else by sec_id: every delisting of the
-        security), and its cash, else the cash the gate kept; with the gate's source, confidence and flags."""
+        security), and its cash, else the cash the gate kept; with the gate's source, confidence and flags. The
+        cash is all the cash one share received: a closing dividend the gate counted is added here (FB-021)."""
         v = self.records.get(key)
         terms = (v.terms if v is not None and v.terms is not None else for_delisting(self.caller_terms, key)) or {}
         if v is None:
             v = MergerValue(key)
-        return TableTerms(terms.get("cash_per_share", v.payout), terms.get("stock_ratio"), terms.get("acquirer_price"),
+        cash = terms.get("cash_per_share", v.payout)
+        if v.dividend:
+            cash = (cash or 0.0) + v.dividend
+        return TableTerms(cash, terms.get("stock_ratio"), terms.get("acquirer_price"),
                           terms.get("acquirer_ticker"), v.source, v.confidence, v.flags)
 
     def _inputs(self, key: DelistingKey, acquirer_sec_id: str = "") -> MergerInputs:
@@ -228,7 +237,8 @@ class MergerValues:
         pr = v.raw
         return MergerInputs(for_delisting(self.caller_terms, key), v.llm, getattr(pr, "value", None),
                             getattr(pr, "source", "") or "", v.acquirer_sec_id or acquirer_sec_id,
-                            v.price_ticker, getattr(pr, "currency", "") or "", v.leg_sec_ids, v.statement)
+                            v.price_ticker, getattr(pr, "currency", "") or "", v.leg_sec_ids, v.statement,
+                            v.dividend)
 
     def terms_read(self, key: DelistingKey) -> bool:
         """Whether anything states the delisting's merger terms (`MergerInputs.read`, stage 10a): False leaves a
@@ -316,7 +326,8 @@ def value_mergers(delistings: Sequence[Delisting], index: acquirer_line.LineInde
     own = closes if own_closes is None else own_closes
     st = _Stage(clients, index, ftd_lo, workers, workers if llm_workers is None else llm_workers, log)
     mergers = [e for e in delistings if e.record.bucket is CrspBucket.MERGER]
-    raw, llm_terms, review = _read_terms(st, mergers, own, {sid: s.name or "" for sid, s in st.securities.items()})
+    raw, llm_terms, dividends, review = _read_terms(st, mergers, own,
+                                                    {sid: s.name or "" for sid, s in st.securities.items()})
     trade_day = {e.key: e.last_trade.day for e in delistings}
     lines, line_review = _acquirer_lines(st, mergers, llm_terms, caller_terms)
     llm_terms, name_review = _name_acquirer_tickers(st, mergers, llm_terms, lines, caller_terms)
@@ -325,7 +336,8 @@ def value_mergers(delistings: Sequence[Delisting], index: acquirer_line.LineInde
     # The first pass reads none of the caller's answers, neither a received close nor a last close: the acquirer,
     # the request's ticker and the run's decisions (8b's R1 test, 9b's reconciled) rest on what the run reads alone,
     # so a second run with the requests answered keeps them all and changes values only (`--price-answers`).
-    first, lagged = _gate(st, mergers, trade_day, raw, llm_terms, own, caller_terms, tol, lines, wins)
+    first, lagged = _gate(st, mergers, trade_day, raw, llm_terms, own, caller_terms, tol, lines, wins,
+                          dividends=dividends)
     acquirer_ids, added, acquirer_review = _add_acquirers(st, mergers, trade_day, first, lines, wins, found)
     price_tickers = _price_tickers(acquirer_ids, lines, index.fresh() if lines else None)
     asked = {e.key: request for e in mergers
@@ -334,7 +346,8 @@ def value_mergers(delistings: Sequence[Delisting], index: acquirer_line.LineInde
     gated = first
     if answered or any(closes.get(e.key) != own.get(e.key) for e in mergers):
         # the values: the answered closes, each received close through the request it answers
-        gated, lagged = _gate(st, mergers, trade_day, raw, llm_terms, closes, caller_terms, tol, lines, wins, answered)
+        gated, lagged = _gate(st, mergers, trade_day, raw, llm_terms, closes, caller_terms, tol, lines, wins, answered,
+                              dividends)
     for e in mergers:
         if e.key in lagged:
             e.add_flag("acquirer_close_lagged")
@@ -360,18 +373,21 @@ def _record(key: DelistingKey, raw: Mapping, llm_terms: Mapping, gated: GatedPay
         source=gated.sources.get(key), confidence=gated.confidences.get(key), terms=terms,
         flags=tuple(gated.flags.get(key, ())), priced_by=gated.priced_by.get(key, ""),
         acquirer_sec_id=acquirer_ids.get(key, ""), price_ticker=price_tickers.get(key, ""),
-        leg_sec_ids=legs.get(key, {}), request=asked.get(key), own_verdict=own_verdict)
+        leg_sec_ids=legs.get(key, {}), request=asked.get(key), own_verdict=own_verdict,
+        dividend=gated.dividends.get(key))
 
 
 # --- 1. the reads ----------------------------------------------------------------------------------------------
 
 def _read_terms(st: _Stage, mergers: list[Delisting], closes: Mapping[DelistingKey, float],
                 names: Mapping[str, str]) -> tuple[dict[DelistingKey, Any], dict[DelistingKey, MergerTerms],
-                                                   list[ReviewItem]]:
+                                                   dict[DelistingKey, float], list[ReviewItem]]:
     """The regex payout read and the LLM merger terms of each merger (the LLM is told the target security's name,
-    `names` by sec_id), and the review items: a failed extraction's `error`, and a read that rested on a degraded
-    answer (a failed EDGAR read or LLM call; it also flags the merger's own row)."""
+    `names` by sec_id), the closing dividend per share of a merger either reader gave terms for (FB-021, the LLM
+    extractor's `closing_dividend`), and the review items: a failed extraction's `error`, and a read that rested on
+    a degraded answer (a failed EDGAR read or LLM call; it also flags the merger's own row)."""
     clients, raw, llm_terms = st.clients, {}, {}
+    dividends: dict[DelistingKey, float] = {}
     review: list[ReviewItem] = []
     if st.workers > 1 and clients.payout_extractor is not None:
         # The regex payout reader's EDGAR reads, warmed.
@@ -400,6 +416,12 @@ def _read_terms(st: _Stage, mergers: list[Delisting], closes: Mapping[DelistingK
                     t = clients.llm_extractor.extract_offer_terms(e.record, security_name=names.get(e.sec_id, ""))
                 if t is not None:
                     llm_terms[key] = t
+                if t is not None or getattr(raw.get(key), "value", None) is not None:
+                    # FB-021: terms alone leave out a dividend the target paid because the deal closed
+                    d = clients.llm_extractor.closing_dividend(e.record, security_name=names.get(e.sec_id, ""))
+                    if d is not None:
+                        dividends[key] = d.amount
+                        st.log(f"{e.sec_id} {e.delist_date}: closing dividend {d.amount:g} read from {d.source}")
         except FATAL:
             raise
         except Exception as exc:  # an overnight run must survive one bad extraction
@@ -407,7 +429,7 @@ def _read_terms(st: _Stage, mergers: list[Delisting], closes: Mapping[DelistingK
             review.append(ReviewItem(e.sec_id, e.ticker, e.cik, "error", f"{type(exc).__name__}: {exc}",
                                      delist_date=e.delist_date))
         watch.report_delisting(review, e, "payout extraction")
-    return raw, llm_terms, review
+    return raw, llm_terms, dividends, review
 
 
 # --- 2. the acquirer line and an unnamed leg's ticker --------------------------------------------------------------
@@ -573,13 +595,15 @@ def _gate(st: _Stage, mergers: list[Delisting], trade_day: Mapping[DelistingKey,
           raw: Mapping[DelistingKey, Any], llm_terms: Mapping[DelistingKey, MergerTerms],
           closes: Mapping[DelistingKey, float], caller_terms: Mapping, tol: float,
           lines: Mapping[DelistingKey, _AcquirerLine], line_first: Collection[DelistingKey],
-          answers: Mapping[DelistingKey, tuple[str, float]] = {}) -> tuple[GatedPayouts, set[DelistingKey]]:
+          answers: Mapping[DelistingKey, tuple[str, float]] = {},
+          dividends: Mapping[DelistingKey, float] = {}) -> tuple[GatedPayouts, set[DelistingKey]]:
     """Every merger payout through the last-close check (`payout_gate`), the acquirer's price read from its FTD rows
     around that merger's own last trade day (`trade_day`), else from its acquirer line (`lines`, stage 8a; first for
     `line_first`, whose terms' ticker is another line's), against `closes`. `answers` are the caller's received
     closes, each as `(path, price)`: the price of the path (BY_TICKER or BY_LINE) the answered request belongs to, so
     an answer settles the gate only through the request it answers (`_answered_paths` works the path out from a first
-    pass that reads no answer, on the run's own closes). Also the mergers whose terms took a lagged acquirer close
+    pass that reads no answer, on the run's own closes). `dividends` are the closing dividends as read; the gate
+    decides on these closes which count (FB-021). Also the mergers whose terms took a lagged acquirer close
     (the caller flags them from its last pass)."""
     ftd = st.ftd
     acq_symbols = {t.ticker for t in llm_terms.values() if t.acquirer_ticker}
@@ -626,7 +650,7 @@ def _gate(st: _Stage, mergers: list[Delisting], trade_day: Mapping[DelistingKey,
         [e.key for e in mergers],
         {k: pr.value for k, pr in regex.items()}, {k: pr.source for k, pr in regex.items()},
         {k: pr.confidence for k, pr in regex.items()}, llm_terms, closes, caller_terms,
-        acquirer_price, tol, line_price=line_price, line_first=line_first,
+        acquirer_price, tol, line_price=line_price, line_first=line_first, dividends=dividends,
     )
     for k, cur in foreign.items():
         if k not in gated.payouts and not for_delisting(gated.merged_terms, k):

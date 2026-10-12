@@ -8,9 +8,11 @@ with its own prices. The rule and its terms are decided once, by `dlret.rule_of`
 which terms (a --merger-terms row, the terms the payout gate kept, else what the library read before the gate dropped
 them), their source and the gate's verdict, and whose price it needs. This module writes that answer as
 contract/delistings.csv's eleven columns (`value_fields`): `value_rule` (one of `exit_kind.VALUE_RULES`),
-`cash_per_share`, `cash_currency` (ruling R5: as the filing states it; blank for a --merger-terms row and when no
-cash), `stock_ratio`, `price_sec_id`/`price_ticker`/`price_date` (whose price the rule needs, and when: the trading day
-after the last trade, as price_requests dates it), `recovery_ratio`, `terms_source`, `terms_gate` and `value_formula`;
+`cash_per_share` (all the cash one share received: a closing dividend the payout gate counted is in it, and
+`value_formula` names it apart, FB-021), `cash_currency` (ruling R5: as the filing states it; blank for a
+--merger-terms row and when no cash), `stock_ratio`, `price_sec_id`/`price_ticker`/`price_date` (whose price the
+rule needs, and when: the trading day after the last trade, as price_requests dates it), `recovery_ratio`,
+`terms_source`, `terms_gate` and `value_formula`;
 and a basket's legs as contract/payout_legs.csv's rows (`basket_legs`, ruling R3).
 
 A stock leg stated as a dollar value (PCYC) is written in `value_formula` over the acquirer's averaging price, with no
@@ -52,17 +54,33 @@ def _leg(leg: StockLeg, day: str) -> str:
     return f"{leg.value:.2f} × {_price(leg.ticker, day)} / avg_price({leg.ticker or '?'}{window})"
 
 
+def _amount(x: float) -> str:
+    """A dollar amount with its cents, and the further digits a filing states (a $0.41145 pro rata dividend)."""
+    whole, _, digits = f"{x:.6f}".partition(".")
+    return f"{whole}.{digits[:2]}{digits[2:].rstrip('0')}"
+
+
+def _cash(rule: Rule) -> str:
+    """The cash term: the amount, or its parts when a closing dividend is one (FB-021: "18.75 + 1.75 dividend";
+    "1.53 dividend" when the dividend is all the cash). `cash_per_share` carries their sum."""
+    if not rule.dividend:
+        return f"{rule.cash:.2f}"
+    said = f"{_amount(rule.dividend)} dividend"
+    package = rule.cash - rule.dividend
+    return said if package < 0.00005 else f"{_amount(package)} + {said}"
+
+
 def _formula(rule: Rule, day: str) -> str:
     if rule.name == "basket":
         parts = ([f"{rule.cash:.2f}"] if rule.cash else []) + [
             f"{r:.6g} × {_price(t, day)}" for r, t, _ in rule.basket.legs(rule.basket_ticker)]
         return f"({' + '.join(parts)}) / last_close − 1"
     if rule.name == "cash_plus_stock":
-        return f"({rule.cash:.2f} + {_leg(rule.leg, day)}) / last_close − 1"
+        return f"({_cash(rule)} + {_leg(rule.leg, day)}) / last_close − 1"
     if rule.name == "stock":
         return f"{_leg(rule.leg, day)} / last_close − 1"
     if rule.name == "cash":
-        return f"{rule.cash:.2f} / last_close − 1"
+        return f"({_cash(rule)}) / last_close − 1" if rule.dividend else f"{rule.cash:.2f} / last_close − 1"
     if rule.name == "recovery":
         if rule.recovery_ratio is None:            # FB-002: a wind-down whose distributions are not read yet
             return "distributions(?, after the last trade) / last_close − 1"

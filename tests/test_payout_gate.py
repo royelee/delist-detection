@@ -319,3 +319,84 @@ def test_a_line_first_leg_is_priced_by_its_line_even_when_the_tickers_price_reco
         g = gate_payouts([K], {}, {}, {}, {K: terms}, {"ABC": 10.5}, {}, lambda ticker, key: 20.0, DEFAULT_TOL,
                          line_price=lambda key: ("XYZA", 21.0), line_first=first)
         assert (g.priced_by[K], g.merged_terms[K]["acquirer_price"]) == (how, price)
+
+
+# --- FB-021: a dividend paid because the deal closed counts when the last close still carried it ---
+
+def test_a_closing_dividend_counts_when_the_total_is_nearer_the_last_close():
+    # Extended Stay 2021: $18.75 and a $1.75 dividend paid before the effective time, against a 20.46 close
+    r = reconcile(18.75, 20.46, None, None, DEFAULT_TOL, 1.75)
+    assert (r.cash, r.dividend, r.source, r.flags) == (18.75, 1.75, "regex", ())
+
+
+def test_a_dividend_the_last_close_no_longer_carries_does_not_count():
+    # USG 2019: $43.50 against a 43.48 close; the $0.50 special dividend was paid months before
+    r = reconcile(43.50, 43.48, None, None, DEFAULT_TOL, 0.50)
+    assert (r.cash, r.dividend, r.source) == (43.50, None, "regex")
+
+
+def test_the_gate_checks_the_total_it_chose():
+    assert reconcile(8.0, 10.0, None, None, DEFAULT_TOL).cash is None            # 20% under, alone
+    r = reconcile(8.0, 10.0, None, None, DEFAULT_TOL, 2.0)
+    assert (r.cash, r.dividend, r.flags) == (8.0, 2.0, ())
+    r = reconcile(5.0, 10.0, None, None, DEFAULT_TOL, 1.0)                       # nearer with it, and still 40% under
+    assert (r.cash, r.dividend, r.flags) == (None, None, ("payout_gate_failed:5",))
+
+
+def test_a_closing_dividend_counts_beside_the_llms_cash():
+    # Change Healthcare 2022: $25.75 and a $2.00 special dividend, against a 27.49 close
+    r = reconcile(None, 27.49, _terms("cash", 25.75), None, DEFAULT_TOL, 2.0)
+    assert (r.cash, r.dividend, r.source) == (25.75, 2.0, "llm")
+
+
+def test_a_closing_dividend_counts_beside_an_elections_leg():
+    r = reconcile(None, 31.0, _terms("election", 30.0, 1.0, "X"), 24.0, DEFAULT_TOL, 1.0)
+    assert (r.cash, r.stock_ratio, r.dividend, r.source) == (30.0, None, 1.0, "llm_election_cash")
+    r = reconcile(None, 31.0, _terms("election", 40.0, 1.0, "X"), 30.0, DEFAULT_TOL, 1.0)
+    assert (r.cash, r.stock_ratio, r.dividend, r.source) == (None, 1.0, 1.0, "llm_election_stock")
+
+
+def _with_dividend(dividend, payout=None, terms=None, close=10.0, csv=None, price=None):
+    return gate_payouts(
+        [K], {} if payout is None else {K: payout}, {} if payout is None else {K: "8K_2.01"},
+        {} if payout is None else {K: "high"}, {} if terms is None else {K: terms}, {"ABC": close},
+        {} if csv is None else {"ABC": csv}, lambda ticker, key: price, DEFAULT_TOL, dividends={K: dividend})
+
+
+def test_the_gate_keeps_the_cash_and_the_dividend_apart():
+    # the cash the gate kept is the package's (the run's decisions read it); the dividend is a value's part
+    g = _with_dividend(1.75, payout=18.75, close=20.46)
+    assert (g.payouts, g.dividends, g.flags) == ({K: 18.75}, {K: 1.75}, {})
+    g = _with_dividend(0.50, payout=43.50, close=43.48)
+    assert (g.payouts, g.dividends) == ({K: 43.50}, {})
+
+
+def test_a_closing_dividend_counts_beside_a_stock_leg():
+    # Six Flags 2024: 0.58 of a share and a $1.53 special dividend, against a 32.00 close
+    g = _with_dividend(1.53, terms=_terms("stock", None, 0.58, "FUN"), close=32.0, price=52.11)
+    assert g.merged_terms[K] == {"stock_ratio": 0.58, "acquirer_price": 52.11, "acquirer_ticker": "FUN"}
+    assert (g.payouts, g.dividends, g.flags) == ({}, {K: 1.53}, {})
+    # Livongo 2020: $4.24, 0.592 of a share and a $7.09 special dividend
+    g = _with_dividend(7.09, terms=_terms("cash_and_stock", 4.24, 0.592, "TDOC"), close=139.77, price=217.89)
+    assert g.merged_terms[K]["cash_per_share"] == 4.24 and g.dividends == {K: 7.09}
+    # FLIR 2021: the stock leg and the cash alone are nearer the close than with the quarterly dividend
+    g = _with_dividend(0.17, terms=_terms("cash_and_stock", 28.0, 0.0718, "TDY"), close=57.34, price=409.41)
+    assert g.merged_terms[K]["cash_per_share"] == 28.0 and g.dividends == {}
+
+
+def test_a_stock_leg_that_fits_only_with_the_dividend_is_kept_with_it():
+    g = _with_dividend(2.0, terms=_terms("stock", None, 1.0, "X"), close=10.0, price=8.0)     # 20% under, alone
+    assert g.merged_terms[K]["stock_ratio"] == 1.0 and g.dividends == {K: 2.0}
+    alone = _gate(terms=_terms("stock", None, 1.0, "X"), close=10.0, price=8.0)
+    assert alone.flags[K] == ("terms_gate_failed:fail_sanity",)
+
+
+def test_the_dividend_of_a_regex_value_the_stock_gate_replaced_is_dropped_with_it():
+    # the regex value fits with the dividend; the LLM's all-stock terms then settle the row, alone nearer the close
+    g = _with_dividend(1.0, payout=9.0, terms=_terms("stock", None, 1.0, "X"), close=10.0, price=10.05)
+    assert (g.payouts, g.dividends) == ({}, {}) and g.merged_terms[K]["stock_ratio"] == 1.0
+
+
+def test_a_callers_terms_take_no_dividend():
+    g = _with_dividend(1.75, payout=18.75, close=20.46, csv={"cash_per_share": 18.75})
+    assert g.dividends == {}

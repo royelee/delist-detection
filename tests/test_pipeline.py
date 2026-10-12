@@ -14,7 +14,7 @@ from delist_detection.endings.delistings import Delisting, DelistingFinder
 from delist_detection.sources.edgar import EdgarBlocked, EdgarSubmission
 from delist_detection.sources.ftd import FtdRow
 from delist_detection.endings.last_trade import LastTrade
-from delist_detection.terms.llm_merger_extractor import MergerTerms
+from delist_detection.terms.llm_merger_extractor import ClosingDividend, MergerTerms
 from delist_detection.identity.observations import Observation, ObservationIndex, TickerEra
 from delist_detection.terms.acquirers import acquirer_cik
 from delist_detection.pipeline import Clients, Overrides, run
@@ -873,6 +873,9 @@ def _two_stock_mergers(fake_edgar, monkeypatch):
         def extract(self, record, security_name=""):
             return self.mapping.get((record.sec_id, record.delist_date))
 
+        def closing_dividend(self, record, security_name=""):
+            return None
+
     clients.llm_extractor = _LLMByKey({
         ("BBGSEC001", "2020-06-15"): terms1,
         ("BBGSEC002", "2020-06-15"): terms2,
@@ -1318,6 +1321,9 @@ def test_a_lagged_acquirer_close_flags_the_delisting(fake_edgar, tmp_path, monke
     class _LLM:
         def extract(self, record, security_name=""):
             return MergerTerms("stock", None, 1.0, "ACQUIRER CO", "ACQ", "high", "8-K:X", "")
+
+        def closing_dividend(self, record, security_name=""):
+            return None
 
     clients.llm_extractor = _LLM()
     run(index, clients, Overrides(last_trade_closes={"BBGSEC201": 100.0, "BBGSEC202": 150.0}), out_dir=tmp_path,
@@ -2596,6 +2602,29 @@ def test_a_merger_with_no_terms_read_has_no_fill_and_says_why(fake_edgar, tmp_pa
     assert summary.uncertain == {"seed": 0, "security": 0, "ending": 1}
 
 
+def test_a_closing_dividend_is_in_the_value_of_a_merger_and_named_in_its_formula(fake_edgar, tmp_path):
+    """FB-021 (Extended Stay 2021): the merger paid $210.10 and the target paid a $2.50 dividend because the deal
+    closed, against a 212.70 last close. The value reads all the cash a holder of the last close received; the
+    contract's `cash_per_share` is that sum and its formula names the dividend. The row was -1.2% without it."""
+    class _LLM:
+        def extract(self, record, security_name=""):
+            return MergerTerms("cash", 210.10, None, "CVS HEALTH", None, "high", "8-K:X", "", package_basis="fixed")
+
+        def closing_dividend(self, record, security_name=""):
+            return ClosingDividend(2.50, "8-K:X", "a special dividend of $2.50 per share")
+
+    index, clients = _clients(fake_edgar)
+    clients.llm_extractor = _LLM()
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+    (d,) = read_table("delistings", table_path(tmp_path, "delistings"))
+    assert (d["payout_per_share"], d["terminal_value"], d["dlret"], d["dlret_method"], d["payout_source"]) == (
+        "212.600000", "212.600000", "-0.000470", "cash_only", "llm")
+    (c,) = read_table("contract_delistings", tmp_path / "contract" / "delistings.csv")
+    assert (c["exit_kind"], c["value_rule"], c["cash_per_share"], c["dlret"], c["terms_gate"], c["verdict"]) == (
+        "merger", "cash", "212.600000", "-0.000470", "passed", "confirmed")
+    assert c["value_formula"] == "(210.10 + 2.50 dividend) / last_close − 1"
+
+
 def test_a_sighting_after_the_ending_is_an_uncertain_seed_but_not_an_uncertain_security(fake_edgar, tmp_path):
     index, clients = _clients(fake_edgar, extra_obs=(Observation("AET", "2019-06-28", "AETNA INC", cik=1122304),))
     summary = run(index, clients, AET_TERMS, out_dir=tmp_path, log=lambda *_: None)
@@ -2725,6 +2754,9 @@ def _stock_merger_whose_gate_reads_the_close(fake_edgar, monkeypatch):
     class _LLM:
         def extract(self, record, security_name=""):
             return MergerTerms("stock", None, 2.0, "ACQUIRER CO", "ACQ", "high", "8-K:X1", "", package_basis="fixed")
+
+        def closing_dividend(self, record, security_name=""):
+            return None
 
     clients.llm_extractor = _LLM()
     return index, clients
@@ -3030,6 +3062,9 @@ class _CashLLM:
     def extract(self, record, security_name=""):
         self.asked.append((record.ticker, record.sec_id))
         return MergerTerms("cash", 40.9, None, "ACQUIRER CO", None, "high", "8-K:0000004242-14-000020", "")
+
+    def closing_dividend(self, record, security_name=""):
+        return None
 
 
 def test_the_ending_of_a_line_successor_the_run_added_is_valued(fake_edgar, tmp_path):

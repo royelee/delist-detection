@@ -232,8 +232,9 @@
   the mismatches it makes are settled under the judge's own keys, `loop_round.new_row_keys`) and commits the truth
   set: the truth file, the
   change log and the ledger together (`truth_set.TruthSet.commit`, `atomic_io.replace_all_on_success`); no script
-  writes one of them alone, and a sub-plan's rulings are data passed to `TruthSet.rule` (scripts/apply_5f/5h/5i, and apply_fb020_truth_rule.py for the
-  contract's `last_trade_date` rule of FB-019 and FB-020). A
+  writes one of them alone, and a sub-plan's rulings are data passed to `TruthSet.rule` (scripts/apply_5f/5h/5i, apply_fb020_truth_rule.py for the
+  contract's `last_trade_date` rule of FB-019 and FB-020, and apply_fb021_truth_rule.py for a `cash_per_share` cell
+  that leaves out a closing dividend). A
   `pending` ledger row is never re-diagnosed automatically: the operator settles it or deletes the row. The loop
   stops after a round with no new error, or after 3 rounds. A sub-plan is accepted only when `D.mismatches` fell
   and `scripts/scorecard.py --check --base <commit>` passes (`D.unexplained_regressions` 0, `loop_round.unexplained`). `truth_build.UNSETTLED`: an OpenFIGI error or several US
@@ -284,8 +285,9 @@
   ending. A day that is not a confirmed exchange print no later than the Form 25 effective date
   (`exit_kind.LastTrade.print_confirmed`; architecture step 4's ruling) makes the ending `uncertain`, with the
   failing part as its reason in `uncertain.csv`; a continuation's verdict does not judge its day. The price date and
-  the price requests follow the published date; a continuation has no value; assumed par, Shumway marks
-  and a transfer's 0.0 are `dlret_fill`. `--price-answers` (the requests plus a `price` column) feeds the closes and
+  the price requests follow the published date; a continuation has no value and publishes no cash (cash paid to
+  the old security's holders at the step is a dividend of the price series, dated on the successor's first day:
+  FB-021); assumed par, Shumway marks and a transfer's 0.0 are `dlret_fill`. `--price-answers` (the requests plus a `price` column) feeds the closes and
   acquirer prices, so a second run changes values only: each stage reads the answer to its own request
   (`price_requests.PriceAnswers`; stage 7 a last close, stage 8 a stock leg's received close, stage 10a an OTC print
   or a plan's new-line close), and `pipeline.Overrides` holds only the caller's own files. What decides an identity,
@@ -569,6 +571,22 @@
   `run_snapshot` refuse every older commit's file. An election whose cash and stock legs together reconcile,
   when neither does alone, is its default package (`llm_election_package`, sub-plan 5e); either-or legs are never
   summed.
+- **A closing dividend is read apart from the package and counts in the value only (FB-021).** It is cash the
+  target paid its holders because the deal closed (Extended Stay 2021: $1.75 a share beside the merger's $18.75).
+  `LLMMergerTermsExtractor.closing_dividend` reads it with a question of its own, for a merger either reader gave
+  terms for, from a closing filing whose text names a dividend with a dollar amount. The filings state a record
+  date and a payment date and no ex-date, so the last close decides: the dividend counts when the consideration
+  with it is nearer the last close than the consideration alone (`payout_gate._counted`), and the gate then checks
+  that total as it checks every value. When the consideration alone is nearer, the stock had gone ex-dividend, the
+  price series carries the payment, and it does not count (USG 2019). The decision is made on the closes each gate
+  pass reads, so a caller's answered close can change it, as it can change any value. A counted dividend is added
+  only to the table's cash (`MergerValues.table_terms`): `payout_per_share` and the contract's `cash_per_share`
+  are all the cash one share received, `raw_payout_per_share` stays the regex read, and `value_formula` names the
+  parts (`(18.75 + 1.75 dividend) / last_close − 1`). What the run's decisions read (`read_terms`, `reconciled`)
+  is the package without it, so the operator ruling of 2026-10-04 (a special dividend is never consideration)
+  still decides an ending's kind, and a continuation publishes no cash (Kraft 2015, Baker Hughes 2017). A
+  `--merger-terms` row takes no dividend: the caller states all the cash. No prompt version changed and no merger
+  is read again; the question's answers are cached under `{accession}_{model}_div1_{ticker}`.
 
 ## The golden set is the regression gate
 

@@ -1345,7 +1345,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   ending: the regex read and the LLM terms (`read`/`raw`, `llm`), the gate's verdict (`payout`, `source`,
   `confidence`, the priced stock leg `terms`, `flags`, `priced_by`), the acquirer security, its `price_ticker`, a
   basket's `leg_sec_ids`, and the received close its stock leg asks (`request`), plus the acquirers the run adds and
-  the review items. Its steps: the reads (the LLM told the target's name; both filled ahead on the worker threads,
+  the review items. `MergerValue.dividend` is the closing dividend the last gate pass counted (FB-021): `table_terms`
+  adds it to the cash delistings.csv carries, `contract_inputs` hands it to the payout rule, and `read_terms` and
+  `reconciled` never read it. Its steps: the reads (the LLM told the target's name; both filled ahead on the worker threads,
   the sequential pass then reading what they cached), sub-plan 5e's stage 8a acquirer line of every stock leg before
   the gate, passed or not (`acquirer_line`; a merger before the run's fails window reads its lines' rows into a
   private index, `FtdIndex.apart` and `LineIndex.fresh`), stage 8a' (`acquirer_ticker`: a leg with no ticker and no line), the gate
@@ -1421,8 +1423,20 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   degraded miss (`SEC_STATS.degraded("llm_call")`: the delisting is `resolution_degraded`), never cached; with
   the calls are filled ahead on `--llm-workers` threads (default 8), one lock per answer file so no call is paid for twice. Calibrate with
   `scripts/eval_merger_extractor.py --truth` (the 10 deals and the truth set's terms cases).
+  `closing_dividend(record, security_name=)` (FB-021) is the third call every adapter takes: the cash the target
+  paid its holders because the deal closed (`ClosingDividend`: every such dividend the filing names, summed,
+  without one the stated consideration already includes). The package never holds it (the prompt's rule, operator
+  ruling 2026-10-04). It is read from the closing 8-K, then an 8-K that reports the closing without 2.01,
+  `max_filings` at most; only a filing whose text names a dividend with a dollar amount is sent, with the text
+  around each "dividend" and its own question (`DIVIDEND_PROMPT`, `DIVIDEND_SCHEMA`), cached as
+  `{accession}_{model}_div1_{ticker}`. Stage 8 asks it for a merger with terms and the payout gate decides whether
+  it counts. The proxy and the exhibits are never opened for it.
 - `terms/payout_gate.py` — every merger payout checked against the last trade before it reaches the table
   (`reconcile`, `gate_payouts` -> `GatedPayouts`); the payout rule's entry has the gate's reading of an LLM answer.
+  A closing dividend as read (`dividends`, FB-021) counts beside a value when the total is nearer the last close
+  than the value alone (`_counted`), and the gate checks the total it chose (`_checked`). The answer names a
+  counted dividend apart (`Reconciled.dividend`, `GatedPayouts.dividends`) and never adds it to `payouts` or
+  `merged_terms`: those are the package, which the run's decisions read.
 - `terms/filing_selection.py` — the merger extractors' filing picker, pure: the closing 8-K, the announcement 8-K and the
   merger proxies within a window (`closing_8k`, `announcement_8k`, `form_filings`, `in_window`), shared by
   `payout_extractor` and `llm_merger_extractor`.
@@ -1493,7 +1507,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `TruthSet.new(truth, rows, legs)` is a set whose rows and legs are given (sub-plan 5-0's build, tests);
   `read_ledger` is the ledger's validated read (scripts/scorecard.py); `LEDGER_COLUMNS` is the ledger's file format
   (its path is the loop folder's, `loop_round.Loop.ledger`). The truth files' only reader and writer:
-  the scorecard, the loop scripts, the apply_5f/5h/5i_truth_rulings.py and apply_fb020_truth_rule.py scripts (their rulings as data), the fixture
+  the scorecard, the loop scripts, the apply_5f/5h/5i_truth_rulings.py, apply_fb020_truth_rule.py and apply_fb021_truth_rule.py scripts (their rulings as data), the fixture
   builders and tests/test_diagnosis_truth_cases.py go through it.
 - `measurement/regression.py` — the contract diff between two run snapshots (the base commit's, `RunSnapshot.at`, and the
   folder's), outside the truth set and its successor chains (`excluded`); `build_report(base, new, cases)` is the one

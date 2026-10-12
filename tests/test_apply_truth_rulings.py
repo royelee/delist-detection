@@ -1,4 +1,5 @@
-"""scripts/apply_5f/5h/5i_truth_rulings.py and apply_fb020_truth_rule.py, their rulings as data over the truth set: each applied to copies of the
+"""scripts/apply_5f/5h/5i_truth_rulings.py, apply_fb020_truth_rule.py and apply_fb021_truth_rule.py, their rulings as
+data over the truth set: each applied to copies of the
 committed truth files changes nothing, since every ruling has been applied (a ruling applies once), and a second run
 changes nothing either. 5f's rulings, before step 9a, would have undone the wave 2 loop's flips of VMED and MHS to
 pass on a rerun; and every rewrite through a raw CSV round trip dropped a cell of the change log's last row."""
@@ -39,6 +40,7 @@ def _bytes(tmp_path):
     ("apply_5h_truth_rulings", ["--after-run"], "0 truth change rows"),
     ("apply_5i_truth_rulings", [], "0 truth changes"),
     ("apply_fb020_truth_rule", [], "0 truth changes"),
+    ("apply_fb021_truth_rule", [], "0 truth changes"),
 ])
 def test_a_run_on_the_committed_truth_set_changes_nothing(tmp_path, capsys, name, extra, said):
     truth = _copies(tmp_path)

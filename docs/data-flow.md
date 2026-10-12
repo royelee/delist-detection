@@ -361,6 +361,9 @@ verdict is always `uncertain`, so a reader must not filter it away as "no ending
 `merger_value.MergerValues.contract_inputs` hands it the `--merger-terms` row, the LLM terms and regex read from before the payout gate, and the acquirer's
 sec_id): a merger's terms come from the override, else the delistings.csv row (`terms_gate` passed, or blank
 when no last close existed), else the pre-gate read (`terms_gate=failed`; a failed election publishes both legs as read).
+`cash_per_share` is all the cash one share received: a dividend the target paid because the deal closed is in it when the
+payout gate counted it (FB-021: the total is nearer the last close than the consideration alone), and `value_formula`
+names the parts, `(18.75 + 1.75 dividend) / last_close − 1`. Terms the gate did not keep take no dividend.
 The scorecard counts endings by `R2.7.value_rule.<rule>` and `R2.7.payout_rule_known`.
 10h, the scorecard.
 

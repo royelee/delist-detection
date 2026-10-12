@@ -17,7 +17,7 @@ from delist_detection.endings.delistings import Delisting
 from delist_detection.sources.ftd import FtdIndex
 from delist_detection.identity.issuer_record import IssuerRecord
 from delist_detection.endings.last_trade import LastTrade
-from delist_detection.terms.llm_merger_extractor import MergerTerms
+from delist_detection.terms.llm_merger_extractor import ClosingDividend, MergerTerms
 from delist_detection.terms.merger_value import MergerValue, MergerValues, TableTerms, value_mergers
 from delist_detection.terms.payout_extractor import PayoutResult
 from delist_detection.pipeline import Clients
@@ -47,9 +47,16 @@ class _Terms:
     """An LLM extractor that answers each target from a map (by ticker); `seen` records the names it was told, and
     `offers` the targets whose offer documents it was asked for (answered from `offer_answers`)."""
 
-    def __init__(self, answers: dict, calls: list | None = None, offer_answers: dict | None = None) -> None:
+    def __init__(self, answers: dict, calls: list | None = None, offer_answers: dict | None = None,
+                 dividends: dict | None = None) -> None:
         self.answers, self.calls, self.seen = answers, calls if calls is not None else [], []
         self.offer_answers, self.offers = offer_answers or {}, []
+        self.dividends, self.dividend_asks = dividends or {}, []
+
+    def closing_dividend(self, record, security_name=""):
+        self.dividend_asks.append(record.ticker)
+        amount = self.dividends.get(record.ticker)
+        return None if amount is None else ClosingDividend(amount, "8-K:D1", "a special dividend")
 
     def extract(self, record, security_name=""):
         self.calls.append(record.ticker)
@@ -116,6 +123,9 @@ def test_the_llm_calls_are_filled_ahead_on_worker_threads_with_the_same_answers(
             calls.append(record.ticker)
             return cache.setdefault(record.ticker, MergerTerms("cash", 10.0 + len(cache), None, None, None, "high",
                                                                "8-K:x", "", package_basis="fixed"))
+
+        def closing_dividend(self, record, security_name=""):
+            return None
 
     es = [_merger(t, t, "2016-09-16", date(2016, 9, 15)) for t in ("AAA", "BBB", "CCC")]
 
@@ -256,6 +266,71 @@ def test_an_answered_last_close_moves_the_gates_values_only():
     assert _value([e], llm=llm, closes={e.key: 20.0}).get(e.key).own_verdict is None   # nothing answered: one pass
 
 
+# --- FB-021: a closing dividend -----------------------------------------------------------------------------------------
+
+class _Cash:
+    """The regex payout reader's double: `values` by ticker."""
+
+    def __init__(self, values: dict) -> None:
+        self.values = values
+
+    def extract(self, record, last_close=None):
+        v = self.values.get(record.ticker)
+        return PayoutResult.none() if v is None else replace(PayoutResult.none(), value=v, confidence="high",
+                                                             source="8K_2.01")
+
+
+def test_a_closing_dividend_is_in_the_tables_cash_and_never_in_what_the_runs_decisions_read():
+    """Extended Stay 2021: $18.75 from the merger and a $1.75 dividend paid before the effective time, against a
+    20.46 close. The value reads all the cash (20.50); the package the run's decisions read stays 18.75 (operator
+    ruling 2026-10-04: a special dividend is never consideration), and the contract's inputs name the dividend."""
+    e = _merger("S", "STAY", "2021-06-26", date(2021, 6, 15))
+    llm = _Terms({}, dividends={"STAY": 1.75})
+    logged = []
+    values = _value([e], llm=llm, payout=_Cash({"STAY": 18.75}), closes={e.key: 20.46}, log=logged.append)
+    v = values.get(e.key)
+    assert (v.payout, v.dividend, v.flags) == (18.75, 1.75, ())
+    assert values.table_terms(e.key).payout_per_share == 20.50
+    assert values.read_terms(e.key) == (18.75, None) and values.reconciled(e.key)
+    assert values.contract_inputs([ending("S", "2021-06-26")])[e.key].dividend == 1.75
+    assert logged == ["S 2021-06-26: closing dividend 1.75 read from 8-K:D1"]
+
+
+def test_a_dividend_the_last_close_does_not_carry_changes_nothing():
+    # USG 2019: the $0.50 was paid months before the closing
+    e = _merger("U", "USG", "2019-05-04", date(2019, 4, 23))
+    values = _value([e], llm=_Terms({}, dividends={"USG": 0.5}), payout=_Cash({"USG": 43.5}), closes={e.key: 43.48})
+    assert values.get(e.key).dividend is None and values.table_terms(e.key).payout_per_share == 43.5
+
+
+def test_a_closing_dividend_beside_a_stock_leg_is_the_tables_cash():
+    # Six Flags 2024: 0.58 of a share and a $1.53 dividend; the answered close prices the leg
+    e = _merger("X", "SIX", "2024-07-12", date(2024, 7, 1))
+    leg = PriceAnswers({PriceKey("X", "2024-07-01", RECEIVED_CLOSE, "FUN", "2024-07-02"): 52.11})
+    values = _value([e], llm=_Terms({"SIX": _stock(0.58, "FUN")}, dividends={"SIX": 1.53}), closes={e.key: 32.0},
+                    answers=leg)
+    terms = values.table_terms(e.key)
+    assert (terms.payout_per_share, terms.stock_ratio, terms.acquirer_price) == (1.53, 0.58, 52.11)
+    assert values.read_terms(e.key) == (None, 0.58)        # the first pass priced no leg: the LLM's terms, no dividend
+
+
+def test_the_dividend_is_asked_only_of_a_merger_with_terms_and_never_counts_beside_a_callers_row():
+    es = [_merger("A", "AAA", "2021-06-26", date(2021, 6, 15)), _merger("B", "BBB", "2021-06-26", date(2021, 6, 15)),
+          _merger("C", "CCC", "2021-06-26", date(2021, 6, 15), bucket=CrspBucket.LIQUIDATION)]
+    llm = _Terms({}, dividends={"AAA": 1.75, "BBB": 1.75})
+    values = _value(es, llm=llm, payout=_Cash({"AAA": 18.75}), closes={e.key: 20.46 for e in es},
+                    caller_terms={"A": {"cash_per_share": 18.75}})
+    assert llm.dividend_asks == ["AAA"]                    # BBB has no terms read; CCC is no merger
+    assert values.get(es[0].key).dividend is None and values.table_terms(es[0].key).payout_per_share == 18.75
+
+
+def test_a_restated_merger_keeps_no_dividend():
+    from delist_detection.outputs.dlret import StatementTerms
+    values = _values(payout=18.75, dividend=1.75)
+    values.restate(K, StatementTerms(1.0, "CNNE", "CANNAE HOLDINGS"), PriceAnswers(), date(2017, 11, 17))
+    assert values.get(K).dividend is None and values.table_terms(K).payout_per_share is None
+
+
 # --- what the later stages read --------------------------------------------------------------------------------------
 
 K = DelistingKey("M", "2018-06-01")
@@ -345,6 +420,9 @@ def test_the_llm_calls_are_filled_ahead_on_their_own_threads_whatever_the_sec_wo
                 threads.append(threading.current_thread().name)
             return MergerTerms("cash", cash[record.ticker], None, None, None, "high", "8-K:x", "",
                                package_basis="fixed")
+
+        def closing_dividend(self, record, security_name=""):
+            return None
 
     es = [_merger(t, t, "2016-09-16", date(2016, 9, 15)) for t in ("AAA", "BBB", "CCC")]
     one = {k: v.llm for k, v in _value(es, llm=Ext(), workers=1, llm_workers=1).records.items()}
