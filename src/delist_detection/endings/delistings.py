@@ -28,8 +28,8 @@ from ..vocabulary.exit_kind import (FAILS_ROWS, LAST_SIGHTING, MIDAS, effective_
                                     rests_on_continued_filings)
 from ..sources.ftd import FtdIndex
 from ..filings.form25 import (
-    ISSUER_FORM25_FORMS, REGIONAL_EXCHANGES, Form25, SecurityRef, class_kind, class_letters, is_involuntary,
-    list_form25, match_securities, other_class, parse_form25, tie_candidates, tied_securities,
+    ISSUER_FORM25_FORMS, REGIONAL_EXCHANGES, Form25, SecurityRef, class_kind, class_letters, every_class,
+    is_involuntary, list_form25, match_securities, other_class, parse_form25, tie_candidates, tied_securities,
 )
 from ..identity.history import Ending
 from ..vocabulary.identifiers import class_letter
@@ -466,15 +466,27 @@ class DelistingFinder:
         one removed; when exactly one of the rest was sighted within TIE_STOP_NEAR_DAYS before the filing (or
         later) it owns the Form 25 (GGP 2018 against Brookfield Property REIT, Carolina Group 2008 against Loews, CIT
         2009 against the reorganized CIT, Lions Gate 2016 against its A and B lines). None when no tied sibling
-        trades on (nothing says which stopped), or when several or none of the rest stopped here: the tie stays."""
+        trades on (nothing says which stopped), or when several or none of the rest stopped here: the tie stays.
+        A Form 25 that names every class of the issuer's lines without telling them apart belongs to each line that
+        stopped at it (FB-003, below)."""
+        near = (date.fromisoformat(sub.filing_date) - timedelta(days=TIE_STOP_NEAR_DAYS)).isoformat()
         cands = tie_candidates(f25, refs)
         if len(cands) < 2:
-            return None
+            # FB-003 (Twenty-First Century Fox 2019): the text names as many classes as the issuer has lines and
+            # tells none apart (`form25.every_class`). Each line is one of the classes, so each owns the Form 25
+            # when none of them trades on after it and every one of them traded or was sighted near it.
+            named = every_class(f25, refs)
+            if ctx.security.sec_id not in named:
+                return None
+            lines = [ctx.record_of(sid) for sid in named]
+            if any(self._goes_on(r, sub, f25) for r in lines):
+                return None
+            stopped = all(r.last_seen >= near or r.traded_within(sub.filing_date, TIE_STOP_NEAR_DAYS) for r in lines)
+            return ctx.security.sec_id if stopped else None
         records = {sid: ctx.record_of(sid) for sid in cands}
         going = {sid for sid, r in records.items() if self._goes_on(r, sub, f25)}
         if not going:
             return None
-        near = (date.fromisoformat(sub.filing_date) - timedelta(days=TIE_STOP_NEAR_DAYS)).isoformat()
         stopped = [sid for sid in cands - going if records[sid].last_seen >= near]
         if len(stopped) != 1:
             return None

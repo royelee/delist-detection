@@ -356,7 +356,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   such classes (`_class_matches`: Liberty SiriusXM's Series C line beside the Series B and C the text names), unless
   their own fails descriptions name another letter (`letter_hint`) or there are more of them than classes;
   `tie_candidates` (the siblings a Form 25 its text cannot place may be about: the tied ones, else, for a text with
-  no class letter, every security of its kind) is the finder's to break by trading.
+  no class letter, every security of its kind) is the finder's to break by trading. `every_class` (FB-003, Twenty-First
+  Century Fox 2019's "Class A Common Stock & Class B Common Stock"): a text that names two or more class letters
+  while the issuer's lines of that kind are as many and carry no letter names each of them, whichever is which.
   `about_class` (a Form 25 is about the security's own class: not of a preferred, warrant, right, unit, fund or
   debt class, not another tracking group's (`other_class`), and not naming only other class letters) and
   `names_only_other_group` (an 8-K section that names tracking groups' common stock and none is the
@@ -751,8 +753,18 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   era's own CUSIPs traded under the ticker the ticker's fails rows are another CUSIP's, the own CUSIPs have no
   trading row later than `LEFT_BEHIND_SETTLE_DAYS` after that CUSIP's first, and `_went_bankrupt` between them; the
   old stock, only observed in 2014, had taken the id of the stock issued under the plan, and becomes
-  `CIK1349436-COMMON`; a new CUSIP with no bankruptcy, Equinix 2015 or Thomson Reuters 2018, changes nothing);
-  `superseded_placeholders` marks a placeholder a later FIGI line of its
+  `CIK1349436-COMMON`; a new CUSIP with no bankruptcy, Equinix 2015 or Thomson Reuters 2018, changes nothing); and
+  (FB-003, Fox 2019) a CUSIP switch is no carrying link when another registrant replaced the class
+  (`identity._Replaced`: the old registrant's Form 25 and an 8-K with item 2.01 or 5.01 within `REPLACED_DAYS` of the
+  new CUSIP's first fails row, the new registrant's Form 10-12B/10-12G (a spin-off's registration; an S-4 with an
+  8-A is an exchange of shares, Clearwire 2008) from `REGISTRATION_LEAD_DAYS`
+  before it, and no 8-K12B/8-K12G3 of the new registrant: Twenty-First Century Fox's FOXA to Fox Corporation's;
+  Merck 2009, Clearwire 2008, Express Scripts 2012 and Disney 2019 are one-for-one and stay one line), so the old weak era is another
+  line (`weak_eras_on_another_line`'s `replaced`), and (`weak_eras_before_registrant`, over
+  `identity._RegistrantAfter`) a weak era with CUSIPs of its own, no CUSIP carrying it on to an era confirmed on the
+  composite, whose ticker SEC lists today under another company that had filed nothing when the era began and is no
+  8-K12B/8-K12G3 successor registrant (`IssuerRecord.listed_under`, `first_filed`) loses its pick, even when no later
+  era of the run is confirmed on the composite (`detached_review`: `BEFORE_REGISTRANT`); `superseded_placeholders` marks a placeholder a later FIGI line of its
   issuer and class holds the ticker for (not listed today), and `identity.left_behind_placeholders` one a
   bankruptcy left behind that way (EDGAR's listing under the ticker is the later shares': stage 5 takes it as not
   listed, so the exchange's Form 25 is its ending). Its era-level
@@ -891,7 +903,12 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   days after the new CUSIP's first row, applied only at the data edge (the old CUSIP's last row within
   `SWITCH_TAIL_DAYS` of `FtdIndex.data_end()`, the fails data's last day, passed as `data_end`: a live line has no stop to see; CHTR's new
   preferred; elsewhere the window is the whole of it, HYH 2018); the own-ticker pick is made before held CUSIPs are
-  dropped, and a pick another security holds is no step (LMCA 2016)); `corroborate` (R1: refused for an 8-K 1.03 in
+  dropped, and a pick another security holds is no step (LMCA 2016), unless the issuer was renamed (FB-003, News Corp
+  2013): the held pick's rows do not name the issuer (the spin-off kept NWSA) and another free switch's rows name the
+  issuer's EDGAR name in force from its first row (`issuer_names`; Twenty-First Century Fox's FOXA, found through
+  its renamed-CUSIP scan or its 8-K text), which is then the issuer's own next line (`_issuers_next_line`; of
+  several, the one that began the day the held pick did, FOXA beside the new News Corp's NWSA, class B a day
+  later)); `corroborate` (R1: refused for an 8-K 1.03 in
   [first − 180, first + 30] d, an OTC move (a new symbol with an 8-K 3.01, a Form 25 or a Form 15 within
   `FILING_DAYS`; a Form 25 counts only when `form25.about_class` says it is about the line's own class, an 8-K 3.01
   unless its section `form25.names_only_other_group`: Liberty Interactive's March 2018 Form 25 and 3.01 are the
@@ -1174,7 +1191,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   classifier's listing deficiency, default transfer, `unknown` or a merger only the continued-filings rule relabelled
   (`exit_kind.merger_relabel`: Retail Value Inc. 2022's Item 2.01 and a registrant that kept filing) becomes CRSP
   520, compliance failure, drop reason `moved_otc`, medium; a cover not in the cache, unread or naming an exchange,
-  with no OTC listing, changes nothing; Freddie Mac and Fannie Mae, June 2010, both on EDGAR's OTC listing too), `_tie_owner` (FB-004: a Form 25 the text leaves between
+  with no OTC listing, changes nothing; Freddie Mac and Fannie Mae, June 2010, both on EDGAR's OTC listing too), `_tie_owner` (FB-003: a Form 25 that names as many classes as the issuer has letterless lines, `form25.every_class`,
+  belongs to each of them when none trades on after it and each traded or was sighted within `TIE_STOP_NEAR_DAYS`
+  before it; FB-004: a Form 25 the text leaves between
   siblings, `form25.tie_candidates`, belongs to the one that stops at it: the candidates whose own CUSIPs trade on
   past it (`_goes_on`: `trades_after`, after a removal under (b) only a row under an own ticker) are not removed, and
   when at least one trades on and exactly one of the rest was sighted within `TIE_STOP_NEAR_DAYS` (90) before the

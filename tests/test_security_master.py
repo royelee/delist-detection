@@ -1489,6 +1489,95 @@ def test_a_weak_pick_across_a_change_of_issuer_with_no_evidence_of_two_lines_kee
     assert (res[old.key].sec_id, res[old.key].source) == ("BBGTODAY001", "ticker") and detached == {}
 
 
+# --- FB-003, Fox 2019: another registrant took the class's place (rule C) ---------------------------------------------
+
+
+def test_a_cusip_switch_to_a_registrant_that_replaced_the_old_one_does_not_carry_the_line_on():
+    """Twenty-First Century Fox's FOXA (CUSIP 90130A101) to Fox Corporation's (35137L105) on 2019-03-21: the old
+    registrant's Form 25 and closing 8-K, the new one's Form 10 and 8-A. The weak pick of the old era (OpenFIGI has no
+    composite for its CUSIP; the ticker gave Fox Corporation's) is another line's and leaves the composite."""
+    asked = []
+
+    def replaced(old, new, old_cik, new_cik):
+        asked.append((old, new, old_cik, new_cik))
+        return True
+
+    res, detached, old, new = _two_lines(old_cik=1308161, new_cik=1754301, handoffs=[_switch], replaced=replaced)
+    assert asked and asked[0] == ("1OLDCUSIP", "1NEWCUSIP", 1308161, 1754301)
+    assert res[new.key].sec_id == "BBGTODAY001" and res[new.key].source == "cusip"
+    assert (res[old.key].sec_id, res[old.key].source) == ("CIK1308161-COMMON", "placeholder") and old.key in detached
+
+
+@pytest.mark.parametrize("old_cik,new_cik", [(64978, 310158), (885721, 1532063), (1001039, 1744489)])
+def test_a_switch_the_old_registrant_became_the_new_one_in_still_carries_the_line_on(old_cik, new_cik):
+    """Merck 2009, Express Scripts 2012, Disney 2019: one-for-one reorganizations (`replaced` answers no): the old
+    era joins the composite through the switch, as before."""
+    res, detached, old, new = _two_lines(old_cik=old_cik, new_cik=new_cik, handoffs=[_switch],
+                                         replaced=lambda *a: False)
+    assert res[old.key].sec_id == "BBGTODAY001" and res[old.key].source == "ticker" and detached == {}
+
+
+def test_a_replaced_switch_is_not_a_carrying_link():
+    from delist_detection.identity.security_master import _carrying_links
+    old = replace(_era("XX", ("2012-06-29", "ACME CORP")), ftd_cusips=("1OLDCUSIP",))
+    new = replace(_era("XX", ("2021-06-30", "ACME CORP")), ftd_cusips=("1NEWCUSIP",))
+    link = _switch(old, new)
+    issuers = issuers_by_era({old.key: 1, new.key: 2})
+    eras = {old.key: old, new.key: new}
+    assert _carrying_links(eras, [link], issuers, None) == {tuple(sorted((old.key, new.key)))}
+    assert _carrying_links(eras, [link], issuers, None, lambda *a: True) == set()
+    assert _carrying_links(eras, [link], issuers, None, lambda *a: False) == {tuple(sorted((old.key, new.key)))}
+
+
+# --- FB-003, Fox 2019: a pick of a registrant that did not exist yet (rule B) ---------------------------------------
+
+
+def _one_weak_era(*, registrant_after, old_cusips=("1OLDCUSIP",), handoffs=()):
+    """A lone weak era (the ticker XX gave today's composite; its CUSIP is on no US venue) and nothing later in the
+    run to set it against: (resolutions, detached, the era)."""
+    from delist_detection.identity.security_master import resolve_with_identity_guard
+    old = replace(_era("XX", ("2013-12-31", "TWENTY FIRST CENTURY FOX INC CLASS A")), ftd_cusips=old_cusips)
+    name = "TWENTY FIRST CENTURY FOX INC CLASS A"
+    figi = _Figi({("TICKER", "XX"): {"data": [_row("BBGTODAY001", "US", "XX", name)]}})
+    res, detached = resolve_with_identity_guard(
+        FigiResolver(figi), [old], issuers=issuers_by_era({old.key: 1308161}), cusips={old.key: list(old_cusips)},
+        registrant_after=registrant_after)
+    return res, detached, old
+
+
+def test_a_weak_pick_of_a_registrant_that_had_not_filed_by_the_eras_first_sighting_is_withdrawn():
+    """FOXA 2013 to 2019: the ticker is Fox Corporation's today, whose first filing is of 2018-10-09, and the era's
+    issuer is Twenty-First Century Fox. The pick's composite is not the era's line."""
+    asked = []
+
+    def after(ticker, cik, last):
+        asked.append((ticker, cik, last))
+        return True
+
+    res, detached, old = _one_weak_era(registrant_after=after)
+    assert asked == [("XX", 1308161, "2013-12-31")]       # the era's first sighting
+    assert (res[old.key].sec_id, res[old.key].source) == ("CIK1308161-CLASS-A", "placeholder")
+    assert detached == {old.key: ("BBGTODAY001", "registrant")}
+
+
+def test_a_weak_pick_of_a_registrant_that_had_filed_stays():
+    res, detached, old = _one_weak_era(registrant_after=lambda *a: False)
+    assert res[old.key].sec_id == "BBGTODAY001" and detached == {}
+
+
+def test_a_weak_pick_of_a_registrant_that_had_not_filed_stays_for_an_era_with_no_cusip_of_its_own():
+    """No CUSIP evidence to set the pick against (Merck 2008): the own-name pick stands."""
+    res, detached, old = _one_weak_era(registrant_after=lambda *a: True, old_cusips=())
+    assert res[old.key].sec_id == "BBGTODAY001" and detached == {}
+
+
+def test_a_weak_line_a_cusip_carries_on_to_an_era_confirmed_on_the_composite_stays_when_the_registrant_is_later():
+    """An era that is the old line of a confirmed era (a redomicile) is that composite's own whatever the holder."""
+    res, detached, old, new = _two_lines(old_cik=64978, new_cik=310158, handoffs=[_switch],
+                                         registrant_after=lambda *a: True)
+    assert res[old.key].sec_id == "BBGTODAY001" and detached == {}
+
+
 # --- a placeholder holds one line (FB-005, Liberty's tracking stocks) -------------------------------------------------
 
 

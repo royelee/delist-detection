@@ -54,7 +54,7 @@ from ..outputs.manifest import StageMeter
 from ..vocabulary.names import (
     description_matches, description_name, description_names, names_agree, names_an_issuer,
 )
-from .line_follow import SWITCH, LineStep, composites, step_refusal
+from .line_follow import SUCCESSOR_FORMS, SWITCH, LineStep, composites, step_refusal
 from .observations import (
     ERA_GAP_DAYS, DerivedFrom, Fold, Observation, ObservationError, ObservationIndex, TickerEra, eras_by_key,
     number_eras,
@@ -591,6 +591,83 @@ def _went_bankrupt(ftd: FtdIndex, record: IssuerRecord) -> _WentBankrupt:
     return _WentBankrupt(ftd, record)
 
 
+REPLACED_DAYS = 45                # the old registrant's Form 25 and closing 8-K lie this close to the new CUSIP's first
+                                  # row, and the new registrant's Form 10 this long after it
+REGISTRATION_LEAD_DAYS = 180      # ... and that Form 10 this long before it
+REGISTRATION_FORMS = ("10-12B", "10-12G")    # a Form 10: stock registered to be handed out (a spin-off), never
+                                             # exchanged for another company's; an 8-A lists a class however it came
+CLOSING_ITEMS = frozenset({"2.01", "5.01"})                      # an 8-K's completed acquisition, a change in control
+
+
+class _Replaced:
+    """Whether another registrant took a class's place at a CUSIP switch, and the old one did not become it (FB-003;
+    Twenty-First Century Fox and Fox Corporation, 2019): the stock of the new CUSIP is another company's, not the old
+    stock under a new registrant. All of these hold, for the switch from `old` (the issuer `old_cik`'s CUSIP) to `new`
+    (the issuer `new_cik`'s), whose first fails row is the day of the change:
+
+    - the old registrant filed a Form 25 within `REPLACED_DAYS` of that day (its listing ended);
+    - and an 8-K of its own, within the same days, with item 2.01 or 5.01 (the closing of an acquisition, a change in
+      control: Disney bought Twenty-First Century Fox on 2019-03-20);
+    - and the new registrant registered its stock by a Form 10-12B/10-12G from `REGISTRATION_LEAD_DAYS` before that
+      day to `REPLACED_DAYS` after (Fox Corporation: the Form 10-12B of 2019-01-07). A Form 10 registers shares that
+      are handed out, a spin-off. Shares issued one for one for the old company's are registered by an S-4 and
+      listed by an 8-A (Clearwire 2008), which is the same stock under a new registrant: one line;
+    - and the new registrant filed no 8-K12B or 8-K12G3 within `REPLACED_DAYS` of it: that is a successor
+      registration, the same stock under a new holding company (Disney 2019, Express Scripts 2012).
+
+    A new registrant that never registered anew (Merck 2009: Schering-Plough was already listed, and took Merck's
+    name) leaves the switch one line, as the old rule had it. A filings read that failed or was stale counts as no
+    replacement, and its CIKs are kept in `degraded` for the review rows."""
+
+    def __init__(self, ftd: FtdIndex, record: IssuerRecord) -> None:
+        self.ftd, self.record, self.degraded = ftd, record, set()
+
+    def __call__(self, old: str, new: str, old_cik: int | None, new_cik: int | None) -> bool:
+        rows = self.ftd.by_cusip(new)
+        day = parse_day(rows[0].date) if rows else None
+        if old_cik is None or new_cik is None or old_cik == new_cik or day is None:
+            return False
+        reads = self.record.watch()
+        old_filings, new_filings = self.record.filings(old_cik), self.record.filings(new_cik)
+        if reads.tripped():
+            self.degraded |= {old_cik, new_cik}
+
+        def filed(filings: Sequence[Any], lead: int, keep: Callable[[Any], bool]) -> bool:
+            return any(keep(f) and (d := parse_day(f.filing_date)) is not None
+                       and day - timedelta(days=lead) <= d <= day + timedelta(days=REPLACED_DAYS) for f in filings)
+
+        closing = lambda f: f.form.startswith("8-K") and bool(CLOSING_ITEMS & f.item_set)
+        return (filed(old_filings, REPLACED_DAYS, lambda f: f.form.startswith("25"))
+                and filed(old_filings, REPLACED_DAYS, closing)
+                and filed(new_filings, REGISTRATION_LEAD_DAYS, lambda f: f.form.split("/")[0] in REGISTRATION_FORMS)
+                and not filed(new_filings, REPLACED_DAYS, lambda f: f.form.split("/")[0] in SUCCESSOR_FORMS))
+
+
+class _RegistrantAfter:
+    """Whether the company SEC lists a ticker under today (`IssuerRecord.listed_under`) had not filed anything by an
+    era's first sighting (`first`), is another company than a given issuer and is no successor registration of it
+    (FB-003: FOXA is Fox Corporation's, CIK 1754301, whose first filing is of 2018-10-09, not Twenty-First Century
+    Fox's, whose FOXA era began in 2013). A holder that
+    has an 8-K12B or 8-K12G3 of its own is a holding company that took an issuer's place one for one, which the
+    pick may rightly name. A read that failed or was stale counts as no, and its CIK is kept in `degraded`."""
+
+    def __init__(self, record: IssuerRecord) -> None:
+        self.record, self.degraded = record, set()
+
+    def __call__(self, ticker: str, cik: int | None, first: str) -> bool:
+        holder = self.record.listed_under(ticker)
+        if cik is None or holder is None or holder == cik:
+            return False
+        reads = self.record.watch()
+        filed = self.record.first_filed(holder)
+        successor = any(f.form.split("/")[0] in SUCCESSOR_FORMS for f in self.record.filings(holder))
+        if reads.tripped():
+            self.degraded.add(holder)
+            return False
+        day = parse_day(first)
+        return filed is not None and day is not None and filed > day and not successor
+
+
 LEFT_BEHIND_SETTLE_DAYS = 30   # an old CUSIP's fails rows this long after another CUSIP took its ticker are still settling
 
 
@@ -663,11 +740,14 @@ def _resolve_securities(eras: list[TickerEra], era_by_key: dict[str, TickerEra],
     issuers = found.issuers
     cusips = candidate_cusips(eras, ftd, issuers)
     went_bankrupt = _went_bankrupt(ftd, clients.issuers)
+    replaced, registrant_after = _Replaced(ftd, clients.issuers), _RegistrantAfter(clients.issuers)
     resolutions, detached = resolve_with_identity_guard(
         FigiResolver(clients.figi, log=log, cusip_span=lambda c: _trading_span(ftd, c),
                      foreign=foreign_ticker_eras(eras, ftd, issuers)),
         eras, issuers=issuers, cusips=cusips, handoffs=handoffs, unconfirmed=guarded_eras(eras, ftd),
-        bankrupt_between=went_bankrupt, left_behind=_LeftBehind(ftd, went_bankrupt))
+        bankrupt_between=went_bankrupt, left_behind=_LeftBehind(ftd, went_bankrupt), replaced=replaced,
+        registrant_after=registrant_after)
+    unread = went_bankrupt.degraded | replaced.degraded | registrant_after.degraded
     securities = build_securities(resolutions, era_by_key, issuers)
     review: list[ReviewItem] = detached_review(detached, era_by_key, resolutions, issuers)
     for key, res in resolutions.items():
@@ -683,10 +763,11 @@ def _resolve_securities(eras: list[TickerEra], era_by_key: dict[str, TickerEra],
                                          f"{e.key} {e.name or ''}: issuer resolution",
                                          "; its answer was used for this run but not saved", last_seen=e.last))
     for e in eras:        # the composite guard asked this issuer's filings and the read failed: it kept the pick
-        if (cik_of(issuers, e.key) in went_bankrupt.degraded
+        if (cik_of(issuers, e.key) in unread
                 and resolutions[e.key].source not in ("pin", "cusip")):
             review.append(degraded_item(resolutions[e.key].sec_id or "", e.ticker, cik_of(issuers, e.key),
-                                         f"{e.key} {e.name or ''}: the check for a bankruptcy between its CUSIPs",
+                                         f"{e.key} {e.name or ''}: the check for a bankruptcy or a replaced registrant "
+                                         f"between its CUSIPs",
                                          "; the era was kept on the composite its pick gave", last_seen=e.last))
     for e in eras:
         inferred = found.inferred.get(e.key)

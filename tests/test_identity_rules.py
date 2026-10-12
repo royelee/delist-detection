@@ -344,3 +344,108 @@ def test_stage_5_takes_a_placeholder_a_bankruptcy_left_behind_as_not_listed_toda
     still reads EDGAR's listing as its own."""
     assert _sd_stage5(fake_edgar, _sd_rows()) is False
     assert _sd_stage5(fake_edgar, _sd_rows(new_from=())) is True
+
+
+# --- FB-003, Fox 2019: another registrant took the class's place at a CUSIP switch (`_Replaced`) ---------------------
+
+FOX_OLD, FOX_NEW, FOX_OLD_CIK, FOX_NEW_CIK = "90130A101", "35137L105", 1308161, 1754301
+
+
+def _f(form, day, items=""):
+    return EdgarSubmission(f"{form}-{day}", form, day, day, items, "d.htm")
+
+
+class _PerCik:
+    """An EDGAR client that knows each issuer's filings, and the tickers SEC lists today (ticker -> CIK)."""
+
+    def __init__(self, filings, listed=None):
+        self.by_cik, self.listed = filings, listed or {}
+
+    def submissions(self, cik, fresh_after=None):
+        return {"name": "ISSUER", "formerNames": []}
+
+    def recent_filings(self, cik):
+        return list(self.by_cik.get(int(cik), []))
+
+    def company_tickers(self):
+        return {t: {"cik_str": c, "ticker": t, "title": t} for t, c in self.listed.items()}
+
+
+def _replaced(old_filings, new_filings):
+    from delist_detection.identity.identity import _Replaced
+    ftd = FtdIndex([FtdRow("2019-03-21", FOX_NEW, "FOXA", "FOX CORP CL A (DE)", 50.0),
+                    FtdRow("2019-03-22", FOX_NEW, "FOXA", "FOX CORP CL A (DE)", 50.5)])
+    got = _Replaced(ftd, IssuerRecord(_PerCik({FOX_OLD_CIK: old_filings, FOX_NEW_CIK: new_filings})))
+    return got(FOX_OLD, FOX_NEW, FOX_OLD_CIK, FOX_NEW_CIK)
+
+
+FOX_CLOSED = [_f("25-NSE", "2019-03-20"), _f("8-K", "2019-03-20", "1.01,2.01,3.01,5.01,5.03,9.01")]
+FOX_REGISTERED = [_f("10-12B", "2019-01-07"), _f("10-12B/A", "2019-01-23"), _f("8-A12B", "2019-03-20")]
+
+
+def test_a_class_the_old_registrant_lost_to_a_company_registered_anew_is_replaced():
+    """Twenty-First Century Fox's FOXA to Fox Corporation's, 2019-03-21: the old registrant's Form 25 and its closing
+    8-K (items 2.01, 3.01, 5.01); the new company's Form 10-12B in January and its 8-A12B on 2019-03-20."""
+    assert _replaced(FOX_CLOSED, FOX_REGISTERED) is True
+
+
+def test_a_successor_registration_is_not_a_replacement():
+    """Disney 2019 and Express Scripts 2012: the new holding company's 8-K12B says it is the old registrant's stock,
+    one for one (Disney's new registrant filed no Form 10 at all; a company that filed one is still a
+    successor)."""
+    successor = _f("8-K12B", "2019-03-20", "1.01,2.01,3.03,5.01")
+    assert _replaced(FOX_CLOSED, [successor]) is False
+    assert _replaced(FOX_CLOSED, [*FOX_REGISTERED, successor]) is False
+    assert _replaced(FOX_CLOSED, [*FOX_REGISTERED, _f("8-K12G3", "2019-03-21")]) is False
+
+
+def test_a_new_registrant_that_registered_by_an_exchange_of_shares_is_not_a_replacement():
+    """Clearwire 2008: the new Clearwire registered its class A stock by an S-4 and an 8-A12B, to issue it one for one
+    for the old Clearwire's. An 8-A lists a class however it came about; only a Form 10 (a spin-off: shares handed
+    out, never exchanged) says the new stock is not the old one."""
+    exchanged = [_f("S-4", "2019-01-07"), _f("8-A12B", "2019-03-20")]
+    assert _replaced(FOX_CLOSED, exchanged) is False
+    assert _replaced(FOX_CLOSED, [*exchanged, _f("10-12B", "2019-01-07")]) is True
+
+
+def test_a_new_registrant_that_registered_nothing_new_is_not_a_replacement():
+    """Merck 2009: Schering-Plough was registered and listed long before it took Merck's name, and filed no Form 10
+    or 8-A for the switch."""
+    assert _replaced(FOX_CLOSED, [_f("10-Q", "2019-03-18"), _f("8-K", "2019-03-19", "2.01")]) is False
+
+
+def test_an_old_registrant_with_no_form_25_or_no_closing_8k_near_the_switch_is_not_replaced():
+    assert _replaced([_f("8-K", "2019-03-20", "2.01,5.01")], FOX_REGISTERED) is False          # no Form 25
+    assert _replaced([_f("25-NSE", "2019-03-20"), _f("8-K", "2019-03-20", "8.01")], FOX_REGISTERED) is False
+    assert _replaced([_f("25-NSE", "2018-01-02"), *FOX_CLOSED[1:]], FOX_REGISTERED) is False   # a Form 25 a year before
+
+
+def test_one_registrant_or_a_cusip_with_no_rows_is_no_replacement():
+    from delist_detection.identity.identity import _Replaced
+    ftd = FtdIndex([FtdRow("2019-03-21", FOX_NEW, "FOXA", "FOX CORP CL A (DE)", 50.0)])
+    got = _Replaced(ftd, IssuerRecord(_PerCik({FOX_OLD_CIK: FOX_CLOSED + FOX_REGISTERED})))
+    assert got(FOX_OLD, FOX_NEW, FOX_OLD_CIK, FOX_OLD_CIK) is False
+    assert got(FOX_OLD, FOX_NEW, None, FOX_NEW_CIK) is False
+    assert got(FOX_OLD, "999999999", FOX_OLD_CIK, FOX_NEW_CIK) is False
+
+
+# --- FB-003, Fox 2019: the company listed under a ticker today had not filed yet (`_RegistrantAfter`) --------------
+
+def _after(filings, listed, ticker="FOXA", cik=FOX_OLD_CIK, first="2013-12-31"):
+    from delist_detection.identity.identity import _RegistrantAfter
+    return _RegistrantAfter(IssuerRecord(_PerCik(filings, listed)))(ticker, cik, first)
+
+
+def test_a_ticker_listed_under_a_company_that_registered_after_the_eras_first_sighting_is_flagged():
+    fox = [_f("DRS", "2018-10-09"), *FOX_REGISTERED]
+    assert _after({FOX_NEW_CIK: fox}, {"FOXA": FOX_NEW_CIK}) is True
+    assert _after({FOX_NEW_CIK: fox}, {"FOXA": FOX_NEW_CIK}, first="2019-06-30") is False       # it had filed by then
+
+
+def test_a_ticker_listed_under_the_eras_own_issuer_or_nobody_or_a_successor_registrant_is_not_flagged():
+    fox = [_f("DRS", "2018-10-09")]
+    assert _after({FOX_NEW_CIK: fox}, {"FOXA": FOX_OLD_CIK}) is False
+    assert _after({FOX_NEW_CIK: fox}, {}) is False
+    assert _after({FOX_NEW_CIK: fox}, {"FOXA": FOX_NEW_CIK}, cik=None) is False
+    holding = [_f("S-4", "2011-10-06"), _f("8-K12B", "2012-04-02")]          # Express Scripts' holding company
+    assert _after({1532063: holding}, {"ESRX": 1532063}, ticker="ESRX", cik=885721, first="2011-03-01") is False

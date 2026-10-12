@@ -4,7 +4,7 @@ from pathlib import Path
 from delist_detection.sources.edgar import EdgarSubmission
 from delist_detection.filings.form25 import (
     Form25, SecurityRef, class_kind, class_letters, exchange_label, exchanges_named,
-    list_form25, match_securities, notice_last_trade, parse_form25, tie_candidates, tied_securities,
+    every_class, list_form25, match_securities, notice_last_trade, parse_form25, tie_candidates, tied_securities,
 )
 
 FIX = Path(__file__).parent / "fixtures" / "form25"
@@ -275,6 +275,26 @@ def test_a_sibling_with_no_class_letter_the_form25_names_by_group_is_a_class_no_
             SecurityRef("FWONA", "CLASS A", "common", "LIBERTY MEDIA FORMULA ONE SERIES A")]
     assert match_securities(f, refs) == (["LSXMA", "LSXMK"], "class A, B by name")
     assert tied_securities(f, refs) == set()
+
+
+def test_a_form25_that_names_as_many_classes_as_letterless_siblings_names_each_of_them():
+    """FB-003 (Twenty-First Century Fox 2019): "Class A Common Stock & Class B Common Stock", and two lines whose
+    observed names lost the class letter. The text matches neither and ties neither, but it names two classes and
+    the issuer has two lines: each is one of them, whichever is which (`every_class`; the finder's trading test
+    decides whether both stopped). Not with a sibling that carries a letter or a hint, with one class named, or with
+    more or fewer lines than classes."""
+    f = Form25("a", "25-NSE", "2019-03-20", "NASDAQ", "Class A Common Stock & Class B Common Stock", "", "")
+    a = SecurityRef("A", "COMMON", "common", "TWENTY FIRST CENTURY FOX INC CLASS")
+    b = SecurityRef("B", "COMMON", "common", "TWENTY-FIRST CENTURY FOX INC CLASS")
+    assert match_securities(f, [a, b]) == ([], "ambiguous class") and tie_candidates(f, [a, b]) == set()
+    assert every_class(f, [a, b]) == {"A", "B"}
+    assert every_class(f, [a, b, SecurityRef("W", "WARRANT", "warrant", "X WTS")]) == {"A", "B"}
+    assert every_class(f, [a]) == set()
+    assert every_class(f, [a, b, SecurityRef("C", "COMMON", "common", "TWENTY FIRST CENTURY FOX")]) == set()
+    assert every_class(f, [a, SecurityRef("L", "CLASS B", "common", "TWENTY-FIRST CENTURY FOX CL B")]) == set()
+    assert every_class(f, [a, SecurityRef("H", "COMMON", "common", "TWENTY-FIRST CENTURY FOX", "B")]) == set()
+    one = Form25("a", "25-NSE", "2019-03-20", "NASDAQ", "Class A Common Stock", "", "")
+    assert every_class(one, [a, b]) == set()
 
 
 def test_more_letterless_siblings_than_unmatched_classes_stay_tied():

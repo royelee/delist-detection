@@ -217,10 +217,37 @@ def _one_switch(switches: Mapping[str, LineStep], tickers: Collection[str]) -> l
     return picks if len(picks) == 1 else []
 
 
+def _names_issuer(step: LineStep, issuer_names: Callable[[date], Collection[str]]) -> bool:
+    """Whether a new CUSIP's rows name the issuer: a description of its first `NAME_DAYS` days agrees with a name the
+    issuer carried from the first row on (`issuer_names(first day)`)."""
+    names = issuer_names(date.fromisoformat(step.first))
+    return any(description_names(d, n) for d in step.descriptions for n in names)
+
+
+def _issuers_next_line(dropped: LineStep, switches: Mapping[str, LineStep], holders: Mapping[str, Collection[str]],
+                       sec_id: str, tickers: Collection[str],
+                       issuer_names: Callable[[date], Collection[str]]) -> list[LineStep]:
+    """FB-003 (News Corp 2013): the step to take when the switch `_one_switch` picked (`dropped`, under the line's own
+    ticker) is another issuer's security's stock. The ticker went on as a spun-off company's stock (the new News
+    Corp kept NWSA), and the old issuer was renamed (Twenty-First Century Fox) and went on under a CUSIP of its own
+    and another ticker (FOXA). That is the issuer's own next line when `dropped`'s rows do not name the issuer (a
+    stock of another company) and a free switch's rows do: its CUSIP is held by no other security, its first row is
+    in the window (`candidate_steps` found it) and its description agrees with the issuer's name in force then. Of
+    several, those that began the day `dropped` did (the spin-off's class A and the old issuer's class A trade from
+    the same day, and a class B from another), then `_one_switch`. A line the issuer did not rename (LMCA 2016: a
+    leftover class of the same company) has none."""
+    if _names_issuer(dropped, issuer_names):
+        return []
+    free = {c: st for c, st in switches.items() if c != dropped.new_cusip and not _others(holders, c, sec_id)
+            and _names_issuer(st, issuer_names)}
+    return _one_switch({c: st for c, st in free.items() if st.first == dropped.first} or free, tickers)
+
+
 def candidate_steps(sec_id: str, cusips: Sequence[str], tickers: Collection[str], ftd: FtdIndex, *,
                     holders: Mapping[str, Collection[str]] = {}, extra_symbols: Collection[str] = (),
                     extra_cusips: Collection[str] = (), days: int = LINE_DAYS, data_end: str | None = None,
-                    late: bool = False) -> list[LineStep]:
+                    late: bool = False,
+                    issuer_names: Callable[[date], Collection[str]] | None = None) -> list[LineStep]:
     """The next steps of a security's line in the fails rows (pure). Its `line_end` opens a window from `days`
     trading days before the settled row to `days` after the line's last row (a fail still settling at the last
     close can run weeks past the settled row: QRTEA's QVCGA began the day after QRTEA's last row, 14 trading days
@@ -241,7 +268,9 @@ def candidate_steps(sec_id: str, cusips: Sequence[str], tickers: Collection[str]
       security of the run holds the old CUSIP too, or when two symbols qualify.
 
     Of several switches, the one under the line's own ticker is taken, else the one with the shortest symbol
-    (`_one_switch`).
+    (`_one_switch`). When that one is dropped because another security holds its CUSIP, and `issuer_names` (the
+    names the issuer carried from a day on) is given, the issuer's own next line is looked for instead
+    (`_issuers_next_line`, FB-003: News Corp 2013 and Twenty-First Century Fox's FOXA).
 
     With `late` (FB-015), a line with no step of a kind in the window may take one that begins after it, marked
     `LineStep.late`:
@@ -280,7 +309,11 @@ def candidate_steps(sec_id: str, cusips: Sequence[str], tickers: Collection[str]
             descs = tuple(sorted({x.description for x in new_rows if x.date <= until}))
             switches[c] = LineStep(sec_id, SWITCH, end.cusip, c, _line_symbol_of(new_rows, own, s), end.settled,
                                    first, descs)
-        steps += [st for st in _one_switch(switches, own) if not _others(holders, st.new_cusip, sec_id)]
+        picks = _one_switch(switches, own)
+        kept = [st for st in picks if not _others(holders, st.new_cusip, sec_id)]
+        if picks and not kept and issuer_names is not None:
+            kept = _issuers_next_line(picks[0], switches, holders, sec_id, own, issuer_names)
+        steps += kept
         nxt = min((r for t in sorted(own) for r in ftd.by_symbol(t) if r.date > hi and r.cusip not in cusips),
                   key=lambda r: (r.date, r.cusip), default=None) if late and not switches else None
         if nxt is not None:
@@ -689,6 +722,11 @@ class _Reads:
         listed = [normalize_ticker(t) for t in (sub.get("tickers") or [])] if isinstance(sub, dict) else []
         return {t for t in listed if is_line_symbol(t)}
 
+    def names_from(self, cik: int | None) -> Callable[[date], list[str]]:
+        """The names the issuer carried from a day to `NAME_DAYS` after it (`evidence.names_between`), asked only
+        when a step's own-ticker switch is dropped (`candidate_steps`)."""
+        return lambda day: self.issuers.names_between(cik, day, day + timedelta(days=NAME_DAYS)) if cik else []
+
     def text_sources(self, s: Security, end: LineEnd) -> tuple[set[str], set[str]]:
         """The tickers and CUSIPs the issuer's own 8-Ks around a line's end name as the stock's new ones (APY's
         ChampionX "CHX", Liz Claiborne's "316645100" and "FNP"): read only when one of them is an 8-K item 5.03
@@ -884,7 +922,8 @@ def follow_lines(identity: "Identity", clients: LineSources, *, as_of: date,
             return candidate_steps(sid, out.cusips.get(sid, []), own(sid), ftd,
                                    holders=holders_for(out.securities[sid], out.securities, out.cusips, holders, ftd),
                                    extra_symbols=extra.get(sid, ()), extra_cusips=named.get(sid, ()),
-                                   data_end=ftd.data_end(), late=late)
+                                   data_end=ftd.data_end(), late=late,
+                                   issuer_names=reads.names_from(out.securities[sid].issuer_cik))
 
         def late_steps() -> dict[str, list[LineStep]]:
             """The late steps of the confirmed lines the round found no step for (see the module docstring)."""

@@ -319,7 +319,15 @@
   issuer's EDGAR names (current and former; `FigiResolver` drops such a match
   when another era's pin or CUSIP contradicts it, or when it would leave a
   same-class sibling era alone on the issuer's placeholder). The spec's third
-  route, an acquirer/successor name match, is not built (spec §17).
+  route, an acquirer/successor name match, is not built (spec §17). A pick is also withdrawn (FB-003, Fox 2019)
+  when the ticker's holder today had not filed anything by the era's first sighting, is another company than the
+  era's issuer and is no 8-K12B/8-K12G3 successor registration (`weak_eras_before_registrant`): the 2013 to 2019
+  sightings of FOXA are Twenty-First Century Fox's, not Fox Corporation's FIGI (whose first filing is of 2018-10-09).
+  A CUSIP change is not one line when another registrant replaced the class (`identity._Replaced`: the old
+  registrant's Form 25 and closing 8-K, the new one registered by a Form 10, a spin-off, and filing no 8-K12B/8-K12G3): the
+  old line ends there, with its own Form 25, and the new FIGI starts at its own CUSIP with the new issuer only. A
+  one-for-one reorganization (Merck 2009, Clearwire 2008, Express Scripts 2012, Disney 2019) stays one security with its issuer
+  change.
 
 ## A delisting is a Form 25 removal — not a rename, not a secondary withdrawal
 
@@ -385,6 +393,12 @@
   or none is one security; a placeholder folds into the FIGI line its new CUSIP names (contract/id_changes.csv
   names it); another composite is a line successor, linked by stage 9 as a continuation (an `unknown` row at the
   switch is rewritten, `line_continuation`: it drops `no_evidence_default` and gets medium confidence); so is a merger row at the switch when stage 4b followed the step (the old registrant carries on: TEAM, LSXMA, FWONA), unless its payout reconciled with the last close.
+  A held pick is not always the end (FB-003, News Corp 2013): when the own-ticker switch's CUSIP is another
+  issuer's security's and its rows do not name the issuer, while the issuer was renamed and a free switch's rows
+  (an 8-K or the renamed-CUSIP scan names it) name its EDGAR name in force, that switch is the issuer's own next
+  line, corroborated and decided as any step (NWS-A to Twenty-First Century Fox's FOXA on 90130A101, which has no
+  composite: the placeholder carries on, folding into the issuer's other placeholder that holds the CUSIP). Of
+  several, the one that began the day the held pick did.
   A step may begin after the window (FB-015): the fails files hold a row only on a day with a fail, so a quiet
   stock's new CUSIP can first appear years after the old one's last row (Ocwen: 2020-08-12, then 2023-07-14). A line
   whose FIGI its own CUSIP or a pin confirms, and that the round found no step for, takes the first later CUSIP
