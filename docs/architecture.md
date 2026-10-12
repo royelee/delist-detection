@@ -429,6 +429,10 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   a delistings.csv row, a merger's pre-gate reads (`MergerInputs`) and stage 9e's `DistressTerms` (both defined here);
   `contract_value(row)`: the contract's `dlret`/`dlret_fill`/`terminal_value` (none for a continuation). A
   liquidation's value and rule read one order (`_distress_rule`: a recovery, else a plan, else the first OTC print).
+  Two endings have no value and no fill, each `uncertain` by the verdict's `value_pending`: a wind-down whose
+  distributions are not read (`pending_recovery`, FB-002) and a merger whose terms nothing states
+  (`pending_terms`, FB-016: `ValueInputs.terms_read` False, from `MergerInputs.read` through
+  `MergerValues.terms_read`; terms the gate refused keep assumed par, which the verdict doubts).
   It loads only the row vocabulary and the leaf enums (`tests/test_import_closure.py`).
 - `outputs/reconstruction.py` — `DelistRecord` (the classifier's hand-off, defined here, below the stages, so the
   table, the merger readers and the handling read it without loading the classifier: architecture step 16),
@@ -1373,7 +1377,11 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   none, the cache label's first choice, then `$CHAT_MODEL`) and `terms/filing_selection.py`
   (filing-tier picker shared with `terms/payout_extractor.py`); responses cached under
   `cache/llm/`. Every extractor adapter takes one call shape, `extract(record, security_name=)` (stage 8 names
-  the target security). Disabled by default — enabled by `--extract-merger-terms-llm`;
+  the target security), and `extract_offer_terms(record, security_name=)` for a merger neither reader found terms
+  for (FB-016): the offer's own documents among the target's filings on or before the delisting, the SC TO-T and
+  its amendments, then the Rule 425 filings, then the SC 14D9, newest first and `max_filings` of a kind at most
+  (CureVac 2026, whose 6-Ks state no ratio and whose third newest SC TO-T/A sets it; exhibits are never opened:
+  TAHO 2019). Disabled by default — enabled by `--extract-merger-terms-llm`;
   `acquirer_price` and `last_trade_close` come from `sources/ftd.py`, not a filing. `MergerTerms` answers for its own
   package, so the gate, the payout rule, the requests and stage 8 ask it instead of reading its fields: `ticker`
   (normalized; a spelled-out null, `NULL_TICKERS`, is cleaned when the answer is built, `clean_ticker`),

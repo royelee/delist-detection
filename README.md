@@ -491,6 +491,7 @@ causes sort first.
 | `merger` | `cash_plus_stock` | `(cash + stock_ratio × acquirer_price) / last_close − 1` | Cash+stock deal, all terms supplied |
 | `merger` | `stock_only` | `stock_ratio × acquirer_price / last_close − 1` | All-stock deal, terms supplied |
 | `merger` / `expiration` | `assumed_par` | `0` (terminal = `last_trade_close`) | Completed deal / fund closure with a known last price but no priceable consideration — terminal ≈ last price, so DLRET ≈ 0; **`low` confidence** |
+| `merger` | `pending_terms` | *(blank)* | Nothing states the terms (no caller's row, no registrant's statement, no regex or LLM read that publishes a leg; FB-016): no par fill, `value_rule` `unknown`, and the verdict is `uncertain` with `value_pending:terms` |
 | `merger` | `needs_last_trade` | *(blank)* | Consideration known but `last_trade_close` missing (no denominator) |
 | `merger` | `abstain_no_consideration` | *(blank)* | No consideration **and** no last price |
 | `exchange_transfer` | `exchange_transfer_zero` | `0` | Security continues at successor exchange |
@@ -503,12 +504,13 @@ causes sort first.
 | `expiration` | `dropped_expiration` | *(blank)* | Non-equity instrument with no last price |
 | *(any)* | `unknown` | *(blank)* | Unclassified ticker |
 
-> **No empty, no silent zero.** Any merger or fund closure with a valid
+> **No empty, no silent zero.** Any fund closure, and any merger whose terms were read, with a valid
 > `last_trade_close` but no priceable consideration is filled with `dlret = 0`
 > tagged `dlret_method = assumed_par` at **`low`** confidence — a completed deal's
 > last price already reflects its terminal value (≈0 incremental return), so 0 is
 > the maximum-likelihood estimate, not a missing value. Rows are blank only when
-> there is genuinely no denominator (no `last_trade_close`). Filter on
+> there is genuinely no denominator (no `last_trade_close`), or for a merger whose terms nothing states
+> (`pending_terms`: par would say the deal paid the last close, which nothing read supports). Filter on
 > `dlret_confidence` to keep, down-weight, or drop the estimates.
 
 ### Review surface
@@ -550,7 +552,7 @@ The full flag vocabulary (from `endings/classifier.py`, `identity/ticker_resolve
 | `terms_gate_failed:<reason>` | The LLM cash+stock/stock-only terms did not reconcile (`no_acq_ticker`, `no_acq_price`, `no_last_close`, or `fail_sanity`) |
 | `llm_gate_failed` | The LLM cash or election terms did not reconcile either |
 | `no_last_close` | No last trade close was found (SEC fails-to-deliver, or `--last-trade-closes`), so the payout could not be checked |
-| `merger_at_par` | A merger whose consideration was never found; DLRET assumed 0 from the last close |
+| `merger_at_par` | A merger whose consideration was read and never passed the gate; DLRET assumed 0 from the last close |
 | `submissions_stale` | A refetch of the company's EDGAR submissions failed; a cached copy was used instead |
 | `distress_at_normal_price` | A compliance-failure or liquidation row whose last trade close was still ≥ $5 |
 | `no_form25` | No Form 25 was found; the classifier's fallback path (8-K completion, Form 15, `REVOKED`, SPAC trust liquidation) found and dated the delisting |

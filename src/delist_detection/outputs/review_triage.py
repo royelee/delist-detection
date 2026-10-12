@@ -123,8 +123,8 @@ CATALOG: dict[str, FlagInfo] = {
     # --- check: a rule could not settle the answer ---
     # merger terms and payouts
     "merger_at_par": FlagInfo(
-        "check", "A merger whose consideration was never found or never passed the gate, so its DLRET was set "
-                 "to 0 (terminal value = last close).",
+        "check", "A merger whose consideration was read and never passed the gate, so its DLRET was set to 0 "
+                 "(terminal value = last close). A merger whose terms nothing states has no DLRET at all (FB-016).",
         "Read the merger 8-K or proxy for the per-share consideration and supply it in --merger-terms; "
         f"{_accept_if('0% is right')}."),
     "terms_gate_failed": FlagInfo(

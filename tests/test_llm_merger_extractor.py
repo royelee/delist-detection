@@ -7,6 +7,7 @@ redirected to ``tmp_path`` so nothing is written outside the test sandbox.
 from pathlib import Path
 
 import pytest
+import requests
 
 from delist_detection.outputs.reconstruction import DelistRecord
 from delist_detection.vocabulary.crsp_codes import CrspBucket
@@ -289,6 +290,57 @@ def test_user_prompt_includes_framing(tmp_path):
     user = llm.users[0]
     assert "AET" in user
     assert "2018-11-28" in user
+
+
+def _offer_doc(accession, form, day):
+    return EdgarSubmission(accession=accession, form=form, filing_date=day, report_date="", items="",
+                           primary_doc="d.htm")
+
+
+_NO_TERMS = {"deal_type": "other", "cash_per_share": None, "stock_ratio": None, "acquirer_name": None,
+             "acquirer_ticker": None, "confidence": "low", "quote": ""}
+_RATIO = {"deal_type": "stock", "cash_per_share": None, "stock_ratio": 0.05363, "acquirer_name": "BioNTech SE",
+          "acquirer_ticker": "BNTX", "confidence": "high", "quote": "0.05363 of a BioNTech ADS per CureVac share"}
+
+
+def test_the_offers_own_documents_are_read_newest_first_by_form(tmp_path):
+    """FB-016 (CureVac 2026): the offer's documents EDGAR lists under the target, on or before the delisting: the
+    SC TO-T and its amendments newest first (CureVac's ratio is in the third newest), then the Rule 425 filings, then
+    the SC 14D9, `max_filings` of each at most, and the first that states a leg answers. An amendment of the SC 14D9
+    and a document filed after the delisting are not read. `extract` reads none of them."""
+    filings = [_offer_doc("T0", "SC TO-T", "2018-10-21"), _offer_doc("T1", "SC TO-T/A", "2018-11-20"),
+               _offer_doc("T9", "SC TO-T/A", "2018-12-03"),              # after the delisting of 2018-11-28
+               _offer_doc("R0", "425", "2018-11-01"), _offer_doc("R1", "425", "2018-11-26"),
+               _offer_doc("D0", "SC 14D9", "2018-10-21"), _offer_doc("D1", "SC 14D9/A", "2018-11-27")]
+    texts = {f.accession: "the exchange ratio per share is stated here " + f.accession for f in filings}
+    edgar = _FakeEdgarText(filings, texts)
+    llm = _FakeLlm([_NO_TERMS, _NO_TERMS, _RATIO])
+    ext = LLMMergerTermsExtractor(edgar, llm, cache_dir=tmp_path)
+    assert ext.extract(_merger_rec()) is None and llm.calls == 0          # no first-choice filing at all
+    terms = ext.extract_offer_terms(_merger_rec())
+    assert (terms.stock_ratio, terms.acquirer_ticker, terms.source) == (0.05363, "BNTX", "425:R1")
+    assert [u.rsplit(" ", 1)[-1] for u in llm.users] == ["T1", "T0", "R1"]   # the bidder's statements, then the 425s
+    llm2 = _FakeLlm([_NO_TERMS])
+    ext2 = LLMMergerTermsExtractor(edgar, llm2, cache_dir=tmp_path / "none")
+    assert ext2.extract_offer_terms(_merger_rec()) is None
+    assert [u.rsplit(" ", 1)[-1] for u in llm2.users] == ["T1", "T0", "R1", "R0", "D0"]
+    llm3 = _FakeLlm([_NO_TERMS])
+    ext3 = LLMMergerTermsExtractor(edgar, llm3, max_filings=1, cache_dir=tmp_path / "one")
+    assert ext3.extract_offer_terms(_merger_rec()) is None
+    assert [u.rsplit(" ", 1)[-1] for u in llm3.users] == ["T1", "R1", "D0"]
+
+
+def test_offer_documents_are_a_mergers_only_and_a_network_error_is_a_miss(tmp_path):
+    class _Down(_FakeEdgarText):
+        def fetch_filing_text(self, cik, accession, primary_doc):
+            raise requests.ConnectionError("down")
+    filings = [_offer_doc("T1", "SC TO-T/A", "2018-11-20")]
+    llm = _FakeLlm([_RATIO])
+    ext = LLMMergerTermsExtractor(_Down(filings, {}), llm, cache_dir=tmp_path)
+    assert ext.extract_offer_terms(_merger_rec()) is None and llm.calls == 0
+    ok = LLMMergerTermsExtractor(_FakeEdgarText(filings, {"T1": "ratio T1"}), llm, cache_dir=tmp_path)
+    assert ok.extract_offer_terms(_merger_rec(bucket=CrspBucket.LIQUIDATION)) is None and llm.calls == 0
+    assert ok.extract_offer_terms(_merger_rec(cik=None)) is None and llm.calls == 0
 
 
 def test_max_filings_caps_llm_calls(tmp_path):

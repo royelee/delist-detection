@@ -223,6 +223,18 @@ class MergerValues:
         return TableTerms(terms.get("cash_per_share", v.payout), terms.get("stock_ratio"), terms.get("acquirer_price"),
                           terms.get("acquirer_ticker"), v.source, v.confidence, v.flags)
 
+    def _inputs(self, key: DelistingKey, acquirer_sec_id: str = "") -> MergerInputs:
+        v = self.records.get(key) or MergerValue(key)
+        pr = v.raw
+        return MergerInputs(for_delisting(self.caller_terms, key), v.llm, getattr(pr, "value", None),
+                            getattr(pr, "source", "") or "", v.acquirer_sec_id or acquirer_sec_id,
+                            v.price_ticker, getattr(pr, "currency", "") or "", v.leg_sec_ids, v.statement)
+
+    def terms_read(self, key: DelistingKey) -> bool:
+        """Whether anything states the delisting's merger terms (`MergerInputs.read`, stage 10a): False leaves a
+        merger with no value and no fill (FB-016)."""
+        return self._inputs(key).read
+
     def contract_inputs(self, endings: Sequence[Mapping[str, str]]) -> dict[DelistingKey, MergerInputs]:
         """The payout rule's inputs of each merger-bucket ending (`endings`: delistings.csv rows, stage 10g)."""
         out: dict[DelistingKey, MergerInputs] = {}
@@ -230,11 +242,7 @@ class MergerValues:
             if r["bucket"] != "merger":
                 continue
             key = DelistingKey(r["sec_id"], r["delist_date"])
-            v = self.records.get(key) or MergerValue(key)
-            pr = v.raw
-            out[key] = MergerInputs(for_delisting(self.caller_terms, key), v.llm, getattr(pr, "value", None),
-                                    getattr(pr, "source", "") or "", v.acquirer_sec_id or r["acquirer_sec_id"],
-                                    v.price_ticker, getattr(pr, "currency", "") or "", v.leg_sec_ids, v.statement)
+            out[key] = self._inputs(key, r["acquirer_sec_id"])
         return out
 
     def requests(self, endings: Sequence[Mapping[str, str]]) -> dict[DelistingKey, tuple[str, str, str]]:
@@ -387,6 +395,9 @@ def _read_terms(st: _Stage, mergers: list[Delisting], closes: Mapping[DelistingK
                 raw[key] = clients.payout_extractor.extract(e.record, last_close=closes.get(key))
             if clients.llm_extractor is not None:
                 t = clients.llm_extractor.extract(e.record, security_name=names.get(e.sec_id, ""))
+                if t is None and getattr(raw.get(key), "value", None) is None:
+                    # FB-016: neither reader found terms in its first-choice filings: the offer's own documents
+                    t = clients.llm_extractor.extract_offer_terms(e.record, security_name=names.get(e.sec_id, ""))
                 if t is not None:
                     llm_terms[key] = t
         except FATAL:

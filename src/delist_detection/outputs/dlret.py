@@ -72,6 +72,7 @@ class DlretMethod(str, Enum):
     SHUMWAY_NYSE_AMEX = "shumway_nyse_amex"
     SHUMWAY_NASDAQ = "shumway_nasdaq"
     PENDING_RECOVERY = "pending_recovery"   # FB-002: a wind-down whose distributions are not read yet, no fill
+    PENDING_TERMS = "pending_terms"         # FB-016: a merger whose terms nothing states, no fill
     WORTHLESS = "worthless"            # reserved; not emitted in v1
     DROPPED_EXPIRATION = "dropped_expiration"
     ASSUMED_PAR = "assumed_par"        # completed delisting, terminal assumed = last price (DLRET≈0)
@@ -100,13 +101,15 @@ METHODS: dict[DlretMethod, tuple[str, str]] = {
     DlretMethod.ABSTAIN_NO_CONSIDERATION: ("", LOW),
     DlretMethod.NEEDS_LAST_TRADE: ("", LOW),
     DlretMethod.PENDING_RECOVERY: ("", LOW),
+    DlretMethod.PENDING_TERMS: ("", LOW),
     DlretMethod.DROPPED_EXPIRATION: ("", LOW),
     DlretMethod.UNKNOWN: ("", LOW),
 }
 _GRADES = {HIGH, MEDIUM, LOW}
 # Blank in the table: an abstain (only one with no last close reaches it: with one it is assumed par) and an unknown,
 # so a reader never mistakes an uncomputable row for a realized 0%. A transfer's 0.0 and assumed par keep theirs.
-_BLANK_IN_TABLE = frozenset({DlretMethod.ABSTAIN_NO_CONSIDERATION, DlretMethod.UNKNOWN, DlretMethod.PENDING_RECOVERY})
+_BLANK_IN_TABLE = frozenset({DlretMethod.ABSTAIN_NO_CONSIDERATION, DlretMethod.UNKNOWN, DlretMethod.PENDING_RECOVERY,
+                             DlretMethod.PENDING_TERMS})
 
 
 # -- the DLRET ---------------------------------------------------------------------------------------------------
@@ -118,7 +121,8 @@ class ValueInputs:
     confidence; `recovery_ratio` the caller's --recoveries ratio; `otc_print` the answered first off-exchange print;
     `plan_value` a bankruptcy plan's ratio times its new line's answered close (ruling R6); `deregistered` an unknown
     ending the classifier found deregistered with no merger or distress evidence (valued at par); `wind_down` a
-    liquidation that is no bankruptcy (`exit_kind.is_wind_down`: valued by its distributions, never a Shumway mark).
+    liquidation that is no bankruptcy (`exit_kind.is_wind_down`: valued by its distributions, never a Shumway mark);
+    `terms_read` whether anything states a merger's terms (`MergerInputs.read`; False: no par fill, FB-016).
     None is blank."""
     bucket: CrspBucket
     exchange: Exchange = Exchange.OTHER
@@ -132,6 +136,7 @@ class ValueInputs:
     payout_confidence: str | None = None
     deregistered: bool = False
     wind_down: bool = False
+    terms_read: bool = True
 
 
 @dataclass(frozen=True)
@@ -283,6 +288,11 @@ def decide(inputs: ValueInputs) -> EndingValue:
         # FB-002: Shumway's marks were estimated on performance delistings; a wind-down is valued by what its holders
         # received, and until that is read it has no value (the firm month keeps the bucket's mark, BMP's convention)
         value, method, terminal = _NAN, DlretMethod.PENDING_RECOVERY, None
+    if (inputs.bucket is CrspBucket.MERGER and not inputs.terms_read
+            and method in (DlretMethod.ASSUMED_PAR, DlretMethod.ABSTAIN_NO_CONSIDERATION)):
+        # FB-016: par says "the deal paid the last close", which nothing read supports; terms the gate refused keep
+        # the par fill the verdict doubts (the firm month keeps the par value, as a wind-down keeps its mark)
+        value, method, terminal = _NAN, DlretMethod.PENDING_TERMS, None
     return EndingValue(method, value, terminal, _confidence(method, value, inputs.payout_confidence), base.value)
 
 
@@ -332,6 +342,14 @@ class MergerInputs:
     raw_currency: str = ""        # the regex read's currency (ruling R5)
     leg_sec_ids: Mapping[str, str] = field(default_factory=dict)   # a basket's further legs: ticker -> sec_id
     statement: StatementTerms | None = None       # stage 8b's restatement from the registrant's filings (FNFV)
+
+    @property
+    def read(self) -> bool:
+        """Whether anything states the merger's terms: the caller's row, the registrant's statement, a regex read, or
+        an LLM answer that publishes a leg (`MergerTerms.published`). False is the value rule `unknown`
+        (`_merger_rule`), and the ending has no value and no fill (`DlretMethod.PENDING_TERMS`, FB-016)."""
+        return (bool(self.override) or self.statement is not None or self.raw_value is not None
+                or (self.llm is not None and self.llm.published is not None))
 
 
 @dataclass(frozen=True)

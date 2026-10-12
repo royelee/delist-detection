@@ -310,6 +310,13 @@ def test_a_wind_down_with_no_value_read_is_uncertain():
     assert "value_pending:distributions" in _reasons(row)
 
 
+def test_a_merger_with_no_terms_read_is_uncertain():
+    """FB-016 (consensus of 2026-10-12): CureVac 2026's terms were not read, so it has no value and no fill, and the
+    verdict says why. A merger left at par with nothing refused (`merger_at_par` alone) is no longer written."""
+    row = ending("A", "2015-03-13", "merger", method="pending_terms", **{**GOOD, "dlret": ""})
+    assert _reasons(row) == ("value_pending:terms",)
+
+
 def test_an_observed_figi_security_with_no_issuer_is_uncertain():
     """FB-006: AMAT, EXPD, DD: a FIGI confirmed by CUSIP and no issuer CIK. Its seeds and endings are uncertain; a
     placeholder (its own rule) and a security the run added (no observation) are left alone."""

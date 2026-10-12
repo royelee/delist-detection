@@ -251,8 +251,9 @@
   in `uncertain.csv`.** `kind` is seed | security | ending; `reason` holds
   `code` or `code:detail` items (outputs/verdict.py's docstring lists them). The
   verdict covers identity, exit kind and the last trade date, never the value
-  (except assumed par after a failed payout, LLM or terms gate, decision 4, and a wind-down with no value at all,
-  ruling G's `value_pending`: the spec's invariant). Ruling G (upstream feedback) adds `no_history`,
+  (except assumed par after a failed payout, LLM or terms gate, decision 4, and an ending with no value at all,
+  `value_pending`: a wind-down whose distributions are not read, ruling G, and a merger whose terms nothing
+  states, FB-016; the spec's invariant). Ruling G (upstream feedback) adds `no_history`,
   `history_after_last_trade`, `exchange_without_successor` and `kind_by_filing_history_only`, and two security
   reasons, `issuer_unresolved` (FB-006: an observed security with a FIGI and no issuer CIK) and
   `open_under_bankruptcy_ticker` (FB-014: an observed security open under a five-letter ticker ending in Q). A seed whose

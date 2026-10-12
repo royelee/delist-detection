@@ -382,6 +382,9 @@ _CLOSING_ITEMS = frozenset({"3.01", "3.03", "5.01"})
 _CLOSING_ITEMS_DAYS = 30
 # the merger documents an amendment 8-K must follow to be read before them (BOT's 8-K raising 0.35 to 0.375)
 _PROXY_FORMS = ("DEFM14A", "DEFM14C", "S-4", "S-4/A", "F-4", "F-4/A", "SC TO-T", "SC TO-I")
+# FB-016: an offer's own documents, read when nothing else states a merger's terms (`extract_offer_terms`), in order
+_OFFER_FORMS = (("SC TO-T", "SC TO-T/A"), ("425",), ("SC 14D9",))
+_OFFER_DAYS = timedelta(days=365)
 _SIX_K_DAYS = (timedelta(days=120), timedelta(days=30))   # a foreign private issuer's 6-K reports around the delisting
 
 
@@ -564,9 +567,56 @@ class LLMMergerTermsExtractor:
         except requests.RequestException:
             return None
 
+    def extract_offer_terms(self, record: DelistRecord, security_name: str = "") -> MergerTerms | None:
+        """FB-016: the consideration the offer's own documents state, for a merger nothing else states the terms of
+        (CureVac 2026: a foreign private issuer's 6-Ks give no ratio; CNX Gas 2010: a tender offer's 8-Ks give no
+        price). EDGAR lists them under the target, their subject company (`_offer_documents`: the SC TO-T and its
+        amendments, then the Rule 425 filings, then the SC 14D9, newest first); the first that states a package
+        answers. The caller asks only when `extract` and the regex read both gave nothing, so the answers
+        already read stand. Same contract as `extract`: None on a miss, for another bucket or a missing CIK, and
+        when EDGAR cannot be read."""
+        if record.bucket is not CrspBucket.MERGER or record.cik is None:
+            return None
+        try:
+            delist = parse_date(record.observed_delist_date or "")
+            for f in self._offer_documents(self.edgar.recent_filings(record.cik) or [], delist):
+                text = self.edgar.fetch_filing_text(record.cik, f.accession, f.primary_doc)
+                if not text:
+                    continue
+                try:
+                    terms = self._llm_extract(self._relevant_excerpts(text), record, f, security_name)
+                except FATAL:
+                    raise
+                except Exception:
+                    SEC_STATS.degraded("llm_call")      # as in `_extract`: never cached, and the row says so
+                    continue
+                if terms is None or unsupported_one_for_one(terms) or states_no_package(terms):
+                    continue
+                if terms.cash_per_share is not None or terms.has_stock:
+                    return replace(terms, value_window=averaging_window(text)) if terms.stock_value else terms
+        except requests.RequestException:
+            return None
+        return None
+
     # ------------------------------------------------------------------ #
     # Internals
     # ------------------------------------------------------------------ #
+
+    def _offer_documents(self, filings, delist) -> list[EdgarSubmission]:
+        """The offer's documents among a target's filings, by kind and newest first within a kind: the SC TO-T and
+        its amendments (the bidder's statement: a later amendment may only report results, so the one that sets the
+        final terms is reached by walking back; CureVac's ratio is in the third newest), the Rule 425 filings, and
+        the SC 14D9 (the target's own statement; its amendments restate little). Each filed in the `_OFFER_DAYS`
+        before the delisting and no later than it, `max_filings` of a kind at most. None without a delisting date."""
+        if delist is None:
+            return []
+        out: list[EdgarSubmission] = []
+        for forms in _OFFER_FORMS:
+            dated = [(d, f) for f in filings if f.form in forms and (d := parse_date(f.filing_date))
+                     and delist - _OFFER_DAYS <= d <= delist]
+            dated.sort(key=lambda x: x[0], reverse=True)       # stable: EDGAR's own order within a day
+            out += [f for _, f in dated[:self.max_filings]]
+        return out
 
     def _extract(self, record: DelistRecord, security_name: str = "") -> MergerTerms | None:
         filings = self.edgar.recent_filings(record.cik)

@@ -287,6 +287,32 @@ def test_a_wind_down_with_nothing_read_publishes_no_fill():
     assert contract_value(row) == ("", "", "")
 
 
+def test_a_merger_with_no_terms_read_publishes_no_fill():
+    """FB-016 (CureVac 2026, CNH 2013, CXG 2010): a merger whose terms nothing states has no value (`pending_terms`):
+    no par fill, blank in the table and the contract; the firm month keeps the par value. Terms that were read and
+    that the gate refused keep the assumed par the verdict doubts. TAHO 2019 has no terms and no last close: pending
+    too."""
+    v = _v(M, close=4.66, terms_read=False)
+    assert (v.method, v.kind, v.confidence, v.table_dlret) == (DlretMethod.PENDING_TERMS, "", "low", None)
+    assert math.isnan(v.value) and v.terminal_value is None and v.firm_month == 0.0
+    assert _v(M, close=4.66).method is DlretMethod.ASSUMED_PAR
+    assert _v(M, terms_read=False).method is DlretMethod.PENDING_TERMS
+    assert _v(E, close=4.66, terms_read=False).method is DlretMethod.ASSUMED_PAR      # a merger's rule only
+    row = ending("C", "2026-01-16", "merger", method="pending_terms", dlret="")
+    assert contract_value(row) == ("", "", "") and rule_of(row).name == "unknown"
+
+
+def test_merger_inputs_say_whether_anything_states_the_terms():
+    """`MergerInputs.read`: the caller's row, the registrant's statement, a regex read or an LLM answer that publishes
+    a leg; an LLM answer with nothing to publish (CureVac's three 6-Ks: no terms) is no read."""
+    class _Answer:
+        def __init__(self, published):
+            self.published = published
+    assert not MergerInputs().read and not MergerInputs(llm=_Answer(None)).read
+    assert MergerInputs(llm=_Answer(object())).read and MergerInputs(raw_value=38.25).read
+    assert MergerInputs(override={"cash_per_share": 38.25}).read and MergerInputs(statement=object()).read
+
+
 def test_a_wind_downs_rule_is_its_recovery_unless_an_otc_symbol_was_read():
     """FB-002: a voluntary liquidation with no OTC symbol read is valued by the sum of its distributions (rule
     `recovery`, no ratio read yet); with one it keeps the first OTC print. A bankruptcy keeps the print."""

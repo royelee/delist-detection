@@ -79,7 +79,8 @@ def test_a_payout_read_through_a_failed_request_is_flagged_with_its_delisting(fa
 
     clients.payout_extractor = _FailingRead()
     run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
-    rows = [r for r in _review(tmp_path) if r["review_flags"] == "resolution_degraded"]
+    # with no terms read the row has no value either (FB-016): its `no_dlret` rides on the same review row
+    rows = [r for r in _review(tmp_path) if "resolution_degraded" in r["review_flags"].split(";")]
     assert [(r["sec_id"], r["delist_date"]) for r in rows] == [("BBG000FJLFX8", "2018-12-09")]
     # the payout read rested on a failed request, so the delisting's own
     # row carries the flag too.
@@ -233,8 +234,9 @@ def test_the_manifest_records_what_the_run_rested_on(fake_edgar, tmp_path):
     assert m["handoffs"] == {"handoffs": 0, "continuations_by_filing": 0, "continuations_by_timing": 0,
                              "takeovers": 0, "conflicts": 0, "rows_added": 0}
     assert m["resolution_degraded"] == 0
-    assert m["review"] == {"fix": 0, "check": 2, "info_hidden": 0, "accepted": 0, "cleared": 0,
-                           "unmatched_decisions": 0}     # review_triage.triage()'s own tally
+    # review_triage.triage()'s own tally: the merger with no terms read has no value (`no_dlret`, FB-016)
+    assert m["review"] == {"fix": 1, "check": 1, "info_hidden": 0, "accepted": 0, "cleared": 0,
+                           "unmatched_decisions": 0}
 
 
 def test_the_manifest_names_the_merger_terms_model_and_where_its_answers_came_from(tmp_path):

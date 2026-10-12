@@ -95,6 +95,11 @@ def _clients(fake_edgar, ftd_rows=None, extra_obs=()):
                           figi=_Figi(), ftd_client=ftd)
 
 
+# the caller's terms for the fixture's one merger: with none read, its ending is uncertain (`value_pending:terms`,
+# FB-016), which is not what most tests here are about
+AET_TERMS = Overrides(merger_terms={("BBG000FJLFX8", "2018-12-09"): {"cash_per_share": 210.10}})
+
+
 def test_end_to_end_tables(fake_edgar, tmp_path):
     index, clients = _clients(fake_edgar)
     summary = run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
@@ -2539,7 +2544,7 @@ def test_run_reports_floor_drops_and_failing_golden_cases(fake_edgar, tmp_path):
     golden = [TruthCase(case_id="AET", group="golden", ticker="AET", on="2017-06-30", issuer_cik="999", status="pass")]
     config = ScorecardConfig(floor={"G.pass": 1, "L1.coverage_tickers": 1.0}, golden=golden)
     logged = []
-    summary = run(index, clients, Overrides(), out_dir=tmp_path, log=logged.append, scorecard=config)
+    summary = run(index, clients, AET_TERMS, out_dir=tmp_path, log=logged.append, scorecard=config)
     assert summary.scorecard_drops == ["G.pass: 1 -> 0"]               # coverage holds at 1.0
     assert summary.golden_failures == ["AET: issuer_cik 1122304 != 999"]
     assert "scorecard drop: G.pass: 1 -> 0" in logged
@@ -2569,14 +2574,31 @@ def test_a_limit_subset_is_never_compared_to_the_floor(fake_edgar, tmp_path):
 
 def test_every_run_writes_uncertain_csv(fake_edgar, tmp_path):
     index, clients = _clients(fake_edgar)
-    summary = run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+    summary = run(index, clients, AET_TERMS, out_dir=tmp_path, log=lambda *_: None)
     assert read_table("uncertain", table_path(tmp_path, "uncertain")) == []
     assert summary.uncertain == {"seed": 0, "security": 0, "ending": 0}
 
 
+def test_a_merger_with_no_terms_read_has_no_fill_and_says_why(fake_edgar, tmp_path):
+    """FB-016 (CureVac 2026): nothing states AET's terms in this run (no payout reader, no LLM, no caller's row), so
+    the ending has no value and no par fill, in the table and in the contract, and the verdict is uncertain with the
+    reason `value_pending:terms`. It was a confirmed row with a fill of 0.000000 and the flag `merger_at_par`."""
+    index, clients = _clients(fake_edgar)
+    summary = run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+    (d,) = read_table("delistings", table_path(tmp_path, "delistings"))
+    assert (d["bucket"], d["dlret_method"], d["dlret"], d["terminal_value"]) == ("merger", "pending_terms", "", "")
+    assert "merger_at_par" not in d["review_flags"].split(";")
+    (c,) = read_table("contract_delistings", tmp_path / "contract" / "delistings.csv")
+    assert (c["exit_kind"], c["dlret"], c["dlret_fill"], c["value_rule"], c["verdict"]) == (
+        "merger", "", "", "unknown", "uncertain")
+    assert [(r["kind"], r["sec_id"], r["reason"]) for r in read_table("uncertain", table_path(tmp_path, "uncertain"))] \
+        == [("ending", "BBG000FJLFX8", "value_pending:terms")]
+    assert summary.uncertain == {"seed": 0, "security": 0, "ending": 1}
+
+
 def test_a_sighting_after_the_ending_is_an_uncertain_seed_but_not_an_uncertain_security(fake_edgar, tmp_path):
     index, clients = _clients(fake_edgar, extra_obs=(Observation("AET", "2019-06-28", "AETNA INC", cik=1122304),))
-    summary = run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+    summary = run(index, clients, AET_TERMS, out_dir=tmp_path, log=lambda *_: None)
     rows = read_table("uncertain", table_path(tmp_path, "uncertain"))
     assert rows == [{"kind": "seed", "ticker": "AET", "sec_id": "BBG000FJLFX8", "date": "2019-06-28",
                      "reason": "outside_security_history", "candidates": ""}]

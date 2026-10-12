@@ -1282,7 +1282,8 @@ def _delisting_rows(delistings: list[Delisting], closes: dict[DelistingKey, floa
     """10a. The delistings.csv rows, and the review rows of those delistings that
     carry a flag or no DLRET. Each delisting's value inputs (`dlret.ValueInputs`)
     are its classification, its stage 7 close, the merger terms delistings.csv
-    carries (stage 8's record, `MergerValues.table_terms`), the caller's
+    carries (stage 8's record, `MergerValues.table_terms`, and whether anything
+    states them, `MergerValues.terms_read`), the caller's
     --recoveries ratio, and a drop's first OTC print or a bankruptcy plan's value
     (ruling R6, stage 9e's ratio times the new line's close): the caller's answers
     to their requests (`PriceAnswers.ending_values`), so a second run with the
@@ -1297,7 +1298,9 @@ def _delisting_rows(delistings: list[Delisting], closes: dict[DelistingKey, floa
                             recovery_ratio=for_delisting(overrides.recoveries, e.key), otc_print=otc,
                             plan_value=plan, payout_confidence=terms.payout_confidence,
                             deregistered=e.record.deregistered,
-                            wind_down=is_wind_down(e.record.bucket.value, e.record.crsp_code))
+                            wind_down=is_wind_down(e.record.bucket.value, e.record.crsp_code),
+                            # a row that continues (IPHI 2020's listing move) has no terms to read
+                            terms_read=values.terms_read(e.key) or bool(e.record.successor_sec_id))
         enriched = enrich(e.record, value, acquirer_ticker=terms.acquirer_ticker, payout_source=terms.payout_source,
                           extra_flags=terms.flags)
         v = values.get(e.key)

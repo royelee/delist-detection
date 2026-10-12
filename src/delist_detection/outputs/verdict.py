@@ -89,7 +89,8 @@ settle a doubt the rules above would otherwise raise; none changes a table row, 
   when it is an `exchange` ending with no successor (`exchange_without_successor`, FB-003: an unlinked rename), when
   its kind rests only on an NT 10-K/Q in the prior year (`kind_by_filing_history_only`, FB-002), or when it is a
   wind-down whose distributions are not read (`value_pending:distributions`, FB-002: no measured value and no fill,
-  the spec's invariant), or, as a security reason, when an observed security has a FIGI and no issuer CIK
+  the spec's invariant) or a merger whose terms nothing states (`value_pending:terms`, FB-016: the same, where it
+  was a par fill on a confirmed row), or, as a security reason, when an observed security has a FIGI and no issuer CIK
   (`issuer_unresolved`, FB-006: its seeds and endings are uncertain, so a blank `issuer_id` never rides on a
   confirmed seed; an acquirer the run adds is no claim and is left alone), or when an observed security's open
   interval carries an OTC bankruptcy symbol, five letters ending in Q (`open_under_bankruptcy_ticker:<ticker>`,
@@ -362,6 +363,8 @@ def _own_reasons(row: Mapping[str, str], issuer_cik: str = "", reading: Continua
         reasons.append("assumed_par_after_failed_gate")
     if row["dlret_method"] == DlretMethod.PENDING_RECOVERY.value:   # G
         reasons.append("value_pending:distributions")
+    if row["dlret_method"] == DlretMethod.PENDING_TERMS.value:      # FB-016
+        reasons.append("value_pending:terms")
     if is_continuation(row):
         if linked_by_timing(row["reason"]) and not confirmed:
             reasons.append("continuation_by_timing_only")

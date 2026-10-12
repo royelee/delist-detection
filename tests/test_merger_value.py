@@ -44,15 +44,21 @@ class _NoFtd:
 
 
 class _Terms:
-    """An LLM extractor that answers each target from a map (by ticker); `seen` records the names it was told."""
+    """An LLM extractor that answers each target from a map (by ticker); `seen` records the names it was told, and
+    `offers` the targets whose offer documents it was asked for (answered from `offer_answers`)."""
 
-    def __init__(self, answers: dict, calls: list | None = None) -> None:
+    def __init__(self, answers: dict, calls: list | None = None, offer_answers: dict | None = None) -> None:
         self.answers, self.calls, self.seen = answers, calls if calls is not None else [], []
+        self.offer_answers, self.offers = offer_answers or {}, []
 
     def extract(self, record, security_name=""):
         self.calls.append(record.ticker)
         self.seen.append((record.ticker, security_name))
         return self.answers.get(record.ticker)
+
+    def extract_offer_terms(self, record, security_name=""):
+        self.offers.append(record.ticker)
+        return self.offer_answers.get(record.ticker)
 
 
 def _value(delistings, *, llm=None, payout=None, edgar=None, resolver=None, name_index=None, ftd_client=None,
@@ -80,6 +86,24 @@ def test_the_llm_is_told_the_target_security():
     _value([_merger("BBG000C496P7", "PARA", "2025-08-07", date(2025, 8, 6), cik=813828)], llm=llm,
            securities={para.sec_id: para})
     assert llm.seen == [("PARA", "PARAMOUNT GLOBAL CLASS B")]
+
+
+def test_the_offers_own_documents_are_asked_only_when_neither_reader_found_terms():
+    """FB-016 (CureVac 2026): a merger whose first-choice filings give the LLM nothing and the regex nothing is asked
+    again over the offer's own documents, and their answer is its terms. A merger either reader answered is not
+    asked, so the answers already read stand."""
+    class Payout:
+        def extract(self, record, last_close=None):
+            hit = replace(PayoutResult.none(), value=38.25, confidence="high", source="8K_2.01")
+            return hit if record.ticker == "CXG" else PayoutResult.none()
+
+    ratio = _stock(0.05363, "BNTX")
+    llm = _Terms({"AAA": _stock(1.5, "ZZZ")}, offer_answers={"CVAC": ratio})
+    es = [_merger(t, t, "2026-01-16", date(2026, 1, 5)) for t in ("AAA", "CXG", "CVAC", "CNH")]
+    values = _value(es, llm=llm, payout=Payout())
+    assert llm.calls == ["AAA", "CXG", "CVAC", "CNH"] and llm.offers == ["CVAC", "CNH"]
+    assert values.get(es[2].key).llm == ratio and values.get(es[3].key).llm is None
+    assert values.terms_read(es[2].key) and values.terms_read(es[1].key) and not values.terms_read(es[3].key)
 
 
 def test_the_llm_calls_are_filled_ahead_on_worker_threads_with_the_same_answers():
