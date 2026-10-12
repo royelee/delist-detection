@@ -962,7 +962,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   FB-015, for a seed list, where a security has one sighting and nothing after it names a later registrant: the
   other CIK must have filed a registrant's own report (`REGISTRANT_FORMS`: 10-K, 10-Q, 8-K, 20-F, 40-F, 6-K,
   N-CSR) no more than `FILING_DAYS` (400) before the sighting (`_filing_around`: LUMN's CIK 1008114 is another
-  "LUMEN TECHNOLOGIES INC" whose reports stop in 1998, and MAN's CIK 62072 holds only its holders' Schedule 13Gs);
+  "LUMEN TECHNOLOGIES INC" whose reports stop in 1999, and MAN's CIK 62072 holds only its holders' Schedule 13Gs);
   a sighting with no name (stage 10c3
   passes each derived era of a sighted security as one, on its first day) changes the issuer on its own day (MDT,
   ICE, PRGO, MYL: the line after the refused CUSIP step is the new registrant's); and `listed_issuer` ends the

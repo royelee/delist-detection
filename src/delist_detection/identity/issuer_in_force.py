@@ -9,7 +9,7 @@ Merck's 2008 sightings resolved to CIK 310158, which was Schering-Plough until
 November 2009, while old Merck & Co (CIK 64978) carried the name then. No such
 CIK, or two, keeps the era's. The other CIK must have been filing a registrant's
 own reports around the sighting (`REGISTRANT_FORMS`, `FILING_DAYS`, FB-015): a
-company whose reports stop in 1998 is not the issuer of a stock sighted in 2020,
+company whose reports stop in 1999 is not the issuer of a stock sighted in 2020,
 whatever its name (LUMN: CIK 1008114, another "LUMEN TECHNOLOGIES INC", while
 EDGAR dated CenturyLink's rename four months after the ticker changed), nor is
 one EDGAR holds only holders' Schedule 13Gs of (MAN: CIK 62072).
