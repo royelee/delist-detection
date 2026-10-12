@@ -86,7 +86,7 @@ from .outputs.verdict import decide as decide_verdicts
 from .outputs.contract import delisting_rows as contract_delisting_rows
 from .outputs.contract import id_change_rows, payout_leg_rows, security_history_rows, seed_rows
 from .identity.issuer_in_force import Sighting as IssuerSighting
-from .identity.issuer_in_force import issuer_changes, with_registrants
+from .identity.issuer_in_force import issuer_changes, listed_issuer, with_registrants
 from .outputs.price_requests import PriceAnswers, request_rows
 
 
@@ -1452,17 +1452,22 @@ def _ticker_evidence(ctx: _RunContext, securities: dict[str, Security], tier: Ca
     return out
 
 
-def _in_force_reads(issuers: IssuerRecord) -> tuple[Callable[[int], dict | None], ReadWatch]:
-    """The submissions read `issuer_in_force` takes: the issuer's profile in the run's issuer record (None when it
-    cannot be read; a CIK whose read failed in this stage is not asked again in it, as the stage reads one per
-    sighting), and the watch over the stage's reads (`ciks`: each CIK whose answer failed or rested on a stale
-    copy)."""
+def _in_force_reads(issuers: IssuerRecord
+                    ) -> tuple[Callable[[int], dict | None], Callable[[int, str], list[date] | None], ReadWatch]:
+    """The reads `issuer_in_force` takes: the issuer's profile in the run's issuer record (None when it cannot be
+    read; a CIK whose read failed in this stage is not asked again in it, as the stage reads one per sighting), the
+    days of its latest filings whose form starts with a prefix (`IssuerRecord.recent_days`, None when its list is
+    not known: the profile keeps no filings block, so the Form 25 bound and the still-filing check read them here), and the watch over the
+    stage's reads (`ciks`: each CIK whose answer failed or rested on a stale copy)."""
     reads = issuers.watch()
 
     def submissions(cik: int) -> dict | None:
         return None if cik in reads.failed else issuers.profile(cik)
 
-    return submissions, reads
+    def filed(cik: int, form: str) -> list[date] | None:
+        return None if cik in reads.failed else issuers.recent_days(cik, form)
+
+    return submissions, filed, reads
 
 
 def _other_issuers(ctx: _RunContext, eras: list[TickerEra], resolutions: dict[str, EraResolution],
@@ -1475,13 +1480,17 @@ def _other_issuers(ctx: _RunContext, eras: list[TickerEra], resolutions: dict[st
     security whose issuer changed in its span has none (Perrigo: CIK 820096 until 2013, then its own). A security
     for whose answer a submissions read failed or was stale gets a `resolution_degraded` row in `review`: the
     other CIK's Form 25s it may have lost are not read until a rerun."""
-    read, reads = _in_force_reads(ctx.clients.issuers)
+    read, read_filed, reads = _in_force_reads(ctx.clients.issuers)
     exact_names = ctx.clients.issuers.exact_holders
     touched: set[int] = set()
 
     def submissions(cik: int):
         touched.add(cik)
         return read(cik)
+
+    def filed(cik: int, form: str):
+        touched.add(cik)
+        return read_filed(cik, form)
 
     conflicts = {(t, d) for t, d, _ in observation_conflicts(o for e in eras for o in e.caller_observations)}
     # an era whose issuer its ticker's fails rows decided (stage 2b) keeps it: its observed name is not the
@@ -1497,7 +1506,7 @@ def _other_issuers(ctx: _RunContext, eras: list[TickerEra], resolutions: dict[st
         by_sec[x.sec_id].append(x)
     for sid, rows in sorted(by_sec.items()):
         touched.clear()
-        timeline = issuer_changes(rows, submissions, exact_names).get(sid, [])
+        timeline = issuer_changes(rows, submissions, exact_names, filed).get(sid, [])
         s = securities.get(sid)
         if s is not None and review is not None and touched & reads.ciks:
             review.append(degraded_item(sid, s.eras[-1].ticker, s.issuer_cik, "the other issuer in force",
@@ -1513,7 +1522,9 @@ def _other_issuers(ctx: _RunContext, eras: list[TickerEra], resolutions: dict[st
 def _issuers_in_force(ctx: _RunContext, observation_map: Sequence[Mapping[str, str]],
                       rows_decided: Collection[str] = (),
                       review: list[ReviewItem] | None = None,
-                      registrants: Mapping[str, Sequence[Registrant]] = {}) -> dict[str, list[tuple[str, str]]]:
+                      registrants: Mapping[str, Sequence[Registrant]] = {},
+                      derived: Sequence[IssuerSighting] = (),
+                      open_lines: Mapping[str, tuple[str, str]] = {}) -> dict[str, list[tuple[str, str]]]:
     """10c3. Each security's issuer timeline (issuer_in_force.issuer_changes) from its
     sightings, for contract/security_history.csv (10g): every observation_map row (as
     written, `store.formatted`) with a sec_id, except a conflict (two names that day).
@@ -1526,13 +1537,31 @@ def _issuers_in_force(ctx: _RunContext, observation_map: Sequence[Mapping[str, s
     (`rows_decided`, stage 2b's `ticker_rows` and `later_ticker`) keeps its era's CIK too: its observed
     name is the one those rows refuted (ERA 2013's BRISTOW GROUP INC) or one the issuer took later (GHC 2012). A security's successor registrants
     (`registrants`, stage 5: a holding-company reorganization of an ending that went on, DIS 2019) are the issuer in
-    force from the day their successor registration was filed (`issuer_in_force.with_registrants`)."""
-    read, reads = _in_force_reads(ctx.clients.issuers)
+    force from the day their successor registration was filed (`issuer_in_force.with_registrants`).
+
+    FB-015, for a seed list, where a security has one sighting and nothing after it names a later registrant. The
+    lines the library derived itself (`derived`: each derived era of a security the caller sighted, as a sighting
+    on its first day with its era's CIK and no name) change the issuer on that day (MDT 2015: the line after the
+    CUSIP change the line follow refused is Medtronic plc's). A security whose history is open on the run date
+    (`open_lines`: sec_id -> its open ticker and its name) ends with the company SEC lists that ticker under when
+    its EDGAR name agrees (`issuer_in_force.listed_issuer`: MRK, whose old registrant kept filing). A ticker map
+    that cannot be read is not asked again in the stage, and the security that asked gets the review row."""
+    read, read_filed, reads = _in_force_reads(ctx.clients.issuers)
     touched: set[int] = set()
 
     def submissions(cik: int) -> dict | None:
         touched.add(cik)
         return read(cik)
+
+    def filed(cik: int, form: str) -> list[date] | None:
+        touched.add(cik)
+        return read_filed(cik, form)
+
+    def listed(ticker: str) -> int | None:
+        if IssuerRecord.NO_ISSUER in reads.failed:
+            return None
+        touched.add(IssuerRecord.NO_ISSUER)
+        return ctx.clients.issuers.listed_under(ticker)
 
     mark = ctx.meter.start()
     by_sec: dict[str, list[IssuerSighting]] = {}          # each security's sightings, in the table's order
@@ -1543,18 +1572,26 @@ def _issuers_in_force(ctx: _RunContext, observation_map: Sequence[Mapping[str, s
                 IssuerSighting(r["sec_id"], r["as_of"], "" if r["era"] in rows_decided else r["name"],
                                r["issuer_cik"]))
             seen[r["sec_id"]] = r
+    later: dict[str, list[IssuerSighting]] = defaultdict(list)
+    for x in derived:
+        later[x.sec_id].append(x)
     out: dict[str, list[tuple[str, str]]] = {}
     for sid, rows in by_sec.items():
         touched.clear()
-        out.update(issuer_changes(rows, submissions, ctx.clients.issuers.exact_holders))
+        timeline = issuer_changes([*rows, *later.get(sid, ())], submissions, ctx.clients.issuers.exact_holders,
+                                  filed).get(sid)
+        if timeline:
+            timeline = with_registrants(timeline, [(r.since, str(r.cik)) for r in registrants.get(sid, ())])
+            if sid in open_lines:
+                ticker, name = open_lines[sid]
+                timeline = listed_issuer(timeline, listed(ticker), name, ctx.as_of,
+                                         max((x.day for x in rows if x.cik), default=""), submissions, filed)
+            out[sid] = timeline
         if review is not None and touched & reads.ciks:
             last = seen[sid]
             review.append(degraded_item(sid, last.get("ticker", ""), int(last["issuer_cik"]) if last["issuer_cik"]
                                         else None, "the issuer in force (contract/security_history.csv)",
                                         "; run again once SEC answers"))
-    for sid, regs in registrants.items():
-        if sid in out:
-            out[sid] = with_registrants(out[sid], [(r.since, str(r.cik)) for r in regs])
     ctx.meter.done("issuers in force", mark)
     return out
 
@@ -1703,8 +1740,13 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     map_rows = _observation_map(ctx, index, eras, resolutions, identity.issuers, history)
     # 10c3. the issuers in force, for 10g's security_history: before triage, so a failed read is a review row
     in_force_review: list[ReviewItem] = []
-    in_force = _issuers_in_force(ctx, formatted("observation_map", map_rows), identity.rows_decided, in_force_review,
-                                 search.registrants)
+    in_force = _issuers_in_force(
+        ctx, formatted("observation_map", map_rows), identity.rows_decided, in_force_review, search.registrants,
+        derived=[IssuerSighting(r.sec_id, e.first, "", str(cik)) for e in eras
+                 if e.derived and (r := resolutions.get(e.key)) is not None and r.sec_id
+                 and (cik := cik_of(identity.issuers, e.key)) is not None],
+        open_lines={r["sec_id"]: (r["ticker"], securities[r["sec_id"]].name) for r in th_rows
+                    if not r["valid_to"] and r["sec_id"] in securities})
     review_rows += [item.row() for item in in_force_review]
     flags, triaged = _triage(ctx, review_rows, review_decisions, limit)
 

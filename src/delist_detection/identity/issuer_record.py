@@ -12,6 +12,8 @@ pipeline's stages all read issuers through one `IssuerRecord`, and ask it what t
   `names_until`);
 - `first_filed(cik)` and `existed_by(cik, day)`: its first filing, and whether it had filed by a day;
 - `recent_form_dates(cik, form)`: the days of its latest filings (the submissions JSON's recent block) of a form;
+- `recent_days(cik, form)`: the same days, None when its filing list is not known and [] when it has no such
+  filing (FB-015: a company with no filing at all was not filing);
 - `filings(cik)` and `text(cik, filing)`: the issuer's filings and a filing's text;
 - `exact_holders(name)`: the CIKs SEC's name index (cik-lookup-data.txt) lists under exactly a name;
 - `listed_under(ticker)`: the CIK SEC's ticker map (company_tickers.json) lists a ticker under today.
@@ -248,8 +250,15 @@ class IssuerRecord:
         """The days of the issuer's latest filings (its submissions JSON's recent block: a delisted company's Form 25
         or 15 is among its last) whose form starts with `form`; [] when unknown. The client's copy is read for it
         each time (the recent block is not kept)."""
+        return self.recent_days(cik, form, about=about) or []
+
+    def recent_days(self, cik: int, form: str = "", *, about: date | str | None = None) -> list[date] | None:
+        """`recent_form_dates`, telling an issuer with no such filing ([]) from one whose list is not known (None:
+        its submissions JSON cannot be read, or holds no filings block)."""
         sub = self._copy(int(cik), self._fresh(about))
-        recent = ((sub.get("filings") or {}).get("recent") or {}) if sub is not None else {}
+        if sub is None or "filings" not in sub:
+            return None
+        recent = (sub.get("filings") or {}).get("recent") or {}
         return [d for f, fd in zip(recent.get("form") or [], recent.get("filingDate") or [])
                 if f.startswith(form) and (d := parse_day(fd)) is not None]
 

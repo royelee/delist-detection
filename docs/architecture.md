@@ -96,7 +96,9 @@ plan's `received_close` answer times its ratio is that ending's value and an ans
 through its own request, `PriceAnswers.ending_values`), then the row builders (stage 10a builds one
 `dlret.ValueInputs` per delisting and `reconstruction.enrich`es it; stage 8's records feed 10a, 10c and 10g:
 `MergerValues.table_terms`, `contract_inputs` and `requests`), `_issuers_in_force` (stage 10c3: the
-contract's issuer timeline, read before triage so a failed or stale read is a `resolution_degraded` row, as 4c's) and
+contract's issuer timeline, read before triage so a failed or stale read is a `resolution_degraded` row, as 4c's; FB-015:
+it also takes the derived eras of each sighted security and, for a history open on the run date, the company SEC
+lists the ticker under) and
 `_triage`; the contract (stage 10g) takes sub-plan 5h's `Identity.renames` too: each placeholder whose eras
 now hold one FIGI line is a `contract/id_changes.csv` rename, across a class label), each with explicit
 inputs and outputs and the run-wide `_RunContext` (clients, run date, log,
@@ -873,7 +875,14 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   after its last row (a flat settling tail can run weeks: QRTEA's QVCGA began the day after QRTEA's last row, 14 trading
   days after the settled one): a new
   CUSIP under the line's ticker, its `…ZZZZ`/`…D` spellings, a ticker of the issuer EDGAR lists or its 8-K text
-  names (`text_symbols`, which also reads "symbol ... changed from X to Y" as Y, curly quotes included: sub-plan 5c, RRI to GEN; `text_cusips`), or the same CUSIP under a new non-OTC ticker; never a CUSIP another
+  names (`text_symbols`, which also reads "symbol ... changed from X to Y" as Y, curly quotes included: sub-plan 5c, RRI to GEN; `text_cusips`), or the same CUSIP under a new non-OTC ticker; with `late` (FB-015, asked by the stage only of a
+  line whose FIGI its own CUSIP or a pin confirms and that the round found no step for), a step that begins after the
+  window, since the fails files hold a row only on a day with a fail: the first later CUSIP under the line's own
+  ticker (Ocwen's post-split CUSIP, first row three years after the old one's last), which the stage takes only when
+  OpenFIGI names the line's own composite for it, or the same CUSIP under a ticker EDGAR lists for the issuer or
+  its 8-K names (ONIT); `corroborate` opens a late step's bankruptcy and listing-ended windows at the old rows'
+  last day and asks it for no filing near its first row, and a late step that is not confirmed is dropped with a
+  log line and no review item; never a CUSIP another
   security holds, nor a switch while the old CUSIP trades on at changing prices more than `SWITCH_DAYS` trading
   days after the new CUSIP's first row, applied only at the data edge (the old CUSIP's last row within
   `SWITCH_TAIL_DAYS` of `FtdIndex.data_end()`, the fails data's last day, passed as `data_end`: a live line has no stop to see; CHTR's new
@@ -950,6 +959,19 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `with_registrants` adds a security's successor registrants (`endings/registrants.py`: the new registrant a
   holding-company reorganization put in the old one's place) as the issuer in force from the day they registered,
   dated after the timeline's last change; stage 10c3 applies it, and only for a security whose line goes on.
+  FB-015, for a seed list, where a security has one sighting and nothing after it names a later registrant: the
+  other CIK must have filed a registrant's own report (`REGISTRANT_FORMS`: 10-K, 10-Q, 8-K, 20-F, 40-F, 6-K,
+  N-CSR) no more than `FILING_DAYS` (400) before the sighting (`_filing_around`: LUMN's CIK 1008114 is another
+  "LUMEN TECHNOLOGIES INC" whose reports stop in 1998, and MAN's CIK 62072 holds only its holders' Schedule 13Gs);
+  a sighting with no name (stage 10c3
+  passes each derived era of a sighted security as one, on its first day) changes the issuer on its own day (MDT,
+  ICE, PRGO, MYL: the line after the refused CUSIP step is the new registrant's); and `listed_issuer` ends the
+  timeline of a history open on the run date with the company SEC lists the ticker under
+  (`IssuerRecord.listed_under`), when its EDGAR name agrees with the security's and its name's first day or the
+  old issuer's Form 25 or 15 dates the change (MRK: old Merck kept filing, so no era names CIK 310158). The filing
+  days come through the injected `filed` read (`IssuerRecord.recent_days`, None for a list that is not known and [] for a company with no filing, which was not filing; `filed_in` reads a submissions
+  JSON's own block for the tests): the run's profile keeps no filings block, so before FB-015 the Form 25 bound
+  below never applied in a run.
   A change to a CIK whose agreeing name began before the old CIK's listing ended (a holding company's, from its
   formation: ICE 2013, formed 2013-03-20) is dated no earlier than the old CIK's first Form 25 or Form 15 in the gap
   between the two sightings (`_deregistered`, its submissions JSON's recent filings).

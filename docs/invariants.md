@@ -380,6 +380,13 @@
   or none is one security; a placeholder folds into the FIGI line its new CUSIP names (contract/id_changes.csv
   names it); another composite is a line successor, linked by stage 9 as a continuation (an `unknown` row at the
   switch is rewritten, `line_continuation`: it drops `no_evidence_default` and gets medium confidence); so is a merger row at the switch when stage 4b followed the step (the old registrant carries on: TEAM, LSXMA, FWONA), unless its payout reconciled with the last close.
+  A step may begin after the window (FB-015): the fails files hold a row only on a day with a fail, so a quiet
+  stock's new CUSIP can first appear years after the old one's last row (Ocwen: 2020-08-12, then 2023-07-14). A line
+  whose FIGI its own CUSIP or a pin confirms, and that the round found no step for, takes the first later CUSIP
+  under its own ticker when OpenFIGI names the line's own composite for it and the registrant carried on, and the
+  same CUSIP under a ticker EDGAR lists for the issuer (ONIT). Such a late step needs no filing near its first row,
+  a bankruptcy or an ended listing anywhere in the gap refuses it, and one that is not confirmed is dropped with no
+  review item.
   A step stage 4b refuses because another registrant took over (`merged_out`, `other_registrant`), or whose new rows do
   not name the issuer's name after the step (`name`) but name the old line's, is a line of the run when it follows an
   era of the same ticker and its CUSIP is not the ticker's next era's: the identity stage keeps those fails rows as an

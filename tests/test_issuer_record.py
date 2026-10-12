@@ -71,6 +71,17 @@ def _reads(edgar: _Edgar, what: str, cik: int = 7) -> int:
     return edgar.calls.count((what, cik))
 
 
+def test_recent_days_tell_no_filing_from_a_list_that_is_not_known():
+    """FB-015: a company EDGAR holds no filing of was not filing; one whose JSON holds no filings block, or cannot be
+    read, is not judged."""
+    empty = {"name": "MANPOWER INC /DE/", "formerNames": [], "filings": {"recent": {"form": [], "filingDate": []}}}
+    r = IssuerRecord(_Edgar({7: HALYARD, 8: empty, 9: {"name": "NO BLOCK CO", "formerNames": []}}, {}))
+    assert r.recent_days(7, "25") == [date(2018, 6, 29)] and r.recent_days(7, "S-") == []
+    assert len(r.recent_days(7)) == len(HALYARD["filings"]["recent"]["form"])
+    assert r.recent_days(8) == [] and r.recent_days(9) is None and r.recent_days(404) is None
+    assert r.recent_form_dates(9, "25") == [] and r.recent_form_dates(404, "25") == []
+
+
 # --- each issuer read once per run --------------------------------------------------------------------------------
 
 def test_each_issuer_is_read_once_and_answers_from_that_read():

@@ -157,6 +157,70 @@ def test_a_chain_of_switches_is_followed_up_to_max_rounds_and_no_further():
     assert [f for _, f in _flags(short)] == ["line_followed", "line_followed"]
 
 
+# --- FB-015: a line that goes on after a gap in the fails rows ----------------------------------------------------
+
+def _weekly(ticker, cusip, start, n=6):
+    return [FtdRow((date.fromisoformat(start) + timedelta(weeks=w)).isoformat(), cusip, ticker, NAME, 5.0 + w * 0.01)
+            for w in range(n)]
+
+
+LATE = _line("AA", ["C1"]) + _weekly("AA", "C2", "2014-06-02")       # C1's last row is 2012-02-20: a two-year gap
+
+
+def test_a_line_goes_on_after_a_gap_when_openfigi_names_its_own_composite():
+    """Ocwen 2020: the post-split CUSIP's first fails row is three years after the old CUSIP's last. The window sees
+    no step; the late one is taken because OpenFIGI names the line's own composite for the new CUSIP, which is asked
+    alone once R1 let the step through."""
+    figi = _Figi({"C2": _answer("BBGA", "AA")})
+    lines = _follow([_Spec("BBGA", 1, "AA", ["C1"])], LATE, edgar=_Edgar([LATER_10Q]), figi=figi)
+    assert lines.cusips["BBGA"] == ["C1", "C2"] and figi.asked == ["C2"]
+    assert _flags(lines) == [("BBGA", "line_followed")]
+    assert "after a gap in the fails rows" in lines.review[0].reason
+
+
+@pytest.mark.parametrize("answers", [{"C2": _answer("BBGX", "AA")}, {}])
+def test_a_late_step_openfigi_does_not_confirm_is_dropped_without_a_review_item(answers):
+    """Another composite (a recycled ticker's new holder that carries the name) or no answer: the line stays as the
+    window left it, with a log line and no finding."""
+    logged = []
+    lines = _follow([_Spec("BBGA", 1, "AA", ["C1"])], LATE, edgar=_Edgar([LATER_10Q]), figi=_Figi(answers),
+                    log=logged.append)
+    assert lines.cusips["BBGA"] == ["C1"] and _flags(lines) == [] and lines.refused == []
+    assert any("late step not followed" in line and "not_own_composite" in line for line in logged)
+
+
+def test_a_late_step_is_asked_only_of_a_line_its_own_cusip_confirms():
+    """A ticker pick is today's holder of the ticker, so its composite for a later CUSIP confirms nothing (old
+    SandRidge, FB-014); a placeholder has no composite."""
+    for spec in (_Spec("BBGA", 1, "AA", ["C1"], source="ticker"), _Spec("CIK1-COMMON", 1, "AA", ["C1"])):
+        figi = _Figi({"C2": _answer(spec.sec_id, "AA")})
+        lines = _follow([spec], LATE, edgar=_Edgar([LATER_10Q]), figi=figi)
+        assert lines.cusips[spec.sec_id] == ["C1"] and figi.asked == []
+
+
+def test_a_late_step_the_registrant_did_not_carry_on_to_is_dropped_before_openfigi_is_asked():
+    figi = _Figi({"C2": _answer("BBGA", "AA")})
+    lines = _follow([_Spec("BBGA", 1, "AA", ["C1"])], LATE, edgar=_Edgar([]), figi=figi)      # no periodic report after
+    assert lines.cusips["BBGA"] == ["C1"] and figi.asked == [] and _flags(lines) == []
+
+
+def test_a_late_rename_is_followed_to_the_ticker_edgar_lists_for_the_issuer():
+    """Ocwen 2024: the same CUSIP's first row under ONIT is eight weeks after its last under OCN; EDGAR lists ONIT
+    for the issuer, so the next round takes it."""
+    class Listed(_Edgar):
+        def submissions(self, cik, fresh_after=None):
+            return {**super().submissions(cik), "tickers": ["AB"], "exchanges": ["NYSE"]}
+
+    rows = LATE + _weekly("AB", "C2", "2014-09-15")          # C2's last row under AA is 2014-07-07
+    lines = _follow([_Spec("BBGA", 1, "AA", ["C1"])], rows, edgar=Listed([LATER_10Q]),
+                    figi=_Figi({"C2": _answer("BBGA", "AB")}))
+    assert lines.cusips["BBGA"] == ["C1", "C2"] and lines.securities["BBGA"].line_tickers == frozenset({"AB"})
+    assert [f for _, f in _flags(lines)] == ["line_followed", "line_followed"]
+    unlisted = _follow([_Spec("BBGA", 1, "AA", ["C1"])], rows, edgar=_Edgar([LATER_10Q]),
+                       figi=_Figi({"C2": _answer("BBGA", "AB")}))
+    assert unlisted.securities["BBGA"].line_tickers == frozenset()
+
+
 def _fingerprint(lines):
     return ({k: (s.sec_id, s.issuer_cik, s.figi_source, tuple(e.key for e in s.eras), s.line_tickers)
              for k, s in lines.securities.items()},

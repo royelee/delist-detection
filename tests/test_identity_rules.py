@@ -76,6 +76,74 @@ def test_a_failed_read_of_the_issuer_in_force_is_a_resolution_degraded_row():
     assert "the issuer in force" in review[0].reason
 
 
+# --- FB-015: the issuer in force on a seed list, where one sighting is all the caller gives ----------------------
+
+def _recent(*pairs):
+    return {"recent": {"form": [f for f, _ in pairs], "filingDate": [d for _, d in pairs]}}
+
+
+SEED_SUBS = {
+    64670: {"name": "MEDTRONIC INC", "formerNames": [], "filings": _recent(("25-NSE", "2015-01-30"))},
+    1613103: {"name": "Medtronic plc", "formerNames": []},
+    64978: {"name": "MERCK SHARP & DOHME LLC", "formerNames": [
+        {"name": "MERCK & CO INC", "from": "1994-03-16T05:00:00.000Z", "to": "2009-11-02T05:00:00.000Z"}],
+        "filings": _recent(("25", "2008-12-01"), ("25-NSE", "2009-11-04"), ("15-12B", "2009-11-18"))},
+    310158: {"name": "Merck & Co., Inc.", "formerNames": [
+        {"name": "SCHERING PLOUGH CORP", "from": "1994-12-29T05:00:00.000Z", "to": "2009-11-03T05:00:00.000Z"}]},
+}
+
+
+def _seed_ctx(company_tickers=lambda: {"MRK": {"cik_str": 310158}, "MDT": {"cik_str": 1613103}}):
+    edgar = SimpleNamespace(submissions=lambda cik: SEED_SUBS[int(cik)], company_tickers=company_tickers)
+    clients = SimpleNamespace(edgar=edgar, issuers=IssuerRecord(edgar))
+    return SimpleNamespace(clients=clients, meter=StageMeter(lambda *a: None), as_of=date(2026, 9, 25))
+
+
+def _seed_row(sec_id, ticker, as_of, name, cik):
+    return {"sec_id": sec_id, "as_of": as_of, "name": name, "ticker": ticker, "issuer_cik": str(cik),
+            "status": "mapped", "era": f"{ticker}@{as_of}"}
+
+
+def test_a_derived_line_changes_the_issuer_in_force_on_its_first_day():
+    """MDT: the seed is Medtronic Inc's (64670); the line the library derived after the CUSIP change of 2015-01-27 is
+    Medtronic plc's (1613103), and contract/security_history.csv says so from that day. A derived line of a
+    security the caller never sighted makes no timeline."""
+    from delist_detection.identity.issuer_in_force import Sighting
+    rows = [_seed_row("BBGMDT", "MDT", "2008-01-16", "MEDTRONIC INC", 64670)]
+    derived = [Sighting("BBGMDT", "2015-01-27", "", "1613103"), Sighting("BBGOTHER", "2015-01-27", "", "1613103")]
+    assert pipeline._issuers_in_force(_seed_ctx(), rows) == {"BBGMDT": [("2008-01-16", "64670")]}
+    assert pipeline._issuers_in_force(_seed_ctx(), rows, derived=derived) == {
+        "BBGMDT": [("2008-01-16", "64670"), ("2015-01-27", "1613103")]}
+
+
+def test_an_open_history_ends_with_the_company_sec_lists_its_ticker_under():
+    """MRK: old Merck (64978) kept filing after November 2009, so no era names the registrant since; SEC lists MRK
+    under 310158, whose name agrees from 2009-11-04, the day of old Merck's Form 25. A security that is not open,
+    or whose listed company is already its last issuer, keeps its timeline."""
+    rows = [_seed_row("BBGMRK", "MRK", "2008-01-16", "MERCK & CO INC", 64978),
+            _seed_row("BBGMDT", "MDT", "2015-06-30", "MEDTRONIC PLC", 1613103)]
+    assert pipeline._issuers_in_force(_seed_ctx(), rows)["BBGMRK"] == [("2008-01-16", "64978")]
+    open_lines = {"BBGMRK": ("MRK", "MERCK & CO INC"), "BBGMDT": ("MDT", "MEDTRONIC PLC")}
+    assert pipeline._issuers_in_force(_seed_ctx(), rows, open_lines=open_lines) == {
+        "BBGMRK": [("2008-01-16", "64978"), ("2009-11-04", "310158")], "BBGMDT": [("2015-06-30", "1613103")]}
+
+
+def test_a_ticker_map_that_cannot_be_read_is_asked_once_and_reviewed():
+    import requests
+    asked = []
+
+    def company_tickers():
+        asked.append(1)
+        raise requests.ConnectionError("down")
+    rows = [_seed_row("BBGMRK", "MRK", "2008-01-16", "MERCK & CO INC", 64978),
+            _seed_row("BBGMDT", "MDT", "2015-06-30", "MEDTRONIC PLC", 1613103)]
+    open_lines = {"BBGMRK": ("MRK", "MERCK & CO INC"), "BBGMDT": ("MDT", "MEDTRONIC PLC")}
+    review = []
+    out = pipeline._issuers_in_force(_seed_ctx(company_tickers), rows, review=review, open_lines=open_lines)
+    assert out == {"BBGMRK": [("2008-01-16", "64978")], "BBGMDT": [("2015-06-30", "1613103")]}
+    assert len(asked) == 1 and [(r.sec_id, r.flag) for r in review] == [("BBGMRK", "resolution_degraded")]
+
+
 # --- rule E, OKE 2026: a holding company's new CUSIP the notice names, after the fails data's last day ----------
 
 def _oke(ftd_rows, day=date(2026, 9, 9)):

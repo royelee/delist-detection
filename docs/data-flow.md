@@ -935,7 +935,10 @@ is its row count; it is no contract file.
 fails-to-deliver rows. The ticker ranges are built the same way but no longer
 written as `ticker_history.csv`: the run keeps them in memory as `ticker_history`
 (the verdicts and the contract read them), and `contract/security_history.csv`
-publishes them, split where the issuer in force changes, without the merger
+publishes them, split where the issuer in force changes (by the caller's
+sightings, by the lines the library derived after a CUSIP change, and at the
+end of an open history by the company SEC lists the ticker under: FB-015),
+without the merger
 acquirers the run adds (and without the `exchange` and `source` columns). In
 memory, `ticker_history.exchange`
 is filled for the range that ends in a delisting (from the Form 25) and for
