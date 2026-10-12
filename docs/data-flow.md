@@ -743,7 +743,7 @@ security-master rebuild — see the spec's §8.7):
 
 | Trigger | CRSP code | Bucket |
 |---|---|---|
-| Non-equity security kind (from the Form 25 class text / OpenFIGI `securityType` / name keywords: warrant, unit, right, fund, debt) | 600 | EXPIRATION |
+| Non-equity security kind (from the Form 25 class text / OpenFIGI `securityType` / name keywords: warrant, unit, right, fund, debt). A unit whose issuer's Form 25s all remove stock (STAY 2021's "Paired Shares", FB-018) is searched and classified as the stock it is | 600 | EXPIRATION |
 | Form `REVOKED` present | 573 | COMPLIANCE_FAILURE |
 | 8-K item 1.03 whose own Item 1.03 section reports a bankruptcy, searched 540 days before to 30 days after the anchor date (an unreadable section still counts, flagged `bankruptcy_text_missing`). Exception: when that 1.03 is more than 180 days before the anchor and a change-in-control 8-K (5.01, or 2.01 with 3.01 or 3.03) falls within 30 days of it, the merger path wins instead and the row is flagged `bankruptcy_before_merger` | 470 | LIQUIDATION |
 | A rename near the anchor, or a 3.01 notice that reads as a listing transfer rather than a deficiency, with the company still reporting results afterward. Yields to the merger path whenever a nearby 8-K shows an acquisition (5.01, or 2.01 with 3.01 or 3.03) | 304 | EXCHANGE_TRANSFER |

@@ -72,6 +72,9 @@ _STRONG_VERB = re.compile(r"convert|exchang|reclassif|redeem|redemption", re.I)
 _DISTRIBUTION_STRONG = re.compile(r"\bRecord\s+Date\b|\b(?:the\s+)?Distribution\b|\bpro\s+rata\b|\bfor\s+every\b")
 _SHARES_OF = re.compile(r"\b(?:shares?|stock)\s+of\s+", re.I)
 _EACH = re.compile(r"\beach\s+", re.I)
+# the kind of stock a clause's own noun phrase names (FB-017)
+_PREFERRED = re.compile(r"\bpreferred\b|\bpreference\b", re.I)
+_COMMON = re.compile(r"\bcommon\b|\bordinary\b", re.I)
 # a subject that is not the class's public shares: an award, another security, a merger subsidiary's shares, the
 # shares an insider rolled over (Continental Resources 2022: "the Rollover Shares owned by the Hamm Family")
 _NOT_SHARES = re.compile(r"\b(?:options?|restricted|awards?|warrants?|preferred|RSUs?|units?|debentures?|notes?|"
@@ -140,6 +143,8 @@ class Statement:
     subject_letters: frozenset[str] = frozenset()
     target_letter: str = ""
     distribution: bool = False
+    # the clause's shares are preferred stock (`_preferred_noun`): never a statement about the common (FB-017)
+    preferred: bool = False
 
 
 @dataclass(frozen=True)
@@ -162,12 +167,15 @@ class OwnExchange:
     # the filing calls the target the registrant's (former) subsidiary: a new issuer, even when it carries a name the
     # registrant carried until then (Liberty Media Corporation's split-off of Liberty Media Corporation, 2011)
     target_subsidiary: bool = False
+    # what came back is preferred stock: one preferred share for a common share is not the line going on (FB-017)
+    target_preferred: bool = False
 
     @property
     def one_for_one(self) -> bool:
-        """One share per share, no cash, one reading, and no second leg of shares, rights, warrants, units or CVRs
-        (R1: only one security comes back)."""
-        return one_share_no_cash(self.ratio, self.cash) and not self.ambiguous and not self.extra_leg
+        """One share per share, no cash, one reading, no second leg of shares, rights, warrants, units or CVRs
+        (R1: only one security comes back), and a share that is not preferred stock."""
+        return one_share_no_cash(self.ratio, self.cash) and not self.ambiguous and not self.extra_leg \
+            and not self.target_preferred
 
     @property
     def split(self) -> bool:
@@ -272,6 +280,18 @@ def _subject_phrase(before: str) -> str:
     return before[hits[-1].end():] if hits else before[-200:]
 
 
+def _preferred_noun(before: str) -> bool:
+    """Whether a clause's shares are preferred stock: its noun phrase, from its first "each" up to the consideration,
+    names preferred or preference stock and no common ("each issued and outstanding share of 6.375% series A
+    cumulative perpetual preferred stock, par value $0.01 per share of GGP"; a clause for "each share of common
+    stock and each share of Series B preferred stock" is still the common's). `_subject_phrase` keeps what follows
+    the last "share of"/"stock of", which there is the issuer alone, so the class check on the subject cannot see
+    the word (FB-017: GGP 2018's preferred read as its common, a buyout made a one-for-one continuation)."""
+    first = _EACH.search(before)
+    noun = before[first.end():] if first else before[-200:]
+    return bool(_PREFERRED.search(noun)) and not _COMMON.search(noun)
+
+
 def _distribution(sentence: str, verb_context: str) -> bool:
     """Whether the holders kept their shares: a record date, "for every", "the Distribution"; "holders of record" or
     "distributed" alone do not make it one when a conversion verb states the statement."""
@@ -296,7 +316,7 @@ def statements(text: str) -> list[Statement]:
                     subject = _subject_phrase(before)
                     out.append(Statement(0.0, True, subject.strip(" ,"), "", sentence,
                                          frozenset(prose_class_letters(subject)), "",
-                                         _distribution(sentence, before[-160:])))
+                                         _distribution(sentence, before[-160:]), _preferred_noun(before)))
                 continue
             ratio = _qty(m.group("qty"))
             if ratio is None:
@@ -304,15 +324,17 @@ def statements(text: str) -> list[Statement]:
             each = _FOR_EACH.search(rest)
             if m.group("lead").lower().startswith("receiv") and each is not None:
                 subject, target = rest[each.end():][:160], rest[:each.start()]   # "received N of T for each of S"
+                preferred = False           # the subject carries its own class words: `_NOT_SHARES` sees them
             else:
                 subject, target = _subject_phrase(before), rest
+                preferred = _preferred_noun(before)
             if not _VERB.search(before[-160:] + " " + m.group("lead")):
                 continue
             consideration = _DIVIDEND_LEG.sub(" ", _LIEU.sub(" ", _PAR.sub(" ", m.group(0) + target)))
             letters = prose_class_letters(target)
             out.append(Statement(ratio, bool(_CASH.search(consideration)), subject.strip(" ,"), target.strip(" ,"),
                                  sentence, frozenset(prose_class_letters(subject)), letters[0] if letters else "",
-                                 _distribution(sentence, before[-160:] + " " + m.group("lead"))))
+                                 _distribution(sentence, before[-160:] + " " + m.group("lead")), preferred))
     return out
 
 
@@ -424,7 +446,7 @@ def own_statements(texts: Iterable[str], *, names: Sequence[str], class_letter: 
     for t in texts:
         for st in statements(t):
             head = st.subject[:120]
-            if st.distribution or _NOT_SHARES.search(head):
+            if st.distribution or st.preferred or _NOT_SHARES.search(head):
                 continue
             if _first_party_own(head, own) is not False and _class_ok(st, class_letter, class_words,
                                                                        security_name, issuer_names):
@@ -486,7 +508,8 @@ def own_exchange(texts: Iterable[str], *, names: Sequence[str], class_letter: st
                             for n in target_names)
     return OwnExchange(st.ratio, st.cash or _cash_for_class(texts, own, class_letter), st.target,
                        tuple(dict.fromkeys(target_names)), letter, target_own, st.sentence,
-                       len({(s.ratio, s.cash) for s in found}) > 1, tuple(dividends), extra, target_subsidiary)
+                       len({(s.ratio, s.cash) for s in found}) > 1, tuple(dividends), extra, target_subsidiary,
+                       bool(_PREFERRED.search(named)) and not _COMMON.search(named))
 
 
 def acquires(texts: Iterable[str], *, names: Sequence[str]) -> str:

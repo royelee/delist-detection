@@ -16,10 +16,11 @@ case's id ends in its round, not a date).
 A scored cell holds the value, a blank (the field must be blank) or `*` (not scored).
 
 The two last trade dates. The scored `last_trade_date` is the contract's published day of the security's own last
-ending (contract/delistings.csv: decision 12 publishes only exchange prints). `internal_last_trade_date` is
-delistings.csv's internal day of that same ending, the corrected one when the contract leaves it blank (a worked-out
-date); blank there means not scored. The golden set's `last_trade_date` column is neither of these: delistings.csv's
-day of the chain's final ending (`truth.TruthCase.final_last_trade_date`).
+ending (contract/delistings.csv: the day the library holds, FB-019 and FB-020; before them decision 12 published
+only exchange prints, and a cell that was blank for that reason alone is `*` now).
+`internal_last_trade_date` is delistings.csv's internal day of that same ending, which scores such a day (a
+worked-out date); blank there means not scored. The golden set's `last_trade_date` column is neither of these:
+delistings.csv's day of the chain's final ending (`truth.TruthCase.final_last_trade_date`).
 
 `status` is pass (must match now) or known_wrong (must not match yet; `fixed_by` names the sub-plan, or `residual`),
 both `truth`'s, or ruling_pending (not judged; `fixed_by` `regression` marks a regressed row the loop could not

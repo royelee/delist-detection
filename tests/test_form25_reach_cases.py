@@ -334,7 +334,7 @@ def test_abraxis_with_no_cusip_and_no_volume_ends_on_its_last_sighting():
     d = _unexplained("CIK1409012-COMMON")
     assert (d.delist_date, d.last_trade.source, d.record.bucket.value, d.cik) == (
         "2009-06-08", "last_sighting", "unknown", 1409012)
-    assert d.flags == ["last_trade_date_unconfirmed", "unexplained_ending"] and not d.last_trade.publishable(None)
+    assert d.flags == ["last_trade_date_unconfirmed", "unexplained_ending"] and not d.last_trade.print_confirmed(None)
 
 
 def test_alberto_culver_under_the_wrong_issuer_ends_on_the_last_day_its_fails_rows_show_it_trading():

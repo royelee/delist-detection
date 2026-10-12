@@ -232,7 +232,8 @@
   the mismatches it makes are settled under the judge's own keys, `loop_round.new_row_keys`) and commits the truth
   set: the truth file, the
   change log and the ledger together (`truth_set.TruthSet.commit`, `atomic_io.replace_all_on_success`); no script
-  writes one of them alone, and a sub-plan's rulings are data passed to `TruthSet.rule` (scripts/apply_5f/5h/5i). A
+  writes one of them alone, and a sub-plan's rulings are data passed to `TruthSet.rule` (scripts/apply_5f/5h/5i, and apply_fb020_truth_rule.py for the
+  contract's `last_trade_date` rule of FB-019 and FB-020). A
   `pending` ledger row is never re-diagnosed automatically: the operator settles it or deletes the row. The loop
   stops after a round with no new error, or after 3 rounds. A sub-plan is accepted only when `D.mismatches` fell
   and `scripts/scorecard.py --check --base <commit>` passes (`D.unexplained_regressions` 0, `loop_round.unexplained`). `truth_build.UNSETTLED`: an OpenFIGI error or several US
@@ -276,9 +277,12 @@
 - **The contract is written beside today's tables for one release (decision 6).** Stage 10g writes
   `output/contract/{security_history,delistings,seeds,price_requests,id_changes,payout_legs}.csv` from the tables about to be
   written and the verdicts; the scorecard (10h) reads the issuer from `contract/security_history.csv`. Contract
-  delistings hold one row per ended security, its last real ending; `last_trade_date` is published only when it
-  is publishable (`exit_kind.LastTrade.publishable`, read over the row by `exit_kind.published`: confirmed, from an
-  exchange print, no later than the Form 25 effective date; architecture step 4's ruling), and the price date and
+  delistings hold one row per ended security, its last real ending; `last_trade_date` is the day the library holds
+  for it, whatever its source (`exit_kind.published`; FB-019 and FB-020, which replaced decision 12's "blank when
+  uncertain"), so it is the day the security's history ends on, and it is blank only when no source dates the
+  ending. A day that is not a confirmed exchange print no later than the Form 25 effective date
+  (`exit_kind.LastTrade.print_confirmed`; architecture step 4's ruling) makes the ending `uncertain`, with the
+  failing part as its reason in `uncertain.csv`; a continuation's verdict does not judge its day. The price date and
   the price requests follow the published date; a continuation has no value; assumed par, Shumway marks
   and a transfer's 0.0 are `dlret_fill`. `--price-answers` (the requests plus a `price` column) feeds the closes and
   acquirer prices, so a second run changes values only: each stage reads the answer to its own request

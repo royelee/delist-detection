@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
 from functools import cached_property
 
@@ -515,6 +515,22 @@ class DelistingFinder:
         return self._judge(ctx, scan, cik, sub, refs, issuer_names, quiet=True, by_elimination=len(refs) == 1)
 
     # -- main ------------------------------------------------------------
+    def _issuers_stock(self, ctx: SecurityContext, cik: int, filings: Sequence[EdgarSubmission]) -> bool:
+        """FB-018: whether a security of kind "unit" is its issuer's stock (Extended Stay America's paired shares,
+        which OpenFIGI types a unit) and not a bundle that ends by separating into its parts (a blank-check
+        company's unit). It is when the issuer has no common stock line in the run, no Form 25 of the issuer
+        names a unit class, and one names a common one ("Paired Shares": `form25.class_kind`). A Form 25 that
+        cannot be read says nothing."""
+        if any(r.kind == "common" for r in ctx.refs):
+            return False
+        kinds = set()
+        for sub in list_form25(filings):
+            raw = self.edgar.fetch_filing_raw(cik, sub.accession)
+            if raw:
+                kinds.add(class_kind(parse_form25(raw, accession=sub.accession, form=sub.form,
+                                                  filing_date=sub.filing_date).class_text))
+        return "common" in kinds and "unit" not in kinds
+
     def find(self, ctx: SecurityContext, *, fallback: bool = True) -> tuple[list[Delisting], list[ReviewItem]]:
         """The security's delistings and review items. `fallback=False` (pipeline stage 9d, a successor the run
         added): Form 25 matches only, no fallback ending and no review item for a security without one."""
@@ -536,6 +552,10 @@ class DelistingFinder:
             return [], []
 
         filings = self.edgar.recent_filings(cik)
+        if sec.kind == "unit" and self._issuers_stock(ctx, cik, filings):
+            # FB-018: searched and classified as the stock it is; the security master's own kind is left alone
+            ctx = replace(ctx, record=replace(rec, security=replace(sec, kind="common")))
+            sec, rec = ctx.security, ctx.record
         floor = (date.fromisoformat(rec.known_from) - timedelta(days=FORM25_LOOKBACK_DAYS)).isoformat()
         # E: a security gone today also judges the Form 25s of the year before the floor, as when a stale
         # snapshot first listed it months after its merger (TXU, Station Casinos, Biomet 2007)
@@ -856,7 +876,7 @@ def unexplained_ending(dating: Dating, record: TradingRecord, cik: int | None) -
     """FB-004 part d, the ending of a security whose history closes with no ending of any rule (pipeline stage 9h
     decides which): the spec's end-of-era branch 6, nothing found, so no bucket asserted (`unknown`, CRSP code none,
     confidence low). Dated from SEC data (`Dating.unexplained`: the last day its own CUSIPs' fails rows show it
-    trading, else MIDAS's last day of volume, else its last sighting), unconfirmed and so never published; the delist
+    trading, else MIDAS's last day of volume, else its last sighting), unconfirmed, so the verdict doubts it; the delist
     date is that day. Flags `unexplained_ending` and the dating's `last_trade_date_unconfirmed`. None for a security
     with no day the run knows it by."""
     last_seen = record.last_seen

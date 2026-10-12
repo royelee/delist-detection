@@ -11,7 +11,7 @@ No rule requires an issuer to state the day, so it is read from several places a
 - the ticker's tenure (rule 3): a read by ticker from the day another CUSIP took it is that security's
   (`trading_record.TradingRecord.taken`: the security's trading record, which the finder passes in);
 - when nothing states the day, the closing day the filings give (rule 4, `closing_day_read`) is the worked-out day,
-  kept in delistings.csv and never published (decision 12).
+  unconfirmed: the contract publishes it and the verdict doubts it (FB-020).
 
 Measured volume beats wording, and wording that disagrees with it is flagged (`decide_last_trade`).
 
@@ -22,7 +22,7 @@ The interface:
 - the ending's anchor day (`anchor_day`: the day it is read around) and an added successor's first day after it
   (`first_day_after`).
 
-The answer type `LastTrade`, its derived facts (`confirmed`, `worked_out`, `publishable`), the day an ending ends its
+The answer type `LastTrade`, its derived facts (`confirmed`, `worked_out`, `print_confirmed`), the day an ending ends its
 security's listing (`end_day`: the clip and stage 9e), the reading of a delistings.csv row (`of_row`, `effective_of`,
 `published`), the sources (`SOURCES`, `EXCHANGE_PRINTS`) and the flags (`UNCONFIRMED`, `CONFLICT`, `NO_DAY`) the
 module writes are defined once in exit_kind, the row vocabulary (architecture step 8a), so the verdict, the scorecard
@@ -460,7 +460,7 @@ class Dating:
         exchange volume under its tickers (`midas_last`, source `midas`), else its last sighting `last_seen` (source
         `last_sighting`: no fails row and no MIDAS day). A fails-row day before the first row of the CUSIP it held last
         (its rows at one price throughout: the run of fails settling at the last close is all there is) counts as none. Always
-        `UNCONFIRMED`: a guess, never published."""
+        `UNCONFIRMED`: a guess, and the verdict says so."""
         shown = trading.trades_until()
         if shown and shown >= self._first_row_of_last_cusip(trading):   # rows at one price throughout show no stop
             return LastTrade(date.fromisoformat(shown), FAILS_ROWS, (UNCONFIRMED,))

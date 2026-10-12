@@ -1154,8 +1154,9 @@ def _gone_universe(fake_edgar, rows, *, listed=False):
 
 def test_a_closed_history_with_no_ending_gets_an_unknown_ending_the_verdict_doubts(fake_edgar, tmp_path):
     """FB-004 part d: not listed today and nothing ends it, so it gets the agreed blank-kind ending (end-of-era branch
-    6: nothing found), dated by the last day its own CUSIP's fails rows show it trading, unconfirmed and unpublished,
-    flagged `unexplained_ending`; its history ends there and the contract's verdict is uncertain."""
+    6: nothing found), dated by the last day its own CUSIP's fails rows show it trading, unconfirmed (the contract
+    publishes the day, FB-020), flagged `unexplained_ending`; its history ends there and the contract's verdict is
+    uncertain."""
     rows = _ftd("GONE", "11111A101", "GONE INC", ["2012-07-02", "2012-09-04", "2013-01-02", "2013-04-02"])
     for i, r in enumerate(rows):
         rows[i] = FtdRow(r.date, r.cusip, r.symbol, r.description, 10.0 + i)
@@ -1167,7 +1168,8 @@ def test_a_closed_history_with_no_ending_gets_an_unknown_ending_the_verdict_doub
     assert (d["last_trade_date"], d["last_trade_date_source"]) == ("2013-04-01", "fails_rows")
     assert {"unexplained_ending", "last_trade_date_unconfirmed"} <= set(d["review_flags"].split(";"))
     (c,) = read_table("contract_delistings", tmp_path / "contract" / "delistings.csv")
-    assert (c["sec_id"], c["exit_kind"], c["last_trade_date"], c["verdict"]) == ("BBGGONE0001", "", "", "uncertain")
+    assert (c["sec_id"], c["exit_kind"], c["last_trade_date"], c["verdict"]) == (
+        "BBGGONE0001", "", "2013-04-01", "uncertain")
     assert [(r["valid_from"], r["valid_to"]) for r in ticker_history(tmp_path)] == [("2012-06-29", "2013-04-01")]
     review = read_table("review", table_path(tmp_path, "review"))
     assert not any(r["review_flags"] == "ended_without_delisting" for r in review)     # the ending replaces its row

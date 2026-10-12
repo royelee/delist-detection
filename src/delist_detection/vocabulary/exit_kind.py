@@ -23,8 +23,8 @@ It imports nothing of the package, so a measurement module reads a row without l
   `names_successor_registration`), and a handoff linked by timing alone (`TIMING_CIK` inside `continuation_reason`
   or `successor_note`, `linked_by_timing`). The published text is the producers' as before, byte for byte.
 - **The value rules** (`VALUE_RULES`): contract/delistings.csv's `value_rule` column.
-- **The last trade** (decision 12; the last trade module's facts, architecture step 4): its sources and flags,
-  `LastTrade` and its facts (`confirmed`, `worked_out`, `publishable`), the day an ending ends its security's listing
+- **The last trade** (decision 12, FB-020; the last trade module's facts, architecture step 4): its sources and flags,
+  `LastTrade` and its facts (`confirmed`, `worked_out`, `print_confirmed`), the day an ending ends its security's listing
   (`end_day`), the Form 25's effective date (`effective_date`), and over a row: `of_row`, `effective_of`,
   `published` (contract/delistings.csv's last_trade_date) and `end_day_of`. last_trade.py dates an ending and
   answers a `LastTrade`; its definition is here, so the measurement side reads it without the dating's clients.
@@ -269,7 +269,7 @@ MIDAS = "midas"                     # SEC MIDAS: the last day with exchange volu
 NASDAQ_HALT = "nasdaq_halt"         # a Nasdaq code-D ("security deletion") halt
 EX99_NOTICE = "ex99_notice"         # the exchange's Form 25 notice (EX-99.25)
 EIGHTK_301 = "8k_301"               # an 8-K's Item 3.01 text
-CLOSING_DAY = "closing_day"         # rule 4: a worked-out closing day (never published)
+CLOSING_DAY = "closing_day"         # rule 4: a worked-out closing day (no exchange print)
 LAST_SIGHTING = "last_sighting"     # the handoff stage: A's last sighting under the ticker, before B's first
 FAILS_ROWS = "fails_rows"           # the unexplained ending: the last day the security's own fails rows show it trading
 UNSOURCED = ""                      # no source: no day, or the fallback's last sighting with nothing to date it
@@ -277,7 +277,7 @@ SOURCES = (MIDAS, NASDAQ_HALT, EX99_NOTICE, EIGHTK_301, CLOSING_DAY, LAST_SIGHTI
 EXCHANGE_PRINTS = frozenset({MIDAS, NASDAQ_HALT, EX99_NOTICE, EIGHTK_301})   # an exchange print gave the day
 MEASURED = frozenset({MIDAS, NASDAQ_HALT})                                   # measured, not worded
 # the review flags a dating writes onto its delisting
-UNCONFIRMED = "last_trade_date_unconfirmed"     # nothing confirms the day: never published
+UNCONFIRMED = "last_trade_date_unconfirmed"     # nothing confirms the day: the verdict doubts it
 CONFLICT = "last_trade_date_conflict"           # the text sources state another day than the one taken
 NO_DAY = "no_last_trade_date"
 FLAGS = frozenset({UNCONFIRMED, CONFLICT, NO_DAY})
@@ -306,10 +306,11 @@ class LastTrade:
         """A day no source states, worked out from the closing (rule 4): the classification never anchors on it."""
         return self.source == CLOSING_DAY
 
-    def publishable(self, effective: date | None) -> bool:
-        """Whether the contract publishes the day (decision 12, controller ruling of architecture step 4): confirmed,
-        from an exchange print (`EXCHANGE_PRINTS`), and no later than the Form 25's effective date `effective` (None:
-        no Form 25)."""
+    def print_confirmed(self, effective: date | None) -> bool:
+        """Whether an exchange print confirms the day (decision 12's test, controller ruling of architecture step 4):
+        confirmed, from an exchange print (`EXCHANGE_PRINTS`), and no later than the Form 25's effective date
+        `effective` (None: no Form 25). The contract publishes the day either way (`published`: FB-019, FB-020); the
+        verdict gives each part that fails as a reason."""
         return (self.confirmed and self.source in EXCHANGE_PRINTS
                 and (effective is None or self.day <= effective))
 
@@ -346,10 +347,12 @@ def of_row(row: Mapping[str, str]) -> LastTrade:
 
 
 def published(row: Mapping[str, str]) -> str:
-    """contract/delistings.csv's last_trade_date (decision 12): the row's day when it is publishable
-    (`LastTrade.publishable` against the row's Form 25 effective date), else blank."""
+    """contract/delistings.csv's last_trade_date (FB-019, FB-020, replacing decision 12's "blank when uncertain"):
+    the day the row holds, whatever its source, blank only when no source dates the ending. It is the day the
+    security's history ends on (`end_day_of`). Whether an exchange print confirms it (`LastTrade.print_confirmed`) is
+    the verdict's to say, with a reason in uncertain.csv."""
     lt = of_row(row)
-    return lt.day.isoformat() if lt.publishable(effective_of(row)) else ""
+    return lt.day.isoformat() if lt.day is not None else ""
 
 
 def end_day_of(row: Mapping[str, str]) -> date:

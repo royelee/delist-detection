@@ -697,7 +697,7 @@ def test_a_drop_is_dated_by_the_last_day_of_exchange_volume_when_the_issuer_file
     trading = _trading(cusips=["OWNCUSIP1"], fails=FtdIndex(_otc_rows()))
     lt = Dating(fake_edgar, midas=_Midas(days={"SBNY": date(2023, 3, 10)})).midas_drop(
         [], ticker="SBNY", trading=trading, last_seen=date(2023, 5, 1))
-    assert lt == LastTrade(date(2023, 3, 10), MIDAS, ()) and lt.publishable(None)
+    assert lt == LastTrade(date(2023, 3, 10), MIDAS, ()) and lt.print_confirmed(None)
 
 
 def test_a_drop_reads_every_ticker_the_security_carried(fake_edgar):
@@ -762,7 +762,7 @@ def test_an_unexplained_ending_is_dated_by_the_last_day_the_own_fails_rows_show_
     trading = _trading([Sighting("2013-04-02", "GONE", "ftd"), Sighting("2013-06-28", "GONE", "observation")],
                        cusips=["OWNCUSIP1"], fails=FtdIndex(_rows("2013-04-02", "2013-04-04", "2013-04-08")))
     lt = Dating(fake_edgar, midas=_Midas(day=date(2013, 3, 1))).unexplained(trading, "GONE", date(2013, 6, 28))
-    assert lt == LastTrade(date(2013, 4, 5), FAILS_ROWS, (UNCONFIRMED,)) and not lt.publishable(None)
+    assert lt == LastTrade(date(2013, 4, 5), FAILS_ROWS, (UNCONFIRMED,)) and not lt.print_confirmed(None)
 
 
 def test_fails_rows_at_one_price_throughout_show_no_stop(fake_edgar):
@@ -779,7 +779,7 @@ def test_fails_rows_at_one_price_throughout_show_no_stop(fake_edgar):
 def test_an_unexplained_ending_falls_to_midas_when_the_fails_rows_show_nothing(fake_edgar):
     trading = _trading([Sighting("2013-06-28", "GONE", "observation")])
     lt = Dating(fake_edgar, midas=_Midas(days={"GONE": date(2013, 3, 1)})).unexplained(trading, "GONE", date(2013, 6, 28))
-    assert lt == LastTrade(date(2013, 3, 1), MIDAS, (UNCONFIRMED,)) and not lt.publishable(None)
+    assert lt == LastTrade(date(2013, 3, 1), MIDAS, (UNCONFIRMED,)) and not lt.print_confirmed(None)
 
 
 def test_an_unexplained_ending_falls_to_the_last_sighting_only_with_no_fails_row_and_no_midas_day(fake_edgar):

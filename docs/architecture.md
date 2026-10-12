@@ -1061,7 +1061,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   from SEC data only: the last day the security's own CUSIPs' fails rows show it trading, `TradingRecord.trades_until`
   and not before the first row of the CUSIP it held last (rows at one price throughout show no stop), source
   `fails_rows`; else `midas_last`, source `midas`; else the last sighting, source `last_sighting`; always
-  `UNCONFIRMED`, so never published) and `from_notice` (stage 9c: a
+  `UNCONFIRMED`, so the verdict doubts it) and `from_notice` (stage 9c: a
   handoff row dated by its last sighting takes its own Form 25 notice's confirmed day, before the successor's first
   sighting and no later than the effective date). MIDAS and the Nasdaq halt feed are its two adapters
   (`last_trade_day`; `deletion_halt`, `failed_days`), each a real client or a fixture-backed double; a halt-feed
@@ -1086,9 +1086,10 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   that add one). Its answer type and the derived facts are defined once in `exit_kind` (the row vocabulary,
   architecture step 8a), which this module imports and the measurement side reads without its clients:
   `LastTrade.confirmed` (dated and not flagged `last_trade_date_unconfirmed`: what the clip, the successor starts
-  and 9c test), `LastTrade.publishable(effective)` (confirmed, from an exchange print, `EXCHANGE_PRINTS`, and no
-  later than the Form 25 effective date, `exit_kind.effective_date`; over a delistings.csv row, `of_row`,
-  `effective_of` and `published`, which the contract, the verdict's reasons and the scorecard read), `end_day` (the
+  and 9c test), `LastTrade.print_confirmed(effective)` (confirmed, from an exchange print, `EXCHANGE_PRINTS`, and no
+  later than the Form 25 effective date, `exit_kind.effective_date`: the verdict's test of the day, each failing
+  part a reason; over a delistings.csv row, `of_row`, `effective_of` and `published`, the contract's
+  `last_trade_date`, which is the day the row holds whatever its source, FB-019 and FB-020), `end_day` (the
   day it ended its security's listing: its last trade, else its delisting date, the Form 25's effective date; the
   clip and stage 9e; over a row `end_day_of`), the sources (`SOURCES`: `midas`, `nasdaq_halt`, `ex99_notice`,
   `8k_301`, `closing_day`, `last_sighting`, and `UNSOURCED` "") and the flags it writes (`UNCONFIRMED`, `CONFLICT`,
@@ -1121,7 +1122,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   completion the 8-Ks state in the window (a defined Closing Date, "On D, ... completed its acquisition", "Merger Sub
   merged with and into", "the closing of the transactions on D", "the evening of D", an effective time with a clock
   time; the trading day before when every clock time that day is before 9:30 a.m.): source `closing_day`
-  (`CLOSING_DAY`), never published.
+  (`CLOSING_DAY`), published unconfirmed.
 - `endings/rewrites.py` — architecture step 3: the one owner of a delisting's kind and successor after its record is built.
   Every rewrite names its rule (`Rule`, a closed set: `ISSUER_MOVE` the finder's R7, `CONTINUED` the finder's continued
   transfer, `TRADES_ON` the clip check at stage 9b's start, `R1` stage 8b, `LINE_FOLLOW` and `SUCCESSOR_LINK` stage 9,
@@ -1145,7 +1146,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   matches and groups them into one delisting per removal (chained within
   `SAME_EVENT_DAYS` of the group's earliest filing, across exchanges), dates
   and classifies each, and falls back to the classifier's no-Form-25 paths
-  when none exists. Its interface is `SecurityContext` (architecture step 14, all data): the security's trading
+  when none exists. A security the master types a unit whose issuer's Form 25s all remove stock, and whose issuer
+  has no common stock beside it, is searched and classified as common stock (`_issuers_stock`: STAY 2021's
+  "Paired Shares", FB-018; the security master's own kind is left alone). Its interface is `SecurityContext` (architecture step 14, all data): the security's trading
   record (`trading_record.TradingRecord`), the records of its issuer's securities (`siblings`, itself among them),
   whether it is listed today, its other CIK in force and its issuer's lookup tier; the finder works out the ticker on
   a day, the last sighting, trading after a day, rows near a Form 25, the CUSIP switches, the tenure and the rows'
@@ -1270,7 +1273,10 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   and gives the ratio, cash in the exchange (par values, cash in lieu of fractions and special dividends set aside:
   a special dividend is never consideration; rollover shares and cash conversions are read), the target clause and
   its names (defined terms expanded), the target's class letter (`identifiers.prose_class_letters`), and whether
-  readings disagree (`ambiguous`);
+  readings disagree (`ambiguous`). A conversion clause whose own subject is preferred stock is no statement about
+  the common (`Statement.preferred`: GGP 2018's "each ... share of 6.375% series A cumulative perpetual preferred
+  stock ... was converted into one share of" BPR's preferred, FB-017), and one share of preferred stock for a
+  share is not one for one (`OwnExchange.target_preferred`);
   `acquires` (another party's shares became the registrant's, or it issued shares under the merger agreement) and
   `distributes` ("for every four shares", kept) are the registrant's other roles. What a statement means for its
   holders is its own: `OwnExchange.one_for_one` (R1's shape, `one_share_no_cash`, which 8b reads over the terms and
@@ -1460,7 +1466,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `TruthSet.new(truth, rows, legs)` is a set whose rows and legs are given (sub-plan 5-0's build, tests);
   `read_ledger` is the ledger's validated read (scripts/scorecard.py); `LEDGER_COLUMNS` is the ledger's file format
   (its path is the loop folder's, `loop_round.Loop.ledger`). The truth files' only reader and writer:
-  the scorecard, the loop scripts, the apply_5f/5h/5i_truth_rulings.py scripts (their rulings as data), the fixture
+  the scorecard, the loop scripts, the apply_5f/5h/5i_truth_rulings.py and apply_fb020_truth_rule.py scripts (their rulings as data), the fixture
   builders and tests/test_diagnosis_truth_cases.py go through it.
 - `measurement/regression.py` — the contract diff between two run snapshots (the base commit's, `RunSnapshot.at`, and the
   folder's), outside the truth set and its successor chains (`excluded`); `build_report(base, new, cases)` is the one

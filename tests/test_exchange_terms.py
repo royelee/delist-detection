@@ -265,3 +265,40 @@ def test_a_sentence_ends_after_plc_or_inc_when_a_sentence_starter_follows():
             "stock received 2.0 shares.")
     own = X.own_exchange([text], names=["ACME CORP"], class_letter="")
     assert own.target_names == ("Newco",) and own.sentence.endswith("Newco plc.")
+
+
+# --- FB-017, GGP 2018: the preferred stock's conversion is not the common stock's ---------------------------------
+
+GGP_CLOSING = (
+    "At the effective time of the Merger, (a) each issued and outstanding share of GGP Common Stock (other than "
+    "Cancelled Shares) was converted into the right to receive cash from BPY in an amount, without interest, equal "
+    "to $0.312 per share and (b) each issued and outstanding share of 6.375% series A cumulative perpetual preferred "
+    "stock, par value $0.01 per share of GGP (“Pre-Existing Series A Preferred Stock”), was converted into "
+    "one share of 6.375% series A cumulative redeemable preferred stock of BPR (“Series A Preferred Stock”).")
+
+
+def test_a_preferred_stocks_conversion_is_not_a_statement_about_the_common():
+    """GGP's closing 8-K states the common's cash and, in the next clause, the preferred's one-for-one conversion
+    into BPR preferred. Cut down to its subject the preferred clause reads "GGP", so the class check on the subject
+    never saw the word; read as the common's it made a cash buyout a one-for-one continuation (R1)."""
+    preferred = [st for st in X.statements(GGP_CLOSING) if st.ratio == 1.0]
+    assert [st.preferred for st in preferred] == [True]
+    assert X.own_exchange([GGP_CLOSING], names=["GGP Inc."], class_letter="") is None
+    common = ("At the effective time each issued and outstanding share of common stock, par value $0.01 per share of "
+              "GGP, was converted into one share of class A stock of BPR.")
+    own = X.own_exchange([common], names=["GGP Inc."], class_letter="")
+    assert own is not None and own.one_for_one and not X.statements(common)[0].preferred
+
+
+def test_a_clause_that_names_common_and_preferred_stock_is_still_the_commons():
+    both = ("each share of common stock and each share of Series B preferred stock of GGP was converted into one "
+            "share of common stock of BPR.")
+    assert [st.preferred for st in X.statements(both)] == [False]
+
+
+def test_one_share_of_preferred_stock_for_a_common_share_is_not_one_for_one():
+    """R1's "one share for each share" is a share of the same kind: a common share that became one preferred share
+    is not the line going on."""
+    text = ("each share of common stock of GGP was converted into one share of Series A preferred stock of BPR.")
+    own = X.own_exchange([text], names=["GGP Inc."], class_letter="")
+    assert own is not None and own.target_preferred and not own.one_for_one

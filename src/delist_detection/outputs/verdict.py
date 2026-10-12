@@ -366,7 +366,7 @@ def _own_reasons(row: Mapping[str, str], issuer_cik: str = "", reading: Continua
         if linked_by_timing(row["reason"]) and not confirmed:
             reasons.append("continuation_by_timing_only")
         return reasons
-    # the row's last trade read back (`exit_kind.of_row`): each part of `LastTrade.publishable` that fails is a
+    # the row's last trade read back (`exit_kind.of_row`): each part of `LastTrade.print_confirmed` that fails is a
     # reason of its own
     lt = of_row(row)
     if lt.day is None:

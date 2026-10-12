@@ -1289,7 +1289,7 @@ def test_a_drop_with_no_filing_at_all_is_dated_by_midas_and_is_crsp_500(fake_edg
         _ctx(sec, rows=rows))
     assert (ev.delist_date, ev.record.crsp_code, ev.record.bucket.value) == ("2023-03-10", 500, "compliance_failure")
     assert (ev.last_trade.day, ev.last_trade.source, ev.last_trade.confirmed) == (date(2023, 3, 10), "midas", True)
-    assert ev.last_trade.publishable(None) and [rw.rule.value for rw in ev.rewrites] == ["midas_drop"]
+    assert ev.last_trade.print_confirmed(None) and [rw.rule.value for rw in ev.rewrites] == ["midas_drop"]
     assert {"no_form25", "midas_drop"} <= set(ev.flags) and "no_evidence_default" not in ev.flags
     assert review == []
 
@@ -1305,7 +1305,7 @@ def test_a_drop_with_a_filing_around_its_end_is_not_a_midas_drop(fake_edgar):
     assert events == [] and [r.flag for r in review] == ["ended_without_delisting"]
 
 
-def test_the_unexplained_ending_is_unknown_dated_from_the_fails_rows_and_never_published(fake_edgar):
+def test_the_unexplained_ending_is_unknown_and_dated_unconfirmed_from_the_fails_rows(fake_edgar):
     clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))
     sec = _sec("BBG_GONE", 777, "GONE", "2012-06-29", "2013-06-28", "GONE INC")
     rows = [_row("2013-01-02", "GONE", 5.0), _row("2013-02-04", "GONE", 6.0), _row("2013-03-04", "GONE", 7.0)]
@@ -1313,7 +1313,7 @@ def test_the_unexplained_ending_is_unknown_dated_from_the_fails_rows_and_never_p
     ev = unexplained_ending(Dating(fake_edgar, midas=_MidasDays(GONE="2013-02-01")), record, 777)
     assert ev.record.bucket is CrspBucket.UNKNOWN and ev.record.crsp_code is None and ev.record.confidence == "low"
     assert (ev.delist_date, ev.last_trade.day, ev.last_trade.source) == ("2013-03-01", date(2013, 3, 1), "fails_rows")
-    assert not ev.last_trade.confirmed and not ev.last_trade.publishable(None)
+    assert not ev.last_trade.confirmed and not ev.last_trade.print_confirmed(None)
     assert ev.flags == ["last_trade_date_unconfirmed", "unexplained_ending"] and ev.record.successor_sec_id is None
     assert ev.ending.real and ev.ending.bucket is CrspBucket.UNKNOWN
 
@@ -1322,3 +1322,57 @@ def test_the_unexplained_ending_of_a_security_with_no_day_is_none(fake_edgar):
     clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))
     sec = Security("BBG_NODAY", 777, "COMMON", "NODAY INC", "Common Stock", True, "cusip")
     assert unexplained_ending(Dating(fake_edgar), TradingRecord.observed(sec, FtdIndex([]), []), 777) is None
+
+
+# --- FB-018: paired shares that OpenFIGI types a unit are their issuer's stock --------------------------------
+
+def _unit(sec_id, cik, ticker, first, last, name):
+    sec = _sec(sec_id, cik, ticker, first, last, name)
+    sec.kind, sec.security_type = "unit", "Unit"
+    return sec
+
+
+def _unit_issuer(fake_edgar, class_text):
+    """An issuer acquired on 2021-06-16: the exchange's Form 25 for `class_text`, the closing 8-K and a Form 15."""
+    fake_edgar.submissions_by_cik[1581164] = [
+        EdgarSubmission("u-25", "25-NSE", "2021-06-16", "", "", "p.xml"),
+        EdgarSubmission("u-8k", "8-K", "2021-06-16", "2021-06-16", "1.02,2.01,3.01,3.03,5.01,5.02,8.01,9.01", "k.htm"),
+        EdgarSubmission("u-15", "15-12B", "2021-06-28", "", "", "f.htm"),
+    ]
+    fake_edgar.raws["u-25"] = _f25_raw("The Nasdaq Stock Market LLC", class_text, form_tag="25-NSE")
+    return fake_edgar
+
+
+def test_paired_shares_typed_a_unit_end_as_their_issuers_filings_say(fake_edgar):
+    """Extended Stay America 2021: OpenFIGI types the paired shares (STAY) a unit. Nasdaq's Form 25 calls the class
+    "Paired Shares", no Form 25 of the issuer names a unit and the issuer has no common stock line in the run, so
+    the unit is the issuer's stock: the Form 25 is its own and the closing 8-K makes the ending a merger, where a
+    unit was ended as a scheduled expiration before any filing was read."""
+    edgar = _unit_issuer(fake_edgar, "Paired Shares")
+    clf = _RecordingClassifier(edgar, TickerResolver(edgar))
+    sec = _unit("BBG0055XMF02", 1581164, "STAY", "2013-12-31", "2021-03-31", "EXTENDED STAY AMERICA UNITS INC")
+    events, review = DelistingFinder(edgar, clf).find(_ctx(sec))
+    (ev,) = events
+    assert ev.record.bucket is CrspBucket.MERGER and ev.delist_date == "2021-06-26"
+    assert clf.calls[-1]["kind"] == "common" and clf.calls[-1]["form25"] is not None
+    assert [r.flag for r in review] == [] and sec.kind == "unit"       # the security master's kind is left alone
+
+
+def test_a_unit_the_exchange_calls_a_unit_still_expires(fake_edgar):
+    """A blank-check company's unit: its Form 25 names the units, so it is a bundle that ends by separating."""
+    edgar = _unit_issuer(fake_edgar, "Units, each consisting of one share of Class A common stock and one-half of one warrant")
+    sec = _unit("BBG_U", 1581164, "SPACU", "2019-12-31", "2021-03-31", "SOME ACQUISITION CORP UNIT")
+    (ev,), _ = DelistingFinder(edgar, DelistClassifier(edgar, TickerResolver(edgar))).find(_ctx(sec))
+    assert ev.record.bucket is CrspBucket.EXPIRATION
+
+
+def test_a_unit_beside_its_issuers_common_stock_keeps_its_kind(fake_edgar):
+    """The issuer's common stock is a line of the run: the Form 25 for "Common Stock" is that line's, and the unit
+    is not read as the issuer's stock."""
+    edgar = _unit_issuer(fake_edgar, "Common Stock")
+    clf = _RecordingClassifier(edgar, TickerResolver(edgar))
+    unit = _unit("BBG_U", 1581164, "SPACU", "2019-12-31", "2021-03-31", "SOME ACQUISITION CORP UNIT")
+    common = _sec("BBG_C", 1581164, "SPAC", "2019-12-31", "2021-03-31", "SOME ACQUISITION CORP")
+    events, _ = DelistingFinder(edgar, clf).find(_ctx(unit, siblings=[unit, common]))
+    assert all(c["kind"] == "unit" for c in clf.calls)
+    assert all(e.record.bucket is CrspBucket.EXPIRATION for e in events)

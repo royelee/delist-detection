@@ -267,9 +267,9 @@ a row's verdict is always `uncertain`, so a reader must not filter it away as
 
 The library writes such a row itself for a security whose history closes with no ending of any rule (FB-004 part d:
 not listed today, not sighted at the fails data's last day, no Form 25, drop or filing that ends it): kind blank,
-`last_trade_date` blank (the library's day is a guess and is never published; delistings.csv holds it, unconfirmed,
-dated by the last day the security's own CUSIPs' fails rows show it trading, else SEC MIDAS's last day of exchange
-volume, else its last sighting), flag `unexplained_ending`, verdict `uncertain`. A reader that filters on an ending
+`last_trade_date` the library's day (a guess, published unconfirmed: the last day the security's own CUSIPs' fails
+rows show it trading, else SEC MIDAS's last day of exchange volume, else its last sighting), flag
+`unexplained_ending`, verdict `uncertain`. A reader that filters on an ending
 therefore finds one for every closed security, and the uncertain verdict says the ending is a placeholder.
 
 `security_history.csv` holds every ticker range (the run's in-memory `ticker_history`) except those of the
@@ -419,7 +419,7 @@ is the Form 25 filing date plus 10 days (Rule 12d2-2(d)(1)), or the date of
 the fallback filing that ended trading when no Form 25 exists.
 `raw_payout_*` is the extraction before the last-close gate (see *Payout
 reconciliation* below); `last_trade_date_source` is `ex99_notice`, `8k_301`,
-`midas`, `nasdaq_halt`, `closing_day` (a worked-out closing day, never published), `last_sighting` (a handoff
+`midas`, `nasdaq_halt`, `closing_day` (a worked-out closing day, unconfirmed), `last_sighting` (a handoff
 row's, or an unexplained ending's when no fails row and no MIDAS day dates it), `fails_rows` (an unexplained ending's:
 the last day the security's own CUSIPs' fails rows show it trading), or empty. `resolution_source` records the resolver
 tier that found the security's CIK (`cik_map` for an observation's `cik` pin,
