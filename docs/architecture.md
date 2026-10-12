@@ -1507,7 +1507,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `TruthSet.new(truth, rows, legs)` is a set whose rows and legs are given (sub-plan 5-0's build, tests);
   `read_ledger` is the ledger's validated read (scripts/scorecard.py); `LEDGER_COLUMNS` is the ledger's file format
   (its path is the loop folder's, `loop_round.Loop.ledger`). The truth files' only reader and writer:
-  the scorecard, the loop scripts, the apply_5f/5h/5i_truth_rulings.py, apply_fb020_truth_rule.py and apply_fb021_truth_rule.py scripts (their rulings as data), the fixture
+  the scorecard, the loop scripts, the apply_5f/5h/5i_truth_rulings.py and apply_fb003/fb020/fb021_truth_rule.py scripts (their rulings as data), the fixture
   builders and tests/test_diagnosis_truth_cases.py go through it.
 - `measurement/regression.py` — the contract diff between two run snapshots (the base commit's, `RunSnapshot.at`, and the
   folder's), outside the truth set and its successor chains (`excluded`); `build_report(base, new, cases)` is the one

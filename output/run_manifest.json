@@ -1,13 +1,13 @@
 {
   "as_of": "2026-09-25",
   "cache_answers": {
-    "archives": 9702,
-    "company_tickers": 13,
-    "full_text_search": 671,
-    "submissions": 23010,
-    "submissions_page": 7862
+    "archives": 10616,
+    "company_tickers": 12,
+    "full_text_search": 1204,
+    "submissions": 30827,
+    "submissions_page": 9945
   },
-  "code_version": "2e47619-dirty",
+  "code_version": "ff0512c-dirty",
   "continuation_filings": [
     {
       "delist_date": "2021-03-14",
@@ -36,21 +36,21 @@
     }
   ],
   "degraded_answers": {},
-  "disputes": 180,
+  "disputes": 168,
   "handoffs": {
-    "conflicts": 8,
-    "continuations_by_filing": 44,
-    "continuations_by_timing": 24,
-    "handoffs": 77,
-    "rows_added": 20,
-    "takeovers": 9
+    "conflicts": 11,
+    "continuations_by_filing": 45,
+    "continuations_by_timing": 25,
+    "handoffs": 80,
+    "rows_added": 19,
+    "takeovers": 10
   },
   "latency_ms": {},
   "merger_terms": {
-    "answers": 783,
+    "answers": 843,
     "asked": 0,
     "failed": 0,
-    "from_cache": 783,
+    "from_cache": 843,
     "model": "claude-sonnet-5-5"
   },
   "not_covered": {},
@@ -58,10 +58,10 @@
   "resolution_degraded": 0,
   "review": {
     "accepted": 0,
-    "check": 490,
+    "check": 479,
     "cleared": 0,
-    "fix": 34,
-    "info_hidden": 618,
+    "fix": 39,
+    "info_hidden": 624,
     "unmatched_decisions": 0
   },
   "schema_version": 4,

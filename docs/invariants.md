@@ -233,8 +233,9 @@
   set: the truth file, the
   change log and the ledger together (`truth_set.TruthSet.commit`, `atomic_io.replace_all_on_success`); no script
   writes one of them alone, and a sub-plan's rulings are data passed to `TruthSet.rule` (scripts/apply_5f/5h/5i, apply_fb020_truth_rule.py for the
-  contract's `last_trade_date` rule of FB-019 and FB-020, and apply_fb021_truth_rule.py for a `cash_per_share` cell
-  that leaves out a closing dividend). A
+  contract's `last_trade_date` rule of FB-019 and FB-020, apply_fb021_truth_rule.py for a `cash_per_share` cell
+  that leaves out a closing dividend, and apply_fb003_truth_rule.py for a row that names the old News Corp line's
+  former placeholder). A
   `pending` ledger row is never re-diagnosed automatically: the operator settles it or deletes the row. The loop
   stops after a round with no new error, or after 3 rounds. A sub-plan is accepted only when `D.mismatches` fell
   and `scripts/scorecard.py --check --base <commit>` passes (`D.unexplained_regressions` 0, `loop_round.unexplained`). `truth_build.UNSETTLED`: an OpenFIGI error or several US
