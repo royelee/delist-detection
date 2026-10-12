@@ -45,6 +45,9 @@ class Security:
     # The tickers the line follow (pipeline stage 4b, `line_follow`) found the security trading under after its
     # observations stopped (HSC's NVRI, Senior Housing's DHC).
     line_tickers: frozenset[str] = frozenset()
+    # OpenFIGI's ticker for the line (its composite's, as the tables spell it), when its eras' candidates give
+    # exactly one: the line's ticker today, or its last. "" for none (a pin alone, a placeholder) or several.
+    figi_ticker: str = ""
 
     def own_tickers(self) -> set[str]:
         """Every ticker the security is known to have traded under: its eras' and its line's."""
@@ -951,9 +954,11 @@ def build_securities(resolutions: Mapping[str, EraResolution], eras: Mapping[str
     off before its class letter: SBA's "...REIT CORP CLASS"). The security type
     and kind come from its earliest era's candidate, the name from its latest
     named era, the issuer CIK from its latest era whose issuer is known
-    (`issuers`, by era key)."""
+    (`issuers`, by era key), and `figi_ticker` from its eras' candidates when
+    they give one ticker."""
     out: dict[str, Security] = {}
     classes: dict[str, list[str]] = defaultdict(list)      # sec_id -> each era's class, earliest first
+    figi_tickers: dict[str, set[str]] = defaultdict(set)   # sec_id -> its eras' candidates' tickers
     for key in sorted(resolutions, key=lambda k: (eras[k].first, k)):
         res = resolutions[key]
         if res.sec_id is None:
@@ -970,6 +975,8 @@ def build_securities(resolutions: Mapping[str, EraResolution], eras: Mapping[str
             sec.figi_source, sec.share_class = res.source, _share_class(res, era)
         sec.observed = sec.observed or not era.derived      # observed when any of its eras is the caller's
         classes[res.sec_id].append(_share_class(res, era))
+        if cand is not None and cand.composite == res.sec_id and cand.ticker:
+            figi_tickers[res.sec_id].add(cand.ticker)
         sec.eras.append(era)
         if key in issuers:
             sec.issuer_cik = issuers[key].cik
@@ -978,6 +985,8 @@ def build_securities(resolutions: Mapping[str, EraResolution], eras: Mapping[str
     for sec in out.values():
         if sec.share_class == "COMMON":
             sec.share_class = next((c for c in classes[sec.sec_id] if c != "COMMON"), "COMMON")
+        if len(figi_tickers[sec.sec_id]) == 1:
+            sec.figi_ticker = next(iter(figi_tickers[sec.sec_id]))
     return out
 
 

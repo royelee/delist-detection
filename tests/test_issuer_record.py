@@ -256,6 +256,49 @@ def test_a_name_index_that_cannot_be_loaded_is_none_and_not_asked_again_but_a_re
 
 # --- warm passes ----------------------------------------------------------------------------------------------------
 
+class _Tickers:
+    """An EDGAR client that answers only SEC's ticker map: its answers in turn (an exception is raised)."""
+
+    def __init__(self, *answers):
+        self.answers, self.reads = list(answers), 0
+
+    def company_tickers(self):
+        self.reads += 1
+        got = self.answers.pop(0) if len(self.answers) > 1 else self.answers[0]
+        if isinstance(got, Exception):
+            raise got
+        return got
+
+
+TICKER_MAP = {"GHC": {"cik_str": 104889, "ticker": "GHC", "title": "Graham Holdings Co"},
+              "BF-B": {"cik_str": "14693", "ticker": "BF-B", "title": "BROWN FORMAN CORP"}}
+
+
+def test_the_ticker_map_is_read_once_a_run_and_names_the_company_a_ticker_is_listed_under():
+    """`listed_under`: the CIK SEC's ticker map lists a ticker under, tickers compared as the tables spell them; the
+    map is read once and again after `forget` (a run starts)."""
+    edgar = _Tickers(TICKER_MAP)
+    record = IssuerRecord(edgar)
+    assert record.listed_under("GHC") == 104889 and record.listed_under("bf.b") == 14693
+    assert record.listed_under("WPO") is None and edgar.reads == 1
+    assert record.shadow().listed_under("GHC") == 104889 and edgar.reads == 1
+    record.forget()
+    assert record.listed_under("GHC") == 104889 and edgar.reads == 2
+
+
+def test_a_ticker_map_that_cannot_be_read_is_unknown_recorded_degraded_and_read_again():
+    """The record's failure policy: a failed read answers None, is logged (under `NO_ISSUER`: the map is no
+    issuer's) and is not remembered; a refusal stops the run."""
+    edgar = _Tickers(requests.ConnectionError("down"), TICKER_MAP)
+    record = IssuerRecord(edgar)
+    watch = record.watch()
+    assert record.listed_under("GHC") is None
+    assert watch.ciks == {IssuerRecord.NO_ISSUER} and watch.failed == {IssuerRecord.NO_ISSUER}
+    assert record.listed_under("GHC") == 104889 and edgar.reads == 2
+    with pytest.raises(EdgarBlocked):
+        IssuerRecord(_Tickers(EdgarBlocked("403"))).listed_under("GHC")
+
+
 def test_a_shadow_starts_from_what_is_remembered_and_keeps_its_own_reads():
     e = _Edgar({1: {"name": "A"}, 2: {"name": "B"}})
     index = CikNameIndex.from_text("A:0000000001:\n")

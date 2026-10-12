@@ -571,8 +571,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   reads each issuer's submissions JSON and filing list once (every issuer's `profile`, the JSON without its filings
   block, and first filing kept; at most `MEMO_SIZE` filing lists, least recently asked dropped) and answers `names`,
   `names_near`/`names_between`/`names_until`, `first_filed`, `existed_by`, `recent_form_dates` (read from the
-  client each time), `profile`, `filings`, `text`, and `exact_holders` (SEC's name index, `name_index`, loaded on
-  first use). `about=` (an event day) asks for a copy fetched by `edgar.submissions_fresh_after(about, today)`;
+  client each time), `profile`, `filings`, `text`, `exact_holders` (SEC's name index, `name_index`, loaded on
+  first use) and `listed_under` (the CIK SEC's ticker map lists a ticker under today; the map is read once a run,
+  and a failed read is logged under `NO_ISSUER`). `about=` (an event day) asks for a copy fetched by `edgar.submissions_fresh_after(about, today)`;
   every refresh of the run goes through it (the resolver's reads and the classifier's up-front read), so a held
   profile is the client's cached copy's. The failure policy, once: a
   `requests.RequestException` is unknown (None, [], (), "", False) and never remembered, `fatal.FATAL` stops the
@@ -664,8 +665,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `era_capped_seen` and `era_last_seen`, with its own pin, name and first sighting; `choose_first_pass` takes one answer), each era's FIGI resolution, the securities, each
   security's CUSIPs over its whole life (`cusips`, their rows followed to the run date), the identity review items, and the
   facts later stages read: `tier`/`resolution_source` (the lookup tier that found an era's or a security's issuer;
-  "security_master" for none), `rows_decided` (stage 2b's `ticker_rows` eras: stages 4c and 10g keep their CIK in
-  force), `securities_of(resolutions)` (stage 4b's rebuild after a fold, `build_securities`) and
+  "security_master" for none), `rows_decided` (stage 2b's `ticker_rows` and `later_ticker` eras: stages 4c and 10g
+  keep their CIK in force), `securities_of(resolutions)` (stage 4b's rebuild after a fold, `build_securities`) and
   `renames(resolutions)` (contract/id_changes.csv: a placeholder one FIGI now holds, across a class label). Its
   adapters: the issuer lookup (`IssuerLookup`: `TickerResolver`, or a double with the same five methods; no
   capability is probed), the run's issuer record, OpenFIGI and the fails client. The CUSIP links between eras
@@ -703,12 +704,20 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `ERA_MIN_ROWS` fails rows of its own) or, for an era with at least that many, whose name the era's own fails rows
   carry and the answer's do not (guard G's `_fits_rows`, `ticker_rows`: ERA 2013 is Era Group's; the rows alone
   decide, so the result never depends on which holder the first pass named);
-  reported as `issuer_inferred`. A `ticker_rows` era keeps its CIK in force in stage 4c and the contract's issuer
-  timeline (`Identity.rows_decided`).
+  reported as `issuer_inferred`. Before either (FB-013, `_later_ticker`, no name index needed): for an era whose
+  ticker the fails data does not show near its dates (`guarded_eras`), the company SEC's ticker map lists the ticker
+  under (`IssuerRecord.listed_under`) is the issuer when it is not the answer, had filed by the era's first sighting,
+  the ticker's first rows after the era are its rows (guard G) and it carried a name agreeing with the observed one
+  by then; not when the ticker's last rows before the era are the answer's own, a stale row (`later_ticker`: the
+  GHC row of 2012-06-29, GRAHAM HOLDINGS COMPANY, is Washington Post Co's, CIK 104889, which took the ticker and
+  the name on 2013-11-29; the name search had answered Graham Corp, whose name compares as the same one word). A
+  `ticker_rows` or `later_ticker` era keeps its CIK in force in stage 4c and the contract's issuer timeline
+  (`Identity.rows_decided`): its observed name is not the issuer's on its dates.
 - `identity/security_master.py` — `FigiResolver.resolve_many()` (a `sec_id` pin wins;
   else CUSIP jobs, then the ticker, then a name filter — see the spec's
   Implementation notes), `build_securities()` (merges eras sharing a
-  `sec_id`; `Security.observed` is True when any of its eras is not derived, and `observation_conflict_review`
+  `sec_id`; `Security.observed` is True when any of its eras is not derived, `Security.figi_ticker` is OpenFIGI's
+  ticker for the line when its eras' candidates give exactly one, and `observation_conflict_review`
   reads the caller's observations only); `identity.identify` is the one stage that calls them. `Issuer` (a CIK and its EDGAR names;
   `issuers_by_era` builds the era key -> `Issuer` map that `identity.candidate_cusips`,
   `resolve_many` and `build_securities` take, the one source of an era's CIK,
@@ -761,7 +770,12 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   observation is no sighting and no row of `observation_map.csv`)
   (`ticker_sightings`/`cusip_sightings`, and `span_sightings` for a successor the run added, stage 9d: its span's
   days, source `SPAN`, and its CUSIPs' fails rows; a fails row is a ticker
-  sighting only when its symbol has a letter, because SEC's Aug–Dec 2007 files mask some symbols as "**********"),
+  sighting only when its symbol has a letter, because SEC's Aug–Dec 2007 files mask some symbols as "**********";
+  a ticker observed with and without a separator is written one way per security, the separator's, except from the
+  day the line itself lost it, `_bare_since`, FB-013: OpenFIGI's ticker for the line, `Security.figi_ticker`, is the
+  bare spelling, the security's rows under the ticker are two or more CUSIPs' in turn, and from one of them on the
+  caller saw the bare spelling alone; Hubbell's class B is HUB-B to 2015-12-27 and HUBB from its new CUSIP's first
+  row, while BF-B, FCE-A and a one-CUSIP VIA-B keep the one spelling),
   `ranges_from_sightings()` (dated `Sighting`s into `ticker_history`/
   `cusip_history` ranges; `value_on` reads one), `backfill_cusips()` (the
   CUSIPs of fails rows under a dead security's tickers in the 120 days before its

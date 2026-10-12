@@ -77,6 +77,9 @@ GUARD_NAME_DAYS = 30     # a name the candidate took up to this long after a row
 RENAME_NEAR_DAYS = 90    # a switch's issuer was renamed this close to it
 NAME_IN_FORCE = "name_in_force"     # 2b's source: the one other holder of the name that carried it over the era
 TICKER_ROWS = "ticker_rows"         # 2b's source: the one other holder of the name its ticker's fails rows describe
+LATER_TICKER = "later_ticker"       # 2b's source: a backfilled row's issuer, the company SEC lists its ticker under
+LATER_ROWS_DAYS = 400               # the ticker's rows this long from its first row after the era say whose it became
+ROWS_DECIDED = frozenset({TICKER_ROWS, LATER_TICKER})      # 2b's answers that refute the era's observed name on its dates
 OBSERVED_ALIVE_DAYS = TickerResolver.OBSERVED_ALIVE_DAYS    # filed within this of a day: the issuer was operating
 EXCHANGE_CIKS = TickerResolver.EXCHANGE_CIKS                # the exchanges' CIKs: never an issuer
 
@@ -118,9 +121,10 @@ class Identity:
     by era key, for the eras whose issuer is known: the one source of an era's CIK), each era's FIGI resolution,
     the securities, each security's CUSIPs over its whole life (`cusips`), the identity review items, each era's
     lookup tier (`tiers`: the first pass's, or the source of the 2b or second-pass rule that answered it) and the
-    eras whose ticker's fails rows decided their issuer (`rows_decided`, 2b's `ticker_rows`: their observed name
-    was refuted, so the issuer in force keeps their CIK), and `verdicts`, what the check of the derived eras found
-    (`identify`): by (ticker, new CUSIP) pair, `NOT_MADE`, `WITHOUT_OLD_ISSUER` or `FOLD_REFUSED`."""
+    eras whose ticker's fails rows decided their issuer (`rows_decided`, 2b's `ticker_rows` and `later_ticker`:
+    their observed name is not the issuer's on their dates, so the issuer in force keeps their CIK), and `verdicts`,
+    what the check of the derived eras found (`identify`): by (ticker, new CUSIP) pair, `NOT_MADE`,
+    `WITHOUT_OLD_ISSUER` or `FOLD_REFUSED`."""
     eras: list[TickerEra]
     era_by_key: dict[str, TickerEra]
     ftd: FtdIndex
@@ -240,7 +244,7 @@ def identify(index: ObservationIndex, clients: Sources, *, as_of: date, limit: i
     cusips = _security_cusips(securities, resolutions, ftd)                                              # 4
     return Identity(eras, era_by_key, ftd, found.issuers, resolutions, securities, cusips, review,
                     {k: r.source for k, r in found.answers.items()},
-                    frozenset(k for k, v in found.inferred.items() if v.source == TICKER_ROWS), verdicts)
+                    frozenset(k for k, v in found.inferred.items() if v.source in ROWS_DECIDED), verdicts)
 
 
 def _pair_of(era: TickerEra, derive: Mapping[tuple[str, str], DerivedFrom]) -> tuple[str, str] | None:
@@ -1058,15 +1062,27 @@ class EraIssuers:
           rows under ERA say ERA GROUP INC, the company later renamed Bristow Group Inc; the old Bristow Group
           traded as BRS).
 
-        A pinned era, one with no name or no name index, keeps its answer. Answers keyed by era."""
+        Before either, an era whose ticker the fails data does not show near its dates (`guarded_eras`) is asked
+        whether its row was backfilled (`later_ticker`, `_later_ticker`, which needs no name index).
+
+        A pinned era, one with no name or (for the two rules above) no name index, keeps its answer. Answers keyed by
+        era."""
         index = self.issuers.name_index()
         out: dict[str, InferredIssuer] = {}
-        if index is None:
-            return out
+        guarded = guarded_eras(eras, ftd)
         for e in sorted(eras, key=lambda e: e.key):
             res = answers.get(e.key)
             if res is None or res.cik is None or res.source != "name_search" or e.cik_pin is not None \
                     or e.sec_id_pin or not e.name:
+                continue
+            if e.key in guarded:
+                self._reset()
+                later = self._later_ticker(e, res.cik, ftd)
+                self._mark(e)
+                if later is not None:
+                    out[e.key] = later
+                    continue
+            if index is None:
                 continue
             holders = sorted({h.cik for h in index.split_search(e.name)[0]} - {res.cik} - EXCHANGE_CIKS)
             if not holders:
@@ -1081,6 +1097,45 @@ class EraIssuers:
                 out[e.key] = got
             self._mark(e)
         return out
+
+    def _later_ticker(self, era: TickerEra, first: int, ftd: FtdIndex) -> InferredIssuer | None:
+        """FB-013: the issuer of a backfilled row, one a snapshot wrote under the ticker and name its company took
+        later (GHC 2012-06-29, GRAHAM HOLDINGS COMPANY: Washington Post Co took both on 2013-11-29; the name search
+        answered Graham Corp, whose name compares as the same one word). For an era whose ticker the fails data does
+        not show near its dates (the caller checks `guarded_eras`), the company SEC's ticker map lists the ticker
+        under (`IssuerRecord.listed_under`), when all of these hold:
+
+        - it is not the answer, and it had filed by the era's first sighting;
+        - the ticker's first rows after the era (one CUSIP's, up to `LATER_ROWS_DAYS` from its first row, at least
+          `ERA_MIN_ROWS`) are its rows (guard G's `_fits_rows`): the ticker did trade later, as that company's;
+        - it carried a name agreeing with the observed one at some point from the era's first sighting to the last
+          of those rows.
+
+        None when the ticker's last rows before the era are the answer's own (`_fits_rows`, at least `ERA_MIN_ROWS`
+        of one CUSIP): a ticker the answer's company traded under and then left is a stale row of that company, not
+        a backfilled one. The ticker map alone decides nothing: it lists today's holder, and the rows and the name
+        must place that holder at the ticker's next use after the era."""
+        holder = self.issuers.listed_under(era.ticker)
+        if holder is None or holder == first or holder in EXCHANGE_CIKS:
+            return None
+        rows = ftd.by_symbol(era.ticker)
+        before, after = [r for r in rows if r.date < era.first], [r for r in rows if r.date > era.last]
+        if not after:
+            return None
+        stale = [r for r in before if r.cusip == before[-1].cusip]
+        if len(stale) >= ERA_MIN_ROWS and self._fits_rows(first, stale):
+            return None
+        start = parse_day(after[0].date)
+        until = (start + timedelta(days=LATER_ROWS_DAYS)).isoformat()
+        later = [r for r in after if r.cusip == after[0].cusip and r.date <= until]
+        lo, hi = parse_day(era.first), parse_day(later[-1].date)
+        if (len(later) < ERA_MIN_ROWS or lo is None or not self.issuers.existed_by(holder, era.first)
+                or not self._fits_rows(holder, later) or not self._carried_over(holder, era.name, lo, hi)):
+            return None
+        return InferredIssuer(holder, LATER_TICKER,
+                              f"no fails row is under {era.ticker} near {era.first}; its rows from {later[0].date} "
+                              f"({later[0].description}) are {holder}'s, which SEC lists {era.ticker} under and "
+                              f"which carried the name by then, not {first}'s")
 
     def _carried_over(self, cik: int, name: str, lo: date, hi: date) -> bool:
         """Whether the CIK carried a name agreeing with `name` at some point in [lo, hi] (its submissions JSON)."""

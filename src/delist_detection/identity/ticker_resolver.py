@@ -71,7 +71,7 @@ class TickerResolution:
     # 'cik_map' | 'manual' | 'rename' | 'company_tickers' | 'efts' | 'efts_name_mismatch'
     # | 'name_search' | 'efts_frequency' | 'efts_frequency_name_mismatch'
     # | 'rejected_validation' | 'none'; the era-level passes (`identity.EraIssuers`), whose answers the
-    # identity stage records the same way: 'name_in_force' | 'ticker_rows' | 'efts_frequency_renamed'
+    # identity stage records the same way: 'name_in_force' | 'ticker_rows' | 'later_ticker' | 'efts_frequency_renamed'
     # | 'shared_cusip' | 'cusip_handoff'
     source: str
 

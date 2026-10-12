@@ -13,7 +13,7 @@ from __future__ import annotations
 import csv
 import gzip
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
@@ -108,7 +108,10 @@ class FixtureEdgar:
         return [] if d is None else [EdgarSubmission(*f) for f in d["filings"]]
 
     def company_tickers(self):
-        return {}
+        """SEC's ticker map as the recorded issuers give it: each one's tickers (its submissions JSON's `tickers`),
+        keyed as `edgar.EdgarClient.company_tickers` keys them."""
+        return {t.upper(): {"cik_str": int(cik), "ticker": t, "title": d["name"]}
+                for cik, d in self._issuers.items() for t in d.get("tickers") or ()}
 
 
 class FixtureFigi:
@@ -169,10 +172,14 @@ class Cases:
     backend: Backend
     log: list[str] = field(default_factory=list)
 
-    def identify(self, tickers, answers: dict[str, tuple[int | None, str]]) -> Identity:
-        """The identity stage over the observations of `tickers`, the lookup answering `answers`."""
-        want = set(tickers)
-        index = ObservationIndex([o for o in self.backend.observations if o.ticker in want])
+    def identify(self, tickers, answers: dict[str, tuple[int | None, str]], seeds=None, pins=None) -> Identity:
+        """The identity stage over the observations of `tickers`, the lookup answering `answers`. `seeds`: the
+        (ticker, day) pairs to keep of them, as a seed-list input has (default: every observation). `pins`:
+        ticker -> the `sec_id` the caller pins its observations to."""
+        want, pins = set(tickers), pins or {}
+        index = ObservationIndex([replace(o, sec_id=pins[o.ticker]) if o.ticker in pins else o
+                                  for o in self.backend.observations if o.ticker in want
+                                  and (seeds is None or (o.ticker, o.as_of) in seeds)])
         clients = SimpleNamespace(resolver=CommittedLookup(answers), figi=self.backend.figi,
                                   ftd_client=self.backend.ftd_client, edgar=self.backend.edgar,
                                   issuers=IssuerRecord(self.backend.edgar, today=AS_OF, name_index=self.backend.index))

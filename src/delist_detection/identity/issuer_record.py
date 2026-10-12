@@ -13,7 +13,8 @@ pipeline's stages all read issuers through one `IssuerRecord`, and ask it what t
 - `first_filed(cik)` and `existed_by(cik, day)`: its first filing, and whether it had filed by a day;
 - `recent_form_dates(cik, form)`: the days of its latest filings (the submissions JSON's recent block) of a form;
 - `filings(cik)` and `text(cik, filing)`: the issuer's filings and a filing's text;
-- `exact_holders(name)`: the CIKs SEC's name index (cik-lookup-data.txt) lists under exactly a name.
+- `exact_holders(name)`: the CIKs SEC's name index (cik-lookup-data.txt) lists under exactly a name;
+- `listed_under(ticker)`: the CIK SEC's ticker map (company_tickers.json) lists a ticker under today.
 
 The failure policy, the same for every reader:
 
@@ -55,6 +56,7 @@ from ..sources.edgar import FETCHED_KEY, STALE_KEY, EdgarSubmission, submissions
 from ..filings.evidence import edgar_names, first_filing, names_between, names_near, names_until, parse_day
 from ..sources.fatal import FATAL
 from ..sources.sec_stats import SEC_STATS
+from ..vocabulary.identifiers import normalize_ticker
 
 if TYPE_CHECKING:
     from ..sources.cik_lookup import CikNameIndex
@@ -110,6 +112,7 @@ class IssuerRecord:
         self._filings: OrderedDict[int, list[EdgarSubmission]] = OrderedDict()
         self._first: dict[int, date | None] = {}
         self._stamps: dict[int, Any] = {}     # CIK -> the fetch day of the copy its remembered answers came from
+        self._listed: dict[str, int] | None = None    # SEC's ticker map, ticker -> CIK, once read
 
     # --- the failure policy ---------------------------------------------------------------------------------------
 
@@ -270,6 +273,23 @@ class IssuerRecord:
         index = self.name_index()
         return [h.cik for h in index.split_search(name)[0]] if index is not None else []
 
+    # --- SEC's ticker map -----------------------------------------------------------------------------------------
+
+    NO_ISSUER = 0        # the CIK a failed read of the ticker map is logged under: no issuer's read
+
+    def listed_under(self, ticker: str) -> int | None:
+        """The CIK SEC's ticker map (company_tickers.json) lists `ticker` under today, tickers compared as the tables
+        spell them (`identifiers.normalize_ticker`); None for a ticker it does not list, or when the map cannot be
+        read (the failed read is logged under `NO_ISSUER`, and the map is read again at the next ask)."""
+        if self._listed is None:
+            raw, current = self._read(self.NO_ISSUER, self.edgar.company_tickers)
+            listed = {normalize_ticker(t): int(v["cik_str"]) for t, v in (raw or {}).items()
+                      if isinstance(v, dict) and v.get("cik_str") is not None}
+            if not current:
+                return listed.get(normalize_ticker(ticker))
+            self._listed = listed
+        return self._listed.get(normalize_ticker(ticker))
+
     # --- runs and threads -----------------------------------------------------------------------------------------
 
     def forget(self) -> None:
@@ -278,6 +298,7 @@ class IssuerRecord:
         self._filings.clear()
         self._first.clear()
         self._stamps.clear()
+        self._listed = None
 
     def shadow(self) -> "IssuerRecord":
         """A record for a warm pass's worker: the same client, run date and name index, a snapshot of what is
@@ -287,6 +308,7 @@ class IssuerRecord:
         s._index_failed = self._index_failed
         s._profiles, s._filings = dict(self._profiles), OrderedDict(self._filings)
         s._first, s._stamps = dict(self._first), dict(self._stamps)
+        s._listed = self._listed
         return s
 
 

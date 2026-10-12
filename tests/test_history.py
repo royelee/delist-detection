@@ -11,7 +11,7 @@ from delist_detection.vocabulary.crsp_codes import CrspBucket
 from delist_detection.sources.ftd import FtdIndex, FtdRow
 from delist_detection.identity.history import (Ending, Histories, SecurityEnd, Sighting, cusip_sightings,
                                       filtered_ticker_sightings, is_backfilled, observation_map_rows,
-                                      ticker_range_review, ticker_sightings)
+                                      ranges_from_sightings, ticker_range_review, ticker_sightings)
 from delist_detection.endings.last_trade import NO_DAY, UNCONFIRMED, LastTrade
 from delist_detection.identity.observations import Observation, TickerEra
 from delist_detection.identity.security_master import Security
@@ -280,6 +280,64 @@ def test_a_first_day_zzzz_row_is_no_ticker_sighting_but_still_a_cusip_sighting()
                     FtdRow("2013-12-05", "320771207", "FMD", "FIRST MARBLEHEAD CORP", 5.50)])
     assert {s.value for s in ticker_sightings(sec, ftd, ["320771207"]) if s.source == "ftd"} == {"FMD"}
     assert cusip_sightings(sec, ftd, ["320771207"])[0] == Sighting("2013-12-03", "320771207", "ftd")
+
+
+# --- a class ticker that lost its separator at a CUSIP change (FB-013, HUB-B then HUBB) ---
+
+OLD_B, NEW_B = "443510201", "443510607"
+
+
+def _class_b(figi_ticker, *, symbol="HUBB", later_observed=("HUBB", "2015-12-31"), cusips=(OLD_B, NEW_B)):
+    """A class B line as Hubbell's: observed as HUB-B to 2015-06-30 and as HUBB in a backfilled 2012 snapshot, its
+    old CUSIP's rows to 2015-12-24 and its new CUSIP's from 2015-12-28, every fails row under `symbol` (SEC's files
+    write HUBB throughout; the run's index hands them over as HUB-B once the class ticker was asked for). Returns
+    the ticker ranges."""
+    eras = [TickerEra("HUB-B", "2008-01-16", "2015-06-30", [Observation("HUB-B", "2008-01-16", "HUBBELL INC"),
+                                                         Observation("HUB-B", "2015-06-30", "HUBBELL INC. CL B")]),
+            TickerEra("HUBB", "2012-06-29", "2012-06-29", [Observation("HUBB", "2012-06-29", "HUBBELL INC")])]
+    if later_observed:
+        ticker, day = later_observed
+        eras.append(TickerEra(ticker, day, day, [Observation(ticker, day, "HUBBELL INC")]))
+    sec = Security("BBG000BLK267", 48898, "CLASS B", "HUBBELL INC", "Common Stock", True, "pin", eras=eras,
+                   figi_ticker=figi_ticker)
+    rows = [FtdRow(d, OLD_B, symbol, "HUBBELL INC CL-B", 100.0 + i)
+            for i, d in enumerate(("2008-01-29", "2012-06-28", "2015-06-29", "2015-12-23", "2015-12-24"))]
+    rows += [FtdRow(d, cusips[1], symbol, "HUBBELL INC CL-B", 100.0 + i)
+             for i, d in enumerate(("2015-12-28", "2015-12-30", "2016-01-04", "2020-06-30"))]
+    return [(r.value, r.valid_from, r.valid_to)
+            for r in ranges_from_sightings(ticker_sightings(sec, FtdIndex(rows), list(dict.fromkeys(cusips))),
+                                           end=None, open_ended=True)]
+
+
+def test_a_bare_spelling_observed_alone_under_a_later_cusip_is_the_lines_own_ticker():
+    """FB-013: Hubbell's class B traded as HUB-B until its CUSIP changed on 2015-12-28 and as HUBB since. The
+    caller saw HUB-B only under the old CUSIP and HUBB alone under the new one, and OpenFIGI's ticker for the line
+    is HUBB: the line changed ticker there. The 2012 HUBB row, backfilled under the old CUSIP, stays HUB-B."""
+    want = [("HUB-B", "2008-01-16", "2015-12-27"), ("HUBB", "2015-12-28", None)]
+    assert _class_b("HUBB") == want
+    assert _class_b("HUBB", symbol="HUB-B") == want       # the rows as the run's index relabels them
+
+
+def test_a_bare_spelling_is_only_a_spelling_when_the_lines_figi_ticker_has_the_separator():
+    """Forest City's snapshots wrote FCE-A to 2015 and FCEA from 2016, across its 2016 CUSIP change, while the
+    stock stayed FCE.A: OpenFIGI's ticker with the separator (here HUB-B) keeps the one spelling. So does a line
+    whose FIGI ticker is unknown (a pin, a placeholder)."""
+    want = [("HUB-B", "2008-01-16", None)]
+    assert _class_b("HUB-B") == want
+    assert _class_b("") == want
+
+
+def test_one_cusip_observed_under_both_spellings_keeps_the_separator():
+    """Viacom's class B on one CUSIP, written VIA-B and VIAB by the snapshots: no CUSIP change dates a change of
+    ticker, so the spelling with the separator stands, whatever OpenFIGI's ticker."""
+    assert _class_b("HUBB", cusips=(OLD_B, OLD_B)) == [("HUB-B", "2008-01-16", None)]
+
+
+def test_a_later_cusip_with_no_sighting_of_the_bare_spelling_alone_keeps_the_separator():
+    """Under the new CUSIP the caller saw HUB-B again (or nothing): nothing shows the ticker changed there."""
+    want = [("HUB-B", "2008-01-16", None)]
+    assert _class_b("HUBB", later_observed=("HUB-B", "2015-12-31")) == want
+    assert _class_b("HUBB", later_observed=None) == want
 
 
 # --- Histories: where a security's history ends, at its interface (the clip, a successor's ticker, listed today) ---

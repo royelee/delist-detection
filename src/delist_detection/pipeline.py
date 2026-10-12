@@ -1475,7 +1475,8 @@ def _other_issuers(ctx: _RunContext, eras: list[TickerEra], resolutions: dict[st
         return read(cik)
 
     conflicts = {(t, d) for t, d, _ in observation_conflicts(o for e in eras for o in e.caller_observations)}
-    # an era whose issuer its ticker's fails rows decided (stage 2b) keeps it: its observed name was refuted
+    # an era whose issuer its ticker's fails rows decided (stage 2b) keeps it: its observed name is not the
+    # issuer's on its dates (refuted, or a later one)
     sightings = [IssuerSighting(r.sec_id, o.as_of, "" if e.key in rows_decided else o.name or "",
                                 str(cik_of(issuers, e.key) or ""))
                  for e in eras if (r := resolutions.get(e.key)) is not None and r.sec_id
@@ -1513,8 +1514,8 @@ def _issuers_in_force(ctx: _RunContext, observation_map: Sequence[Mapping[str, s
     reviewed and counts toward exit 3); a refusal (`fatal.FATAL`) stops the run.
     Without a name index (the run's issuer record holds none), every sighting keeps
     its era's CIK. A sighting of an era whose issuer its ticker's fails rows decided
-    (`rows_decided`, stage 2b's `ticker_rows`) keeps its era's CIK too: its observed
-    name is the one those rows refuted (ERA 2013's BRISTOW GROUP INC). A security's successor registrants
+    (`rows_decided`, stage 2b's `ticker_rows` and `later_ticker`) keeps its era's CIK too: its observed
+    name is the one those rows refuted (ERA 2013's BRISTOW GROUP INC) or one the issuer took later (GHC 2012). A security's successor registrants
     (`registrants`, stage 5: a holding-company reorganization of an ending that went on, DIS 2019) are the issuer in
     force from the day their successor registration was filed (`issuer_in_force.with_registrants`)."""
     read, reads = _in_force_reads(ctx.clients.issuers)
