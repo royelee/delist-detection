@@ -60,9 +60,6 @@ BBG000C496P7,2025-08-06,diagnosis_truth.csv,BBG000C496P7_2025-08-17,price_ticker
 BBG000C496P7,2025-08-06,diagnosis_truth.csv,BBG000C496P7_2025-08-17,stock_ratio,1.0,
 BBG000C496P7,2025-08-06,diagnosis_truth.csv,BBG000C496P7_2025-08-17,successor_sec_id,,BBG01VS5NK99
 BBG000C496P7,2025-08-06,diagnosis_truth.csv,BBG000C496P7_2025-08-17,value_rule,stock,continuation
-BBG000D9V7T4,2020-10-16,accuracy_audit.csv,assumed_par:BBG000D9V7T4:2020-10-29,ends_after,2026-08-05,2020-10-16
-BBG000D9V7T4,2020-10-16,accuracy_audit.csv,assumed_par:BBG000D9V7T4:2020-10-29,successor_ticker,PRG,
-BBG000D9V7T4,2020-10-16,accuracy_audit.csv,assumed_par:BBG000D9V7T4:2020-10-29,tickers,AAN;PRG,AAN;AANA;RNTA
 BBG000DFMXT3,2022-05-16,accuracy_audit.csv,continuation:BBG000DFMXT3:2022-05-26,last_trade_date,2022-05-16,2025-03-11
 BBG000FJJW82,2008-11-21,diagnosis_truth.csv,BBG000FJJW82_2008-12-06,cash_per_share,17.10,38.000000
 BBG000FJJW82,2008-11-21,diagnosis_truth.csv,BBG000FJJW82_2008-12-06,price_date,2008-11-24,
