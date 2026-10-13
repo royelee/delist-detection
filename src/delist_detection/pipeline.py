@@ -386,6 +386,14 @@ def _find_delistings(ctx: _RunContext, securities: dict[str, Security], sec_cusi
             # listed_today and the context live inside the try too: a FIGI/EDGAR
             # error there must become a reviewable row for this one security,
             # not abort the whole overnight run.
+            # The search reads the filings of the security's issuer, and of the other CIK in force, with no day of
+            # its own. So each is made current first for the security's last sighting: a copy fetched by that day
+            # plus 45 days, or by the run date when that comes first, which is every security still seen at the
+            # data's end (FB-028: Exxon Mobil's list was a copy of May 2026, and no run as of 2026-09-25 read its
+            # Form 25 of 2026-07-02).
+            for cik in (s.issuer_cik, other_ciks.get(s.sec_id)):
+                if cik is not None and last_seen:
+                    clients.issuers.profile(cik, about=last_seen)
             found, found_review, regs, listed[s.sec_id] = _search_security(
                 finder, registrants, contexts, s,
                 lambda cik: _listed_now(clients.figi, clients, s, contexts, ftd, listing.get(s.sec_id), retired,
