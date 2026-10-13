@@ -45,7 +45,7 @@ def test_a_merger_made_a_continuation_drops_its_payout_reads_and_flags():
     merger a continuation. The row keeps its last close's own flags; the merger value is dropped with one call, so
     delistings.csv's payout columns do not carry it."""
     d = _row(flags=("last_trade_date_unconfirmed", "ftd_close_prior:1", "acquirer_close_lagged",
-                    "contingent_right_unvalued"))           # FB-024's flag is a value flag too
+                    "contingent_right_unvalued", "closing_dividend_unstated"))   # FB-024's and FB-023's value flags
     values = MergerValues({d.key: _merger_value(d.key, flags=("payout_gate_failed:87.69",
                                                               "terms_gate_failed:no_acq_ticker"),
                                                 raw=replace(PayoutResult.none(), value=87.69,

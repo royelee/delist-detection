@@ -559,6 +559,7 @@ The full flag vocabulary (from `endings/classifier.py`, `identity/ticker_resolve
 | `llm_gate_failed` | The LLM cash or election terms did not reconcile either |
 | `no_last_close` | No last trade close was found (SEC fails-to-deliver, or `--last-trade-closes`), so the payout could not be checked |
 | `merger_at_par` | A merger whose consideration was read and never passed the gate; DLRET assumed 0 from the last close |
+| `closing_dividend_unstated` | The merger is valued more than 1% under its last close and a filing names a closing dividend (special, stub-period, pre-closing) without an amount per share. The terms and DLRET leave it out, and the ending is `uncertain` (`value_incomplete:closing_dividend`) |
 | `contingent_right_unvalued` | The merger's terms note a contingent value right, a warrant or another contingent payment beside the cash or stock. The library does not value it: the terms and DLRET are the valued part alone, and the ending is `uncertain` (`value_incomplete:contingent_right`) |
 | `submissions_stale` | A refetch of the company's EDGAR submissions failed; a cached copy was used instead |
 | `distress_at_normal_price` | A compliance-failure or liquidation row whose last trade close was still ≥ $5 |

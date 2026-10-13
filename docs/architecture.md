@@ -439,7 +439,10 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   another contingent payment beside the package (`MergerTerms.unvalued_right`, matched on the note's words) is
   flagged `contingent_right_unvalued` by stage 8 (`merger_value._flag_unvalued_rights`, which logs every note and
   how it read it) and is `uncertain` with `value_incomplete:contingent_right` (FB-024); its terms and `dlret`
-  stand as the value of the valued part.
+  stand as the value of the valued part. The same holds for a merger the last gate pass values more than 1% under
+  its last close whose filings name a closing dividend with no amount per share and for which no search found one
+  (`merger_value._flag_unstated_dividends`, flag `closing_dividend_unstated`, reason
+  `value_incomplete:closing_dividend`; FB-023's follow-up, Two Harbors 2026).
   It loads only the row vocabulary and the leaf enums (`tests/test_import_closure.py`).
 - `outputs/reconstruction.py` — `DelistRecord` (the classifier's hand-off, defined here, below the stages, so the
   table, the merger readers and the handling read it without loading the classifier: architecture step 16),

@@ -327,6 +327,13 @@ def test_a_merger_with_a_contingent_right_beside_its_cash_is_uncertain_and_keeps
     assert _reasons(plain) == ()
 
 
+def test_a_merger_whose_filings_name_a_closing_dividend_without_an_amount_is_uncertain():
+    """FB-023's follow-up (Two Harbors 2026): the row keeps its cash and its dlret, and the verdict says a dividend
+    the filings name is not in the value."""
+    row = ending("A", "2015-03-13", "merger", flags="closing_dividend_unstated", **GOOD)
+    assert _reasons(row) == ("value_incomplete:closing_dividend",) and row["dlret"] == "0.01"
+
+
 def test_an_observed_figi_security_with_no_issuer_is_uncertain():
     """FB-006: AMAT, EXPD, DD: a FIGI confirmed by CUSIP and no issuer CIK. Its seeds and endings are uncertain; a
     placeholder (its own rule) and a security the run added (no observation) are left alone."""

@@ -724,3 +724,35 @@ def test_a_note_of_a_contingent_right_or_a_warrant_is_a_part_the_library_does_no
 ])
 def test_a_note_that_names_no_right_is_no_unvalued_part(note):
     assert not _noted(note).unvalued_right
+
+
+# --------------------------------------------------------------------------- #
+# FB-023 follow-up: a closing dividend a filing names without an amount
+# --------------------------------------------------------------------------- #
+
+_STUB = "As previously announced, TWO will pay a stub period dividend to holders of TWO common stock"
+_STUB_TEXT = ("The merger consideration is $12.00 per share in cash. " + _STUB + " in connection with the CCM Merger, "
+              "in addition to the regular dividend of $0.34 declared in June.")
+
+
+def test_a_closing_dividend_named_without_an_amount_is_reported_with_no_amount(tmp_path):
+    """Two Harbors 2026: the 8-K names a stub-period dividend "as previously announced" and no amount per share."""
+    ext, llm = _dividend_ext(tmp_path, [{"closing_dividends": [_dividend(None, quote=_STUB)]}], text=_STUB_TEXT)
+    assert ext.closing_dividend(_merger_rec()) == ClosingDividend(None, "8-K:C1", _STUB)
+    # one the stated consideration includes, or an answer with nothing, names none
+    ext, _ = _dividend_ext(tmp_path / "in", [{"closing_dividends": [_dividend(None, included=True)]}], text=_STUB_TEXT)
+    assert ext.closing_dividend(_merger_rec()) is None
+
+
+def test_a_filing_that_states_the_amount_answers_over_one_that_only_names_the_dividend(tmp_path):
+    second = EdgarSubmission(accession="C2", form="8-K", filing_date="2018-11-29", report_date="2018-11-29",
+                             items="3.01,5.01", primary_doc="d.htm")
+    answers = [{"closing_dividends": [_dividend(None, quote=_STUB)]}, {"closing_dividends": [_dividend(0.45)]}]
+    ext, llm = _dividend_ext(tmp_path, answers, text=_STUB_TEXT, filings=[_closing_8k(), second])
+    got = ext.closing_dividend(_merger_rec())
+    assert (got.amount, got.source) == (0.45, "8-K:C2") and llm.calls == 2
+    # the earlier search keeps looking too, and falls back to the first that only names it
+    filings = [_earlier_8k("E2", "2018-11-21"), _earlier_8k("E1", "2018-11-10")]
+    unstated = [{"closing_dividends": [_dividend(None, quote=_STUB)]}, {"closing_dividends": []}]
+    ext, llm = _earlier_ext(tmp_path / "e", unstated, filings, {"E1": _STUB_TEXT, "E2": _STUB_TEXT})
+    assert ext.earlier_dividend(_merger_rec()) == ClosingDividend(None, "8-K:E2", _STUB) and llm.calls == 2

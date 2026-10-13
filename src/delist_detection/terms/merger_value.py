@@ -50,8 +50,9 @@ from ..endings.delistings import Delisting
 from ..outputs.dlret import STATEMENT_SOURCE, MergerInputs, StatementTerms
 from ..endings.exchange_terms import one_share_no_cash
 from ..sources.fatal import FATAL
-from ..vocabulary.exit_kind import (CONTINGENT_RIGHT_UNVALUED, GATE_FLAGS, LLM_GATE_FAILED, PAYOUT_GATE_FAILED,
-                                    TERMS_GATE_FAILED, TERMS_GATE_SKIPPED, flag_detail, flag_name)
+from ..vocabulary.exit_kind import (CLOSING_DIVIDEND_UNSTATED, CONTINGENT_RIGHT_UNVALUED, GATE_FLAGS,
+                                    LLM_GATE_FAILED, PAYOUT_GATE_FAILED, TERMS_GATE_FAILED, TERMS_GATE_SKIPPED,
+                                    flag_detail, flag_name)
 from ..sources.ftd import FtdIndex
 from .llm_merger_extractor import MergerTerms
 from ..vocabulary.identifiers import class_letter, normalize_ticker, share_class_from_name
@@ -327,7 +328,7 @@ def value_mergers(delistings: Sequence[Delisting], index: acquirer_line.LineInde
     st = _Stage(clients, index, ftd_lo, workers, workers if llm_workers is None else llm_workers, log)
     mergers = [e for e in delistings if e.record.bucket is CrspBucket.MERGER]
     names = {sid: s.name or "" for sid, s in st.securities.items()}
-    raw, llm_terms, dividends, review = _read_terms(st, mergers, own, names)
+    raw, llm_terms, dividends, unstated, review = _read_terms(st, mergers, own, names)
     trade_day = {e.key: e.last_trade.day for e in delistings}
     lines, line_review = _acquirer_lines(st, mergers, llm_terms, caller_terms)
     llm_terms, name_review = _name_acquirer_tickers(st, mergers, llm_terms, lines, caller_terms)
@@ -338,7 +339,7 @@ def value_mergers(delistings: Sequence[Delisting], index: acquirer_line.LineInde
     # so a second run with the requests answered keeps them all and changes values only (`--price-answers`).
     first, lagged = _gate(st, mergers, trade_day, raw, llm_terms, own, caller_terms, tol, lines, wins,
                           dividends=dividends)
-    earlier = _EarlierDividends(st, mergers, caller_terms, names, review)
+    earlier = _EarlierDividends(st, mergers, caller_terms, names, review, unstated)
     if earlier.read(first, own, dividends):                 # FB-023: the gate again, with the dividends it found
         first, lagged = _gate(st, mergers, trade_day, raw, llm_terms, own, caller_terms, tol, lines, wins,
                               dividends=dividends)
@@ -347,8 +348,9 @@ def value_mergers(delistings: Sequence[Delisting], index: acquirer_line.LineInde
     asked = {e.key: request for e in mergers
              if (request := _request(e, llm_terms, caller_terms, acquirer_ids, price_tickers)) is not None}
     answered = _answered_paths(mergers, answers, llm_terms, caller_terms, lines, first, asked)
-    gated = first
+    gated, last_closes = first, own
     if answered or any(closes.get(e.key) != own.get(e.key) for e in mergers):
+        last_closes = closes
         # the values: the answered closes, each received close through the request it answers
         gated, lagged = _gate(st, mergers, trade_day, raw, llm_terms, closes, caller_terms, tol, lines, wins, answered,
                               dividends)
@@ -359,10 +361,30 @@ def value_mergers(delistings: Sequence[Delisting], index: acquirer_line.LineInde
         if e.key in lagged:
             e.add_flag("acquirer_close_lagged")
     _flag_unvalued_rights(st, mergers, llm_terms, caller_terms)
+    _flag_unstated_dividends(mergers, gated, last_closes, dividends, unstated, caller_terms)
     legs = _leg_holders(st, mergers, llm_terms, price_tickers)
     records = {e.key: _record(e.key, raw, llm_terms, gated, first, caller_terms, acquirer_ids, price_tickers, legs,
                               asked) for e in mergers}
     return MergerValues(records, caller_terms, added, review + line_review + name_review + acquirer_review)
+
+
+def _flag_unstated_dividends(mergers: list[Delisting], gated: GatedPayouts, closes: Mapping[DelistingKey, float],
+                             dividends: Mapping[DelistingKey, float], unstated: Mapping[DelistingKey, str],
+                             caller_terms: Mapping) -> None:
+    """FB-023's follow-up: a merger the last gate pass values more than `EARLIER_DIVIDEND_GAP` under its last close
+    (`closes`: that pass's), whose filings name a closing dividend with no amount (`unstated`) and for which no
+    search found one (`dividends`), is flagged `closing_dividend_unstated`: a part of the value is missing, the
+    verdict is uncertain and the value stays (Two Harbors 2026: $12.00 against 12.18 and a stub-period dividend
+    "as previously announced"). Under that gap a missing dividend is worth less than two percent of the close and
+    nothing is flagged (Athene 2022, whose named dividend went to the holders after the merger). A merger the
+    caller gave terms for takes no flag."""
+    for e in mergers:
+        key = e.key
+        if key not in unstated or key in dividends or for_delisting(caller_terms, key) is not None:
+            continue
+        close, value = for_delisting(closes, key), _kept_value(gated, key)
+        if value is not None and close and close > 0 and value < close * (1 - EARLIER_DIVIDEND_GAP):
+            e.add_flag(CLOSING_DIVIDEND_UNSTATED)
 
 
 def _flag_unvalued_rights(st: _Stage, mergers: list[Delisting], llm_terms: Mapping[DelistingKey, MergerTerms],
@@ -408,13 +430,16 @@ def _record(key: DelistingKey, raw: Mapping, llm_terms: Mapping, gated: GatedPay
 
 def _read_terms(st: _Stage, mergers: list[Delisting], closes: Mapping[DelistingKey, float],
                 names: Mapping[str, str]) -> tuple[dict[DelistingKey, Any], dict[DelistingKey, MergerTerms],
-                                                   dict[DelistingKey, float], list[ReviewItem]]:
+                                                   dict[DelistingKey, float], dict[DelistingKey, str],
+                                                   list[ReviewItem]]:
     """The regex payout read and the LLM merger terms of each merger (the LLM is told the target security's name,
     `names` by sec_id), the closing dividend per share of a merger either reader gave terms for (FB-021, the LLM
-    extractor's `closing_dividend`), and the review items: a failed extraction's `error`, and a read that rested on
+    extractor's `closing_dividend`), the source of a closing dividend a filing names with no amount (FB-023's
+    follow-up, by merger), and the review items: a failed extraction's `error`, and a read that rested on
     a degraded answer (a failed EDGAR read or LLM call; it also flags the merger's own row)."""
     clients, raw, llm_terms = st.clients, {}, {}
     dividends: dict[DelistingKey, float] = {}
+    unstated: dict[DelistingKey, str] = {}      # a closing dividend a filing names with no amount: its source
     review: list[ReviewItem] = []
     if st.workers > 1 and clients.payout_extractor is not None:
         # The regex payout reader's EDGAR reads, warmed.
@@ -446,9 +471,12 @@ def _read_terms(st: _Stage, mergers: list[Delisting], closes: Mapping[DelistingK
                 if t is not None or getattr(raw.get(key), "value", None) is not None:
                     # FB-021: terms alone leave out a dividend the target paid because the deal closed
                     d = clients.llm_extractor.closing_dividend(e.record, security_name=names.get(e.sec_id, ""))
-                    if d is not None:
+                    if d is not None and d.amount is not None:
                         dividends[key] = d.amount
                         st.log(f"{e.sec_id} {e.delist_date}: closing dividend {d.amount:g} read from {d.source}")
+                    elif d is not None:        # FB-023's follow-up: named, and no amount per share stated
+                        unstated[key] = d.source
+                        st.log(f"{e.sec_id} {e.delist_date}: closing dividend named without an amount in {d.source}")
         except FATAL:
             raise
         except Exception as exc:  # an overnight run must survive one bad extraction
@@ -456,7 +484,7 @@ def _read_terms(st: _Stage, mergers: list[Delisting], closes: Mapping[DelistingK
             review.append(ReviewItem(e.sec_id, e.ticker, e.cik, "error", f"{type(exc).__name__}: {exc}",
                                      delist_date=e.delist_date))
         watch.report_delisting(review, e, "payout extraction")
-    return raw, llm_terms, dividends, review
+    return raw, llm_terms, dividends, unstated, review
 
 
 EARLIER_DIVIDEND_GAP = 0.01     # FB-023: a kept value more than this share under the last close asks the earlier 8-Ks
@@ -482,8 +510,9 @@ class _EarlierDividends:
     What is read joins the run's dividends, which every later gate pass decides on its own closes."""
 
     def __init__(self, st: _Stage, mergers: list[Delisting], caller_terms: Mapping, names: Mapping[str, str],
-                 review: list[ReviewItem]) -> None:
+                 review: list[ReviewItem], unstated: dict[DelistingKey, str]) -> None:
         self.st, self.mergers, self.caller_terms, self.names, self.review = st, mergers, caller_terms, names, review
+        self.unstated = unstated                # a dividend an earlier 8-K names with no amount joins the closing ones
         self.asked: set[DelistingKey] = set()
 
     def read(self, gated: GatedPayouts, closes: Mapping[DelistingKey, float],
@@ -513,10 +542,14 @@ class _EarlierDividends:
                                               delist_date=e.delist_date))
                 d = None
             watch.report_delisting(self.review, e, "payout extraction")
-            if d is not None:
+            if d is not None and d.amount is not None:
                 dividends[key] = d.amount
                 found += 1
                 self.st.log(f"{e.sec_id} {e.delist_date}: closing dividend {d.amount:g} read from {d.source}, "
+                            "an 8-K before the closing")
+            elif d is not None and key not in self.unstated:
+                self.unstated[key] = d.source
+                self.st.log(f"{e.sec_id} {e.delist_date}: closing dividend named without an amount in {d.source}, "
                             "an 8-K before the closing")
         if asked:
             self.st.log(f"earlier 8-Ks: {asked} mergers valued more than {EARLIER_DIVIDEND_GAP:.0%} under their last "

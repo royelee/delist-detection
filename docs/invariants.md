@@ -586,7 +586,11 @@
   dividend counts only when it is less than twice the gap between the value and the close, so a merger not asked
   can be short by less than 2% of its close. What is read joins the run's dividends before the gate runs again,
   and every later pass decides on its own closes whether it counts. A merger only the caller's answers value (its
-  stock leg, its close) is asked after the answered pass, so the first pass is the same in both runs.
+  stock leg, its close) is asked after the answered pass, so the first pass is the same in both runs. A filing that
+  names a closing dividend and states no amount per share gives nothing to count (`ClosingDividend.amount` None);
+  when no search finds the amount and the last pass values the merger more than 1% under its close, the row is
+  flagged `closing_dividend_unstated` and is `uncertain` with `value_incomplete:closing_dividend`, its terms and
+  `dlret` kept (Two Harbors 2026; Athene 2022, 0.5% under, is not flagged).
 - **A closing dividend is read apart from the package and counts in the value only (FB-021).** It is cash the
   target paid its holders because the deal closed (Extended Stay 2021: $1.75 a share beside the merger's $18.75).
   `LLMMergerTermsExtractor.closing_dividend` reads it with a question of its own, for a merger either reader gave

@@ -48,19 +48,25 @@ class _Terms:
     `offers` the targets whose offer documents it was asked for (answered from `offer_answers`)."""
 
     def __init__(self, answers: dict, calls: list | None = None, offer_answers: dict | None = None,
-                 dividends: dict | None = None, earlier: dict | None = None) -> None:
+                 dividends: dict | None = None, earlier: dict | None = None, unstated=(),
+                 earlier_unstated=()) -> None:
         self.answers, self.calls, self.seen = answers, calls if calls is not None else [], []
         self.offer_answers, self.offers = offer_answers or {}, []
         self.dividends, self.dividend_asks = dividends or {}, []
         self.earlier, self.earlier_asks = earlier or {}, []      # FB-023: the 8-Ks before the closing one
+        self.unstated, self.earlier_unstated = set(unstated), set(earlier_unstated)
 
     def closing_dividend(self, record, security_name=""):
         self.dividend_asks.append(record.ticker)
+        if record.ticker in self.unstated:                 # named in the closing filing with no amount
+            return ClosingDividend(None, "8-K:D1", "a stub period dividend")
         amount = self.dividends.get(record.ticker)
         return None if amount is None else ClosingDividend(amount, "8-K:D1", "a special dividend")
 
     def earlier_dividend(self, record, security_name=""):
         self.earlier_asks.append(record.ticker)
+        if record.ticker in self.earlier_unstated:
+            return ClosingDividend(None, "8-K:E1", "a stub period dividend")
         amount = self.earlier.get(record.ticker)
         return None if amount is None else ClosingDividend(amount, "8-K:E1", "a special one-time cash dividend")
 
@@ -416,6 +422,37 @@ def test_a_failed_earlier_read_is_an_error_row_and_the_merger_keeps_its_value():
     values = _value([e], llm=Broken({}), payout=_Cash({"PXP": 46.0}), closes={e.key: 48.90})
     assert values.get(e.key).payout == 46.0 and values.get(e.key).dividend is None
     assert [(r.sec_id, r.flag) for r in values.review] == [("P", "error")]
+
+
+# --- FB-023 follow-up: a closing dividend a filing names without an amount -------------------------------------------
+
+def test_a_merger_under_its_close_whose_filings_name_a_dividend_without_an_amount_is_flagged():
+    """Two Harbors 2026: $12.00 against a 12.18 close, and an 8-K that names a stub-period dividend with no amount.
+    The value stays the cash; the row says a part is missing. Athene 2022 is 0.5% under its close with a dividend
+    its filing names for the holders after the merger: under the 1% of FB-023 nothing is flagged."""
+    es = [_merger(sec_id, ticker, "2026-09-04", date(2026, 8, 24))
+          for sec_id, ticker in (("T", "TWO"), ("A", "ATH"), ("E", "ERL"), ("G", "GIVEN"), ("S", "STATED"))]
+    cash = {"TWO": 12.00, "ATH": 12.12, "ERL": 12.00, "GIVEN": 12.00, "STATED": 12.00}
+    llm = _Terms({}, unstated={"TWO", "ATH", "GIVEN", "STATED"}, earlier_unstated={"ERL"}, earlier={"STATED": 0.18})
+    logged = []
+    values = _value(es, llm=llm, payout=_Cash(cash), closes={e.key: 12.18 for e in es},
+                    caller_terms={"G": {"cash_per_share": 12.0}}, log=logged.append)
+    assert [e.ticker for e in es if "closing_dividend_unstated" in e.flags] == ["TWO", "ERL"]
+    assert values.get(es[0].key).payout == 12.00 and values.get(es[0].key).dividend is None
+    assert values.get(es[4].key).dividend == 0.18           # an earlier 8-K states the amount: it counts, no flag
+    assert llm.earlier_asks == ["TWO", "ERL", "STATED"]     # a named dividend with no amount is still looked for
+    assert "T 2026-09-04: closing dividend named without an amount in 8-K:D1" in logged
+
+
+def test_the_unstated_dividends_flag_is_decided_on_the_closes_of_the_last_pass():
+    e = _merger("T", "TWO", "2026-09-04", date(2026, 8, 24))
+
+    def flagged(answered_close):
+        row = _merger("T", "TWO", "2026-09-04", date(2026, 8, 24))
+        _value([row], llm=_Terms({}, unstated={"TWO"}), payout=_Cash({"TWO": 12.00}),
+               closes={row.key: answered_close}, own_closes={row.key: 12.18})
+        return "closing_dividend_unstated" in row.flags
+    assert flagged(12.18) and not flagged(12.05) and e.flags == []
 
 
 # --- FB-024: a contingent right beside the package -------------------------------------------------------------------

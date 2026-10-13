@@ -263,8 +263,11 @@ class ClosingDividend:
     """FB-021: the cash per share the target paid the holders of its security because the deal closed (`amount`:
     every such dividend the filing names, summed; Nordstrom 2025 paid a special and a stub-period one), the filing
     it was read from (`source`, form:accession) and the sentences that state it (`quote`). It is no part of the
-    package (`MergerTerms`); whether it counts in the ending's value is the payout gate's decision."""
-    amount: float
+    package (`MergerTerms`); whether it counts in the ending's value is the payout gate's decision. `amount` None:
+    the filing names a closing dividend and states no amount per share (FB-023's follow-up, Two Harbors 2026: "TWO
+    will pay a 'stub period' dividend ... in connection with the CCM Merger"), so nothing can be counted and stage 8
+    says a part of the value is missing."""
+    amount: float | None
     source: str = ""
     quote: str = ""
 
@@ -743,7 +746,8 @@ class LLMMergerTermsExtractor:
 
     def _stated_dividend(self, record: DelistRecord, security_name: str, pick: Callable, *,
                          count_unsent: bool) -> ClosingDividend | None:
-        """The first closing dividend one of `pick(filings, delist)`'s filings states, in their order. At most
+        """The first closing dividend one of `pick(filings, delist)`'s filings states, in their order; when none
+        states an amount, the first that names one without it (`ClosingDividend.amount` None). At most
         `max_filings` filings count: every text read when `count_unsent` (the closing search reads few), else only
         those sent to the model."""
         if record.bucket is not CrspBucket.MERGER or record.cik is None:
@@ -752,6 +756,7 @@ class LLMMergerTermsExtractor:
             filings = self.edgar.recent_filings(record.cik) or []
             delist = parse_date(record.observed_delist_date or "")
             tried, seen = 0, set()
+            named: ClosingDividend | None = None        # the first filing that names one and states no amount
             for f in pick(filings, delist):
                 if tried >= self.max_filings:
                     break
@@ -776,11 +781,12 @@ class LLMMergerTermsExtractor:
                     SEC_STATS.degraded("llm_call")      # as in `_extract`: never cached, and the row says so
                     continue
                 found = self._to_dividend(raw, f)
-                if found is not None:
+                if found is not None and found.amount is not None:
                     return found
+                named = named or found                  # a later filing may state the amount
         except requests.RequestException:
             return None
-        return None
+        return named
 
     # ------------------------------------------------------------------ #
     # Internals
@@ -1084,18 +1090,23 @@ class LLMMergerTermsExtractor:
     @staticmethod
     def _to_dividend(raw: object, filing: EdgarSubmission) -> ClosingDividend | None:
         """A closing-dividend answer as a `ClosingDividend`: the dividends it states an amount for, summed, without
-        those the stated consideration already includes; None when none is left."""
+        those the stated consideration already includes. When it states no amount and names a dividend the
+        consideration does not include, that dividend with no amount. None when nothing is left."""
         if not isinstance(raw, dict):
             return None
-        parts = []
+        parts, named = [], []
         for d in raw.get("closing_dividends") or ():
-            amount = _tolerant_float(d.get("amount_per_share")) if isinstance(d, dict) else None
-            if amount and amount > 0 and not d.get("included_in_consideration"):
+            if not isinstance(d, dict) or d.get("included_in_consideration"):
+                continue
+            amount = _tolerant_float(d.get("amount_per_share"))
+            if amount and amount > 0:
                 parts.append((amount, _text(d.get("quote"))))
-        if not parts:
-            return None
-        return ClosingDividend(round(sum(a for a, _ in parts), 6), f"{filing.form}:{filing.accession}",
-                               " | ".join(q for _, q in parts if q))
+            elif amount is None:
+                named.append(_text(d.get("quote")))
+        source = f"{filing.form}:{filing.accession}"
+        if parts:
+            return ClosingDividend(round(sum(a for a, _ in parts), 6), source, " | ".join(q for _, q in parts if q))
+        return ClosingDividend(None, source, " | ".join(q for q in named if q)) if named else None
 
     @staticmethod
     def _to_terms(raw: object, filing: EdgarSubmission) -> MergerTerms | None:
