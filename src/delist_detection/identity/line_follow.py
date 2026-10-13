@@ -63,7 +63,7 @@ from ..sources.ftd import FtdIndex, FtdRow, is_deleted_symbol, is_unassigned_sym
 from .issuer_record import IssuerRecord
 from ..filings.listing_status import edgar_lists, lists_on_major_exchange
 from ..outputs.manifest import StageMeter
-from ..vocabulary.names import description_names, names_agree
+from ..vocabulary.names import description_names, names_agree, plain_words
 from ..vocabulary.identifiers import (bare_ticker, class_letter, description_class_letter,
                                       descriptions_class_letter, fits_class, is_placeholder, name_class_letter,
                                       normalize_ticker)
@@ -538,6 +538,19 @@ def name_on(sub: Mapping | None, day: date, fallback: str = "") -> str:
     return _STATE_TAG.sub("", name or "").strip() or fallback
 
 
+def registrant_names(sub: Mapping | None, day: date, line_names: Iterable[str]) -> list[str]:
+    """The names another registrant's 8-K12B may call the issuer by on `day`, each one searched as a phrase: its
+    EDGAR name then (`name_on`), and each of the line's own names that has other words (`names.plain_words`). SEC's
+    name list shortens a name the filing writes out (FB-026: the 8-K12G3 of Noble Corp / Switzerland, 2009-03-27,
+    names "Noble Corporation", which the phrase "NOBLE CORP" does not find and the line's observed name does)."""
+    names = [n for n in line_names if n]
+    out = [name_on(sub, day, names[0] if names else "")]
+    for n in names:
+        if all(plain_words(n) != plain_words(seen) for seen in out):
+            out.append(n)
+    return [n for n in out if n]
+
+
 def other_registrant(search: Callable | None, edgar, *, name: str, day: date, cik: int,
                      own_tickers: Collection[str]) -> int | None:
     """Another CIK whose 8-K12B/8-K12G3 names `name` in the successor search's window around `day`
@@ -749,8 +762,9 @@ class _Reads:
             text_of=lambda f: self.issuers.text(cik, f), as_of=as_of,
             form25_of=lambda f: self._form25(cik, f), line_name=s.name,
             listed_now=lambda: lists_on_major_exchange(self.issuers.profile(cik), sorted(tickers | {step.symbol})),
-            other_registrant=lambda: self._other_registrant(cik, name_on(self.issuers.profile(cik), first, s.name),
-                                                            first, tickers))
+            other_registrant=lambda: self._other_registrant(
+                cik, registrant_names(self.issuers.profile(cik), first, [s.name, *_observed_names(s)]), first,
+                tickers))
 
     def _form25(self, cik: int, f: EdgarSubmission) -> Form25 | None:
         """A Form 25 of the issuer parsed from its complete text; None when it cannot be read (a failed read is
@@ -763,11 +777,25 @@ class _Reads:
             return None
         return parse_form25(raw, accession=f.accession, form=f.form, filing_date=f.filing_date) if raw else None
 
-    def _other_registrant(self, cik: int, name: str, day: date, tickers: set[str]) -> int | None:
-        other = other_registrant(self._search, self._edgar, name=name, day=day, cik=cik, own_tickers=tickers)
-        if other == READ_FAILED:
+    def _other_registrant(self, cik: int, names: Sequence[str], day: date, tickers: set[str]) -> int | None:
+        """`other_registrant` under each of `names` in turn (`registrant_names`): the first registrant found;
+        `READ_FAILED` when none was found and a search failed."""
+        failed = False
+        for name in names:
+            other = other_registrant(self._search, self._edgar, name=name, day=day, cik=cik, own_tickers=tickers)
+            if other == READ_FAILED:
+                failed = True
+            elif other is not None:
+                return other
+        if failed:
             self._search_failed.add(cik)
-        return other
+            return READ_FAILED
+        return None
+
+
+def _observed_names(s: Security) -> list[str]:
+    """The names the caller observed the security under, in the order seen."""
+    return list(dict.fromkeys(o.name for e in s.eras for o in e.observations if o.name))
 
 
 def step_refusal(clients: Any, step: LineStep, *, cik: int, name: str, share_class: str, tickers: Collection[str],

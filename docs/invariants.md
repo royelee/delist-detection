@@ -445,6 +445,13 @@
   same CUSIP under a ticker EDGAR lists for the issuer (ONIT). Such a late step needs no filing near its first row,
   a bankruptcy or an ended listing anywhere in the gap refuses it, and one that is not confirmed is dropped with no
   review item.
+  The search for another registrant's 8-K12B/8-K12G3 is of a phrase, and SEC's name list shortens a name the
+  filing writes out. So it is asked under the issuer's EDGAR name on the step's day and then under each of the
+  line's own names that has other words (`line_follow.registrant_names`, FB-026: on a seed list Noble's Cayman
+  line, seen in 2008 only, kept the Swiss company's CUSIP of 2009 as its own, because "NOBLE CORP" does not find
+  the 8-K12G3 that names "Noble Corporation"; under the observed name it is found, the step is refused, and the
+  line ends on 2009-03-26 as on every sighting). The first name that finds a registrant answers; a search that
+  failed under one name is no answer unless another name finds one.
   A step stage 4b refuses because another registrant took over (`merged_out`, `other_registrant`), or whose new rows do
   not name the issuer's name after the step (`name`) but name the old line's, is a line of the run when it follows an
   era of the same ticker and its CUSIP is not the ticker's next era's: the identity stage keeps those fails rows as an

@@ -958,7 +958,10 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   Liberty Ventures group's, so QRTEA's rename on the same CUSIP is followed; an unread Form 25 counts), a description that names no name in force (a holding word does not
   count, `names.description_names`: ExxonMobil Holdings, XOM 2026, keeps the name), a class conflict, a
   registrant that merged out or that another CIK's 8-K12B/12G3 replaces (`other_registrant`, the CIK of
-  `successor_filer`, which also gives the day it filed: stage 5's successor registrants), no filing stating
+  `successor_filer`, which also gives the day it filed: stage 5's successor registrants; the stage asks it under
+  the issuer's EDGAR name of the day and then under each of the line's own names of other words,
+  `registrant_names`, FB-026: the search is of a phrase, SEC's name list has NOBLE CORP, and the Swiss company's
+  8-K12G3 of 2009-03-27 names "Noble Corporation", the name the line was observed under), no filing stating
   the change, or a failed `other_registrant` read (`read_failed`); the registrant carries on by a periodic report in `PERIODIC_FORMS`, which includes the small-business
   forms 10-K405, 10-KSB, 10-KSB40 and 10-QSB, or by a registered investment company's report in
   `INVESTMENT_COMPANY_FORMS` (N-CSR, N-CSRS, N-Q, N-CEN, NPORT-P, NSAR-A, NSAR-B: Altaba 2017), each for a period
