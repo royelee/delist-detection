@@ -158,6 +158,66 @@ def test_a_member_company_with_its_own_form25_replaces_the_efts_fallback(monkeyp
     assert (res.cik, res.source) == (765880, "name_search")
 
 
+# FB-026 (Triad Hospitals): a stale snapshot names a company delisted before it, and the ticker's later traffic gives
+# the full-text search another company's Form 25 near the date
+TRIAD = (1074771, ("TRIAD HOSPITALS INC", [], [_f("T0", "10-Q", "2007-05-09"), _f("T1", "25-NSE", "2007-07-25"),
+                                              _f("T2", "15-12B", "2007-08-06")]))
+TRI_S = (1304901, ("TRI-S SECURITY CORP", [], [_f("S0", "10-K", "2009-03-31"), _f("S1", "25-NSE", "2009-06-22")]))
+
+
+TRI_VALLEY = (22551, ("TRI VALLEY CORP", [], [_f("V0", "10-K", "2012-03-30"), _f("V1", "25-NSE", "2012-06-15")]))
+
+
+def _triad(monkeypatch, triad=TRIAD, cache=None, weak=TRI_S, index=None):
+    _real_efts(monkeypatch, [_hit((str(weak[0]), f"{weak[1][0]}  (CIK {weak[0]:010d})"))])
+    e = _Edgar(dict([triad, weak]), {"TRIAD": 1074771})
+    return TickerResolver(e, observed_names=lambda t, d=None: "TRIAD HOSPITALS INC", cache_path=cache,
+                          name_index=index)
+
+
+def test_a_delisted_company_of_exactly_the_member_name_replaces_the_efts_fallback(monkeypatch):
+    """TRI (FB-026): the seeds of 2008 name TRIAD HOSPITALS INC, bought and delisted in July 2007. Asked at
+    2009-07-02, the full-text search finds TRI-S Security's Form 25 of that month, a weak answer, and the name tier
+    finds Triad, whose own Form 25 lies two years before, outside the 90 days a replacement needed. A company EDGAR
+    names with exactly the observed name's words, delisted in the 1,500 days before the date and filing no periodic
+    report after it, is the company the stale name means."""
+    res = _triad(monkeypatch).resolve("TRI", "2009-07-02")
+    assert (res.cik, res.source) == (1074771, "name_search")
+
+
+def test_a_delisted_company_that_went_on_reporting_does_not_replace_the_efts_fallback(monkeypatch):
+    """A Form 25 alone is no death: a company that left the exchange and still files its 10-Ks is a live issuer of
+    the name, as Babcock & Wilcox is for BWC, and the company the full-text search found stands."""
+    alive = (1074771, ("TRIAD HOSPITALS INC", [], [*TRIAD[1][2], _f("T3", "10-K", "2010-03-01")]))
+    res = _triad(monkeypatch, alive).resolve("TRI", "2009-07-02")
+    assert (res.cik, res.source) == (1304901, "efts_name_mismatch")
+
+
+def test_a_company_delisted_long_before_does_not_replace_the_efts_fallback(monkeypatch):
+    """Asked at 2012-06-28, where the full-text search finds Tri-Valley's Form 25, Triad's own is five years old,
+    outside the 1,500 days: the weak answer stands."""
+    res = _triad(monkeypatch, weak=TRI_VALLEY).resolve("TRI", "2012-06-28")
+    assert (res.cik, res.source) == (22551, "efts_name_mismatch")
+
+
+def test_a_remembered_weak_answer_the_name_tier_can_now_replace_is_resolved_again(monkeypatch, tmp_path):
+    """The rule would not take effect on a warm cache: `TRI|2009-07-02|TRIAD HOSPITALS INC` -> TRI-S Security is kept
+    from before it. A remembered weak full-text answer falls when the name tier now has a company that may replace
+    it, and the new answer is kept in its place. Without SEC's name list a remembered answer stands, as every
+    remembered answer does: the recheck asks the name tier, and a live company search is not sent for it."""
+    import json
+    from delist_detection.sources.cik_lookup import CikNameIndex
+    index = CikNameIndex.from_text("TRIAD HOSPITALS INC:0001074771:\nTRI-S SECURITY CORP:0001304901:")
+    cache = tmp_path / "res.json"
+    cache.write_text(json.dumps({"__version__": 4, "entries": {"TRI|2009-07-02|TRIAD HOSPITALS INC": {
+        "ticker": "TRI", "cik": 1304901, "name": "TRI-S SECURITY CORP  (CIK 0001304901)",
+        "source": "efts_name_mismatch", "member_name": "TRIAD HOSPITALS INC"}}}))
+    assert _triad(monkeypatch, cache=cache).resolve("TRI", "2009-07-02").cik == 1304901       # no name list
+    res = _triad(monkeypatch, cache=cache, index=index).resolve("TRI", "2009-07-02")
+    assert (res.cik, res.source) == (1074771, "name_search")
+    assert json.loads(cache.read_text())["entries"]["TRI|2009-07-02|TRIAD HOSPITALS INC"]["cik"] == 1074771
+
+
 def test_a_member_name_without_a_three_letter_word_is_an_expected_name_that_agrees_with_its_own_letters():
     """FB-004 part c: AT&T INC. has no `name_tokens` word, but `names_agree` reads it by its letters (FB-006), so the
     name tier and the checks use it (2U INC, TWOU); the ticker map still answers first and agrees."""

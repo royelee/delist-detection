@@ -453,3 +453,55 @@ def test_a_single_word_name_has_no_stem():
     idx = _index("ACMEWIDGETS INC:0000000001:", *(f"{n[0]}:{c:010d}:" for c, n in others.items()))
     r = TickerResolver(_Edgar({**others, **dict([ok])}), name_index=idx)
     assert r._index_candidates(idx, "ACMEWIDGS", "2012-06-29") == {}
+
+
+def _bunge_resolver(cache=None):
+    ltd = (1144519, ("BUNGE LTD", [], [_f("L0", "10-K", "2008-03-03"), _f("L1", "10-Q", "2008-11-10"),
+                                       _f("L2", "10-K", "2023-02-24"), _f("L3", "25-NSE", "2023-11-01")]))
+    fin = (1230396, ("BUNGE LIMITED FINANCE CORP", [], [_f("F1", "424B2", "2009-01-05"), _f("F2", "8-K", "2009-02-10"),
+                                                        _f("F3", "8-K", "2023-10-20")]))
+    e = _Edgar(dict([ltd, fin]))
+    idx = _index("BUNGE LIMITED FINANCE CORP:0001230396:", "BUNGE LTD:0001144519:")
+    return TickerResolver(e, observed_names=lambda t, d=None: "BUNGE LIMITED", cache_path=cache, name_index=idx)
+
+
+def _bunge(date_):
+    return _bunge_resolver().resolve("BG", date_)
+
+
+@pytest.mark.parametrize("day", ["2009-02-19", "2023-11-01"])
+def test_a_company_named_with_the_words_of_the_observed_name_ranks_before_one_with_more_words(day):
+    """Bunge (BG, FB-026): the seed's "BUNGE LIMITED" shares its one word with BUNGE LTD (1144519), the listed
+    company, and with BUNGE LIMITED FINANCE CORP (1230396), a finance subsidiary whose index entry the observed name
+    is a prefix of. The subsidiary won the tie, by its filing dates in 2009 and by the order found in 2023."""
+    res = _bunge(day)
+    assert (res.cik, res.source) == (1144519, "name_search")
+
+
+def _kept(tmp_path, entries):
+    cache = tmp_path / "res.json"
+    cache.write_text(json.dumps({"__version__": 4, "entries": {
+        key: {"ticker": key.split("|")[0], "cik": cik, "name": name, "source": "name_search",
+              "member_name": key.split("|")[2]} for key, (cik, name) in entries.items()}}))
+    return cache
+
+
+def test_a_remembered_answer_the_ranking_now_puts_behind_a_company_of_exactly_the_name_is_resolved_again(tmp_path):
+    """Bunge (FB-026): the rule above was not in effect, because the resolver served the answer it had kept before the
+    rule, `BG|2009-02-19|BUNGE LIMITED` -> 1230396, the finance subsidiary. A remembered name-search answer whose
+    company EDGAR does not name with exactly the observed name's words falls when the tier now ranks first a company
+    it does name so. The new answer is kept in its place, and no version of the file changes."""
+    cache = _kept(tmp_path, {"BG|2009-02-19|BUNGE LIMITED": (1230396, "BUNGE LIMITED FINANCE CORP")})
+    got = _bunge_resolver(cache).resolve("BG", "2009-02-19")
+    assert (got.cik, got.source) == (1144519, "name_search")
+    saved = json.loads(cache.read_text())
+    assert saved["__version__"] == 4 and saved["entries"]["BG|2009-02-19|BUNGE LIMITED"]["cik"] == 1144519
+
+
+def test_a_remembered_answer_of_other_words_stands_when_no_company_has_exactly_the_name(tmp_path):
+    """The recheck is not a second resolve: with no company named exactly as observed, the remembered answer stands
+    and nothing is searched (103 of the consumer's 1,404 kept name-search answers are of this kind)."""
+    cache = _kept(tmp_path, {"BG|2009-02-19|BUNGE GLOBAL": (1230396, "BUNGE LIMITED FINANCE CORP")})
+    r = _bunge_resolver(cache)
+    got = r.resolve("BG", "2009-02-19", name="BUNGE GLOBAL")           # neither company is BUNGE GLOBAL and no more
+    assert got.cik == 1230396 and r.edgar.searches == []

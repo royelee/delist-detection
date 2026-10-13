@@ -12,6 +12,7 @@ import logging
 import re
 import threading
 import time
+from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, timedelta
@@ -61,6 +62,9 @@ FETCHED_KEY = "__fetched__"
 # Marks a payload served from cache because the refetch failed. Added to the
 # returned dict only, never written to disk.
 STALE_KEY = "__stale__"
+# On a cached older page of a filing list: which copy of the main file it was fetched under (`_list_id`,
+# `EdgarClient._whole_list`)
+LIST_KEY = "__list__"
 SUBMISSIONS_FRESH_DAYS = 45  # filings this long after the last trade must be in the submissions read
 COMPANY_SEARCH_FRESH_DAYS = 7  # a company-search answer this old is refetched, never trusted forever
 # The forms of the recent filings an --as-of run's submissions copy left out, dated after the run date
@@ -116,8 +120,11 @@ def _filed_by(hits: list[dict], day: date) -> list[dict]:
 def _as_filed_by(sub: Any, day: date) -> Any:
     """A submissions JSON as it stood on `day`: its recent filings dated after `day` dropped, every column cut alike,
     and the forms left out named under FILED_AFTER_RUN_DATE (a Form 25 among them shows the issuer was still listed
-    on `day`, though the copy's `tickers`/`exchanges` already show the later state: `listing_status`). The cached
-    copy keeps every filing for a later run date. Any other payload is returned as it is."""
+    on `day`, though the copy's `tickers`/`exchanges` already show the later state: `listing_status`). The names
+    are left as the copy has them: EDGAR lists a current name among the former ones with its first day and the day
+    of the issuer's latest filing (Accenture plc, from 2009-09-01), so a former name that outlasts `day` is no
+    rename after it, and every reader of the names asks them by date. The cached copy keeps every filing for a
+    later run date. Any other payload is returned as it is."""
     recent = sub.get("filings", {}).get("recent") if isinstance(sub, dict) else None
     dates = recent.get("filingDate") if isinstance(recent, dict) else None
     last = day.isoformat()
@@ -136,6 +143,17 @@ def submissions_fresh_after(on: date, today: date | None = None) -> date:
     `min(on + 45 days, today)`, where `today` is the run date (default: the clock).
     The classifier and the resolver both use it."""
     return min(on + timedelta(days=SUBMISSIONS_FRESH_DAYS), today or date.today())
+
+
+def _stamped_on(data: Any) -> date:
+    """The fetch date a cached JSON payload carries (FETCHED_KEY: the run date of the run that fetched it), else
+    `date.min`: a copy with no fetch date has no known age and is fresh for no caller that asks for one. Its file
+    time is not read. A copied cache carries the day of the copy (FB-028: Exxon Mobil's filing list of May 2026
+    under a file time of 2026-10-02, a week after the run date, so no run read its Form 25 of 2026-07-02)."""
+    try:
+        return date.fromisoformat(data.get(FETCHED_KEY)) if isinstance(data, dict) else date.min
+    except (TypeError, ValueError):
+        return date.min
 
 
 def _fetched_on(cp: Path, data: Any) -> date:
@@ -279,6 +297,40 @@ def _submissions_of(block: dict) -> list[EdgarSubmission]:
     return [EdgarSubmission(accession[i], form[i], filed[i], reported[i], items[i], primary[i]) for i in range(n)]
 
 
+def _listed_pages(main: dict) -> list[dict]:
+    """The older pages a main submissions file lists, the newest first, as EDGAR gives them: each entry its file
+    name, row count, first and last date."""
+    files = (main.get("filings") or {}).get("files") if isinstance(main, dict) else None
+    return [f for f in files or [] if isinstance(f, dict) and f.get("name")]
+
+
+def _rows(page: dict) -> int:
+    return len(page.get("accessionNumber") or [])
+
+
+def _list_id(main: dict) -> str:
+    """What tells one copy of a filing list's main file from another: its recent block's accession numbers and the
+    pages it lists. Two copies with the same id are one list: no filing arrived between them, so no row moved."""
+    filings = main.get("filings") or {}
+    held = [(filings.get("recent") or {}).get("accessionNumber") or [], filings.get("files") or []]
+    return hashlib.sha1(json.dumps(held, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+
+
+def _one_list(main: dict, listed: list[dict], pages: list[dict]) -> bool:
+    """Whether the cached `pages` are the pages of this copy of the main file (`EdgarClient._whole_list`): each
+    fetched under it (`LIST_KEY`). Pages cached before that was kept say nothing of the main file they belong to: a
+    list of them is whole only when it has one page, with the row count the main file lists (rows that left the
+    main file after the page was cached would show there; with a second page, rows can pass through the first and
+    leave its count as it was)."""
+    want = _list_id(main)
+    if all(p.get(LIST_KEY) == want for p in pages):
+        return True
+    if len(listed) != 1 or LIST_KEY in pages[0] or pages[0].get("__not_found__"):
+        return False
+    count = listed[0].get("filingCount")
+    return not isinstance(count, int) or _rows(pages[0]) == count
+
+
 # A genuine EDGAR company-search answer, matched or not, is always a complete
 # ATOM feed (see tests/fixtures/company_search/: nomatch.atom is a <feed> with
 # no <cik>, just like onematch.atom and multimatch.atom are <feed>s with one).
@@ -339,6 +391,8 @@ class EdgarClient:
         self.sleep = sleep
         self._today = today
         self.search_cache = search_cache
+        # How many times this client fetched each JSON URL itself (`_whole_list` reads it)
+        self._fetched: Counter[str] = Counter()
         self._locks: dict[str, threading.Lock] = {}
         self._locks_guard = threading.Lock()
         # Answers not written to disk (undated full-text searches, rejected
@@ -420,7 +474,7 @@ class EdgarClient:
                 except json.JSONDecodeError:
                     cp.unlink(missing_ok=True)
                 else:
-                    if fresh_after is None or filling_only() or _fetched_on(cp, cached) >= fresh_after:
+                    if fresh_after is None or filling_only() or _stamped_on(cached) >= fresh_after:
                         SEC_STATS.add(f"cache:{endpoint_of(url)}")
                         return cached
             host = "data.sec.gov" if url.startswith(SEC_HOST) else "www.sec.gov"
@@ -447,6 +501,7 @@ class EdgarClient:
                     raise
                 SEC_STATS.degraded("stale_copy")
                 return {**cached, STALE_KEY: True}
+            self._fetched[url] += 1
             today = self.today.isoformat()
             if resp.status_code == 404:
                 data = {"__not_found__": True, "url": url, FETCHED_KEY: today}
@@ -555,7 +610,21 @@ class EdgarClient:
         date are seen."""
         cik_str = str(int(cik)).zfill(10)
         url = f"{SEC_HOST}/submissions/CIK{cik_str}.json"
-        return _as_filed_by(self._get_json(url, fresh_after=fresh_after), self.today)
+        before = self._fetched[url]
+        raw = self._get_json(url, fresh_after=fresh_after)
+        if self._fetched[url] != before and self._holds_a_page(raw):
+            # a main file fetched again beside the pages of an older copy is a torn list in the cache until the next
+            # read of the filings mends it, and a run that never reads them leaves it so (McEwen, FB-028's runs: 23
+            # filings of 2012 in neither copy): the pages the cache holds are fetched with it
+            raw, _ = self._whole_list(url, raw)
+        return _as_filed_by(raw, self.today)
+
+    def _holds_a_page(self, main: Any) -> bool:
+        """Whether the cache holds an older page of this main file's list."""
+        if not isinstance(main, dict) or main.get("__not_found__") or main.get(STALE_KEY):
+            return False
+        return any(self._cache_path(f"{SEC_HOST}/submissions/{entry['name']}").exists()
+                   for entry in _listed_pages(main))
 
     def fetch_filing_text(self, cik: int | str, accession: str, primary_doc: str) -> str:
         """Fetch a filing's primary document, return stripped plain text.
@@ -756,15 +825,73 @@ class EdgarClient:
             return []
 
     def recent_filings(self, cik: int | str) -> list[EdgarSubmission]:
-        sub = self.submissions(cik)
-        if not isinstance(sub, dict) or sub.get("__not_found__"):
+        """Every filing of the issuer as it stood on the run date: the main file's recent block (`submissions`), then
+        each older page, each filing once. The copies read are one filing list (`_whole_list`)."""
+        url = f"{SEC_HOST}/submissions/CIK{str(int(cik)).zfill(10)}.json"
+        raw = self._get_json(url)
+        if not isinstance(raw, dict) or raw.get("__not_found__"):
             return []
-        out = _submissions_of(sub.get("filings", {}).get("recent", {}))
-        # also pull historical files (paginated chunks of older filings)
-        for fchunk in sub.get("filings", {}).get("files", []):
-            url = f"{SEC_HOST}/submissions/{fchunk['name']}"
-            data = self._get_json(url)
-            if not isinstance(data, dict) or data.get("__not_found__"):
-                continue
-            out += _submissions_of(data)
-        return out
+        raw, pages = self._whole_list(url, raw)
+        out = _submissions_of(_as_filed_by(raw, self.today).get("filings", {}).get("recent", {}))
+        for page in pages:
+            out += _submissions_of(page)
+        # copies fetched one after the other can hold a filing twice (it moved between the two fetches): each once
+        seen: set[str] = set()
+        return [f for f in out if not (f.accession in seen or seen.add(f.accession))]
+
+    def _whole_list(self, url: str, main: dict) -> tuple[dict, list[dict]]:
+        """The main file `main` (the copy cached at `url`) and its older pages as copies of one filing list:
+        `(main, pages)`.
+
+        EDGAR keeps an issuer's latest 1,000 filings in the main file and moves the oldest on into page 001 as the
+        issuer files; a full page hands its own oldest on to the next, and a new page is added at the end. So a
+        filing is lost from the cache whenever a copy is newer than the copy of the block after it: a main file
+        fetched again beside an old page (new Cigna's 8-K12B of 2018-12-20: FB-025), page 001 fetched again beside
+        an old page 002, or pages fetched beside a main file that lists fewer pages than EDGAR now has.
+
+        The cached copies are read as they are when each page was fetched under this copy of the main file
+        (`LIST_KEY`, `_list_id`), or, for pages cached before that was kept, when the list has one page with the row
+        count its main file lists. Any other list is fetched again from the top: the main file, unless this client
+        fetched it itself, then every page in order. Rows only move toward older pages, so copies fetched in that
+        order can hold a filing twice and never lose one. An oldest page that then holds fewer rows than listed has
+        handed rows to a page the main file does not list yet, and the list is fetched once more. A fetch that
+        fails serves the cached copy as a stale read (`_get_json`), which flags what rested on it, and the next
+        read asks again. A prefetch thread reads the cached copies as they are and fetches what is absent."""
+        listed = _listed_pages(main)
+        mine = _list_id(main) if self._fetched[url] else None
+        # a page the cache lacks beside a main file another run fetched: the list is fetched from the top below, so
+        # the page is not fetched here first
+        absent = mine is None and not filling_only() and any(
+            not self._cache_path(f"{SEC_HOST}/submissions/{entry['name']}").exists() for entry in listed)
+        pages = None if absent else [self._page(entry, mine) for entry in listed]
+        if pages is not None and (filling_only() or _one_list(main, listed, pages)):
+            return main, pages
+        for again in (False, True):
+            if again or not self._fetched[url]:
+                fresh = self._get_json(url, fresh_after=date.max)       # no copy is that fresh: fetched, else stale
+                if not isinstance(fresh, dict) or fresh.get("__not_found__") or fresh.get(STALE_KEY):
+                    break
+                main, listed = fresh, _listed_pages(fresh)
+            pages = [self._page(entry, _list_id(main), again=True) for entry in listed]
+            count = listed[-1].get("filingCount") if listed else None
+            if not (isinstance(count, int) and _rows(pages[-1]) < count):
+                break
+        if pages is None:
+            pages = [self._page(entry, None) for entry in listed]
+        return main, pages
+
+    def _page(self, listed: dict, list_id: str | None, *, again: bool = False) -> dict:
+        """The copy of one older page (`listed`: its entry in the main file), fetched when the cache has none or
+        `again`; {} when it is no JSON object. A copy this call fetched under a known copy of the main file
+        (`list_id`) is kept as that copy's page (`LIST_KEY`)."""
+        url = f"{SEC_HOST}/submissions/{listed['name']}"
+        before = self._fetched[url]
+        data = self._get_json(url, fresh_after=date.max if again else None)
+        if not isinstance(data, dict):
+            return {}
+        if list_id is not None and self._fetched[url] != before and not data.get(STALE_KEY):
+            data = {**data, LIST_KEY: list_id}
+            cp = self._cache_path(url)
+            with self._lock_for(str(cp)):
+                write_atomic(cp, json.dumps(data))
+        return data

@@ -72,7 +72,7 @@ class TickerResolution:
     # | 'name_search' | 'efts_frequency' | 'efts_frequency_name_mismatch'
     # | 'rejected_validation' | 'none'; the era-level passes (`identity.EraIssuers`), whose answers the
     # identity stage records the same way: 'name_in_force' | 'ticker_rows' | 'later_ticker' | 'efts_frequency_renamed'
-    # | 'shared_cusip' | 'cusip_handoff'
+    # | 'shared_cusip' | 'cusip_handoff' | 'cusip_issuer' | 'successor_registrant'
     source: str
 
     @property
@@ -256,8 +256,48 @@ class TickerResolver:
                 return True
         return False
 
+    PERIODIC_REPORTS = frozenset({"10-K", "10-Q", "20-F", "40-F"})      # a company filing these is carrying on
+
+    def _accepts(self, cik: int, observed_date: str | None, observed_name: str | None) -> bool:
+        """The name tier's check of a candidate when no full-text answer stands against it: the observed-name
+        acceptance when the caller supplied a usable observed name, else the loose check (a real Form 25 in the
+        window)."""
+        if observed_name and has_name(observed_name):
+            return self._accept_observed_name_candidate(cik, observed_date, observed_name)
+        return not observed_date or self._validate_cik(cik, observed_date, strict=False)
+
+    def _may_replace(self, cik: int, observed_date: str | None, expected: str | None) -> bool:
+        """Whether the name tier's candidate may replace a weak full-text answer (a Form 25 near the date under
+        another name): its own Form 25/15 lies within `REPLACE_WINDOW_DAYS` of the date (PEAK, WE), or it is a
+        delisted company of exactly the expected name (`_delisted_under_the_name`: TRI)."""
+        if not observed_date:
+            return False
+        return self._validate_cik(cik, observed_date, strict=False, window=self.REPLACE_WINDOW_DAYS) \
+            or self._delisted_under_the_name(cik, observed_date, expected)
+
+    def _delisted_under_the_name(self, cik: int, observed_date: str, expected: str | None) -> bool:
+        """A stale snapshot's company (FB-026, Triad Hospitals: named by seeds of 2008, delisted in July 2007): EDGAR
+        names it with exactly the expected name's words (`_same_words`), it filed a Form 25 or 15 in the
+        `OBSERVED_TAIL_DAYS` before the date (to 45 days after: the frozen-tail window of
+        `_accept_observed_name_candidate`), and it filed no periodic report after the date. One that left its
+        exchange and went on reporting is a live issuer of the name, which replaces nothing (BWC)."""
+        on = parse_day(observed_date)
+        if on is None or not expected or not self._same_words(cik, expected, observed_date):
+            return False
+        left = later = False
+        for f in self.issuers.filings(cik, about=observed_date):
+            d = parse_day(f.filing_date)
+            if d is None:
+                continue
+            if f.form in {"25", "25-NSE", "15-12G", "15-12B", "15-15D"} and \
+                    on - timedelta(days=self.OBSERVED_TAIL_DAYS) <= d <= on + timedelta(days=45):
+                left = True
+            if f.form.split("/")[0] in self.PERIODIC_REPORTS and d > on:
+                later = True
+        return left and not later
+
     def _still_named(self, memo: TickerResolution, ticker: str, observed_date: str | None,
-                     observed_name: str | None) -> bool:
+                     observed_name: str | None, exclude: Collection[int] = (), since: str | None = None) -> bool:
         """Whether a remembered answer still stands. A name-tier answer (`name_search`) stands only while it agrees
         with the tier's first rule, which the index makes deterministic: the one active holder of exactly the
         expected name (`_exact_holder`) is the company. An answer the retired live company search remembered against
@@ -265,16 +305,46 @@ class TickerResolver:
         Group LLC, CIK 1355001, whose name agrees once HOLDINGS and GROUP are left out; the one active holder of
         REALOGY HOLDINGS CORP is CIK 1398987, today's Anywhere Real Estate Inc., which lists the security). Without
         an index, with no exact holder or several, or when the holder could not be read, the remembered answer
-        stands; so does every other tier's."""
+        stands; so does every other tier's.
+
+        A weak full-text answer (`efts_name_mismatch`) stands until the name tier has a company that may replace
+        it (`_may_replace`, FB-026: `TRI|2009-07-02|TRIAD HOSPITALS INC`, kept as TRI-S Security before a delisted
+        company of exactly the name could replace it). An answer the full-text search gave by the ticker in a
+        filer's name is resolved to itself again.
+
+        And a name-tier answer while it agrees with the tier's ranking rule (FB-026): an answer whose company EDGAR does not name with
+        exactly the expected name's words (`_same_words`) is resolved again when the tier's answer today is a company
+        it does name so (BUNGE LIMITED, kept as Bunge Limited Finance Corp before the rule that ranks BUNGE LTD
+        first). Any other remembered answer is one the ranking cannot change, so the tier is asked for few of them,
+        nothing is searched, and an answer the tier would give again is not resolved again."""
         index = self._index()
-        if memo.source != "name_search" or index is None:
+        if memo.source not in ("name_search", "efts_name_mismatch") or index is None:
             return True
         expected = self.expected_name(ticker, observed_date, observed_name)
         if not expected:
             return True
         self._reset()
+        if memo.source == "efts_name_mismatch":
+            # FB-026: a weak full-text answer stands until the name tier has a company that may replace it. One the
+            # search gave by the ticker in the filer's name ("BGC Partners, Inc. (BGC)") was no weak answer: the
+            # name tier is not asked for it, now as then
+            if re.search(rf"\(\s*{re.escape(ticker.upper())}\s*\)", (memo.name or "").upper()):
+                return True
+            hit = next((c for c, _ in self._name_search(observed_date, expected, exclude)
+                        if c != memo.cik and self.issuers.existed_by(c, since)
+                        and self._may_replace(c, observed_date, expected)), None)
+            return hit is None or self._rested_on_failure()
         holder = self._exact_holder(index, expected, observed_date)
-        return holder is None or holder == memo.cik or self._rested_on_failure()
+        if holder is not None:
+            return holder == memo.cik or self._rested_on_failure()
+        if memo.cik is None or self._same_words(memo.cik, expected, observed_date):
+            return True
+        # the tier's answer today, as `resolve` takes it: the first candidate in rank that existed by the era's
+        # first sighting and passes the tier's check
+        now = next((c for c, _ in self._name_search(observed_date, expected, exclude)
+                    if self.issuers.existed_by(c, since) and self._accepts(c, observed_date, observed_name)), None)
+        return now is None or now == memo.cik or not self._same_words(now, expected, observed_date) \
+            or self._rested_on_failure()
 
     def _exact_holder(self, index: CikNameIndex, nm: str, observed_date: str | None) -> int | None:
         """The one CIK whose name is exactly `nm` (as the index compares names) and that filed within
@@ -743,7 +813,11 @@ class TickerResolver:
         found = {c: v for c, v in found.items() if c not in exclude}
         order = list(found)
         fit = {c: self._edgar_name_fit(c, nm, observed_date) for c in order}
-        ranked = sorted(order, key=lambda c: (-fit[c][0], found[c][1], order.index(c)))
+        # Among candidates that share as many words, one that EDGAR names with the observed name's words and no
+        # others comes first: "BUNGE LIMITED" is BUNGE LTD, not BUNGE LIMITED FINANCE CORP, which shares the one
+        # word too, files more often and was found first (FB-026)
+        same = {c: self._same_words(c, nm, observed_date) for c in order}
+        ranked = sorted(order, key=lambda c: (-fit[c][0], not same[c], found[c][1], order.index(c)))
         # The best candidate is checked as it always was; one below it only when
         # EDGAR records a name for it that agrees with `nm`: Keurig Green Mountain
         # shares KEURIG with KEURIG DR PEPPER INC, and its 2016 Form 25 alone
@@ -761,6 +835,12 @@ class TickerResolver:
         for n in names:
             candidate_tokens |= name_tokens(n)
         return len(candidate_tokens & name_tokens(expected)), any(names_agree(n, expected) for n in names)
+
+    def _same_words(self, cik: int, expected: str, observed_date: str | None = None) -> bool:
+        """Whether one of the CIK's EDGAR names (current and former) has the expected name's `names.name_tokens`
+        words and no others; False for a name with no such word."""
+        want = name_tokens(expected)
+        return bool(want) and any(name_tokens(n) == want for n in self.issuers.names(cik, about=observed_date))
 
     def _name_match_score(self, cik: int, ticker_name: str, observed_date: str | None = None) -> int:
         """Token-overlap score between the expected name and the CIK's EDGAR names
@@ -929,7 +1009,7 @@ class TickerResolver:
         memo = self._memo.get(cache_key)
         if memo is not None and self._memo_observed.get(cache_key) == observed_name and \
                 (memo.cik is None or memo.source in _GIVEN_SOURCES or self.issuers.existed_by(memo.cik, since)) and \
-                self._still_named(memo, t, observed_date, observed_name):
+                self._still_named(memo, t, observed_date, observed_name, exclude, since):
             # A rename built on this answer inherits whether it rests on a failed request.
             self._reset(cache_key in self._degraded)
             return memo
@@ -994,10 +1074,10 @@ class TickerResolver:
             if fallback is not None:
                 # The observed name is a check, never a substitute: it replaces
                 # the company EFTS found only with its own Form 25/15 near the
-                # date (PEAK -> Healthpeak, WE -> WeWork), not with a live
+                # date (PEAK -> Healthpeak, WE -> WeWork), or as a delisted company
+                # of exactly that name (TRI -> Triad Hospitals), not with a live
                 # issuer of that name (BWC keeps Blue Whale, flagged).
-                hit = next(((c, n) for c, n in ranked if self._validate_cik(
-                    c, observed_date, strict=False, window=self.REPLACE_WINDOW_DAYS)), None)
+                hit = next(((c, n) for c, n in ranked if self._may_replace(c, observed_date, expected)), None)
                 if hit is not None:
                     (cik, name), source = hit, "name_search"
                 else:
@@ -1007,13 +1087,7 @@ class TickerResolver:
                 # Loose validation (a real Form 25 in the window), or the
                 # observed-name acceptance when the caller supplied a usable
                 # observed name.
-                if observed_name and has_name(observed_name):
-                    def ok(c: int) -> bool:
-                        return self._accept_observed_name_candidate(c, observed_date, observed_name)
-                else:
-                    def ok(c: int) -> bool:
-                        return not observed_date or self._validate_cik(c, observed_date, strict=False)
-                hit = next(((c, n) for c, n in ranked if ok(c)), None)
+                hit = next(((c, n) for c, n in ranked if self._accepts(c, observed_date, observed_name)), None)
                 if hit is None:
                     hit = self._agreeing_issuer(expected, observed_date, since)
                     if hit is not None and hit[0] in exclude:

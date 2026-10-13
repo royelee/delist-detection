@@ -199,7 +199,8 @@ def test_the_predecessors_own_form_25_raises_no_unmatched_row_for_the_added_succ
                        filing=FilingRef("25-NSE", "0000876661-26-000999", "2026-09-18"))
     finder = SimpleNamespace(find=lambda ctx, fallback: ([], [item, other]))
     monkeypatch.setattr(pipeline, "listed_today", lambda *a, **k: False)
-    ctx = SimpleNamespace(clients=SimpleNamespace(figi=None, edgar=None), as_of=date(2026, 9, 25),
+    issuers = SimpleNamespace(profile=lambda cik, about=None: None)      # the stage reads the issuer as of the run date
+    ctx = SimpleNamespace(clients=SimpleNamespace(figi=None, edgar=None, issuers=issuers), as_of=date(2026, 9, 25),
                           meter=StageMeter(lambda *a: None), log=lambda m: None)
     owner = SimpleNamespace(form25_sub=SimpleNamespace(accession="0000876661-26-000770"))
     out = pipeline._successor_endings(ctx, finder, {added.security.sec_id: added}, {}, {}, FtdIndex([]), [owner])

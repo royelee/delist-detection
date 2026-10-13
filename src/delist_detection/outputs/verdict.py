@@ -94,7 +94,10 @@ settle a doubt the rules above would otherwise raise; none changes a table row, 
   or another contingent part beside what was valued (`value_incomplete:contingent_right`, FB-024: the row keeps its
   terms and its `dlret`, the value of the valued part) or a merger valued more than 1% under its last close whose
   filings name a closing dividend and state no amount (`value_incomplete:closing_dividend`, FB-023's follow-up: Two
-  Harbors 2026), or, as a security reason, when an observed security has a
+  Harbors 2026), or a merger left standing against a handoff found by timing whose successor has no issuer, so no
+  filing of the successor's could be looked for (`handoff_unchecked:<successor>`, FB-027: Exxon Mobil 2026, Aaron's
+  2020; where the successor's issuer is known and no successor registration was found, the row keeps its verdict),
+  or, as a security reason, when an observed security has a
   FIGI and no issuer CIK
   (`issuer_unresolved`, FB-006: its seeds and endings are uncertain, so a blank `issuer_id` never rides on a
   confirmed seed; an acquirer the run adds is no claim and is left alone), or when an observed security's open
@@ -118,7 +121,7 @@ from dataclasses import dataclass
 from datetime import date
 
 from ..vocabulary.exit_kind import (CLOSING_DIVIDEND_UNSTATED, CONFLICT, CONTINGENT_RIGHT_UNVALUED, EXCHANGE_PRINTS,
-                                    GATE_FLAGS, MEASURED, PAYOUT_GATE_FAILED, TERMS_GATE_SKIPPED,
+                                    GATE_FLAGS, HANDOFF_UNCHECKED, MEASURED, PAYOUT_GATE_FAILED, TERMS_GATE_SKIPPED,
                                     ContinuationReading, cites_form25,
                                     effective_of, end_day_of, ending_fields, flag_detail, flag_name, flag_names,
                                     flag_tokens, is_continuation, is_real_ending, last_endings, linked_by_timing,
@@ -376,6 +379,8 @@ def _own_reasons(row: Mapping[str, str], issuer_cik: str = "", reading: Continua
         reasons.append("value_incomplete:contingent_right")
     if CLOSING_DIVIDEND_UNSTATED in flags and not is_continuation(row):     # FB-023's follow-up
         reasons.append("value_incomplete:closing_dividend")
+    if not is_continuation(row):                                            # FB-027
+        reasons += sorted(t for t in flag_tokens(row) if flag_name(t) == HANDOFF_UNCHECKED)
     if is_continuation(row):
         if linked_by_timing(row["reason"]) and not confirmed:
             reasons.append("continuation_by_timing_only")

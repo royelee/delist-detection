@@ -16,6 +16,30 @@
   `fetch_filing_text`/`full_text_search`/`sec_http` downloads retries up to 3
   attempts (2s/4s backoff, `edgar.retry_request`, inside `edgar.sec_get`); a 403/429 still raises
   `EdgarBlocked` at once, and a failure is never cached.
+  A filing list is a main file and older pages, and its cached copies are read only as one list: each page
+  fetched under the copy of the main file it is read with. Any other list is fetched again from the top, the main
+  file first and the pages in order (`EdgarClient._whole_list`, FB-025), and a fetch that fails is a stale read,
+  which flags the row that rested on it. A main file fetched again for its profile alone takes the pages the cache
+  holds with it (`EdgarClient.submissions`, `_holds_a_page`), so a run never leaves a filing list with fewer
+  filings in its cached copies than it found (McEwen, FB-028's runs: a fresh main file beside the page of May,
+  23 filings of 2012 in neither).
+  A cached filing list with no fetch date has no known age: it is fresh for no caller that asks for a fresh copy,
+  and its file time is never read, because a copied cache carries the day of the copy (`edgar._stamped_on`, FB-028).
+  The search for an ending reads an issuer's filings with no day of its own, so stage 5 first makes the issuer's
+  list current for the security's last sighting (`issuers.profile(cik, about=last_seen)`). A security the search
+  then leaves open (`pipeline._left_open`: no real ending found on or after its last sighting) has its issuers, a
+  successor registrant in force among them, made current for the run date, and is searched again: the last
+  sighting of a security with no fails row for 45 days says nothing of how old a copy may be. So a run as of D
+  reads no list fetched before D for a security it leaves open. `run_manifest.json` counts the issuers of the
+  securities the run leaves open whose list it read from a copy fetched before the run date, or with no fetch
+  date (`open_issuers_read_before_as_of`, `pipeline._old_open_issuers`): 0 unless a read failed or a stage read
+  an issuer the search did not.
+  A security the run adds (a successor, an acquirer's line) is never searched by stage 5, so stage 9d reads its
+  issuer as of the run date before it looks for its ending (`_successor_endings`).
+  A run as of D leaves out the filings dated after D (`edgar._as_filed_by`) and reads the names as the copy has
+  them: EDGAR lists a current name among the former ones with its first day (Accenture plc, from 2009-09-01), so
+  a former name that outlasts D is no rename after D. A fresh copy can therefore date a name SEC had not dated
+  before (Matson's "Matson, Inc." from 2012-07-03, added on 2026-10-01), and the issuer dates that rest on it move.
   The limiter (`sec_limiter.SEC_LIMITER`) is shared by every thread of the process
   and, through `~/.cache/delist_detection/sec_rate.lock`
   (`$DELIST_DETECTION_SEC_RATE_LOCK`), by every SEC client on the machine
@@ -260,7 +284,10 @@
   another contingent payment beside the package, flagged `contingent_right_unvalued` by stage 8; the row keeps its
   terms and its `dlret`, which is the value of the valued part, and a `--merger-terms` row takes no such doubt).
   Ruling G (upstream feedback) adds `no_history`,
-  `history_after_last_trade`, `exchange_without_successor` and `kind_by_filing_history_only`, and two security
+  `history_after_last_trade`, `exchange_without_successor` and `kind_by_filing_history_only`; FB-027 adds
+  `handoff_unchecked:<successor>` (a merger left standing against a handoff found by timing whose successor has
+  no issuer, so no filing of the successor's could be looked for; with a known issuer and no successor
+  registration found, the row keeps its verdict); and two security
   reasons, `issuer_unresolved` (FB-006: an observed security with a FIGI and no issuer CIK) and
   `open_under_bankruptcy_ticker` (FB-014: an observed security open under a five-letter ticker ending in Q). A seed whose
   only problem is its security is counted, not listed. Pipeline stages 10e
@@ -418,6 +445,13 @@
   same CUSIP under a ticker EDGAR lists for the issuer (ONIT). Such a late step needs no filing near its first row,
   a bankruptcy or an ended listing anywhere in the gap refuses it, and one that is not confirmed is dropped with no
   review item.
+  The search for another registrant's 8-K12B/8-K12G3 is of a phrase, and SEC's name list shortens a name the
+  filing writes out. So it is asked under the issuer's EDGAR name on the step's day and then under each of the
+  line's own names that has other words (`line_follow.registrant_names`, FB-026: on a seed list Noble's Cayman
+  line, seen in 2008 only, kept the Swiss company's CUSIP of 2009 as its own, because "NOBLE CORP" does not find
+  the 8-K12G3 that names "Noble Corporation"; under the observed name it is found, the step is refused, and the
+  line ends on 2009-03-26 as on every sighting). The first name that finds a registrant answers; a search that
+  failed under one name is no answer unless another name finds one.
   A step stage 4b refuses because another registrant took over (`merged_out`, `other_registrant`), or whose new rows do
   not name the issuer's name after the step (`name`) but name the old line's, is a line of the run when it follows an
   era of the same ticker and its CUSIP is not the ticker's next era's: the identity stage keeps those fails rows as an
@@ -568,7 +602,22 @@
   listed Anywhere Real Estate Inc.). Of several active holders that carried the name in the years before the date,
   `_exact_holder` takes the one that carried it within 30 days of it (`_one_filer`'s narrowing: Alberto-Culver, ACV
   2010, is the 2006 spin-off, CIK 1368457, not the old registrant renamed New Alberto-Culver LLC, 3327). With no
-  index, no exact holder or several, the remembered answer stands.
+  index the remembered answer stands. With no exact holder or several it stands while it agrees with the tier's
+  ranking rule (FB-026): an answer whose company EDGAR does not name with exactly the expected name's words is
+  resolved again when the tier's answer today is a company it does name so (`BG|2009-02-19|BUNGE LIMITED`, kept
+  as Bunge Limited Finance Corp, 1230396, becomes Bunge Ltd, 1144519). The tier's answer today is the one
+  `resolve` would take: the first candidate in rank that existed by the era's first sighting and passes the tier's
+  check (`_accepts`), so an answer the tier's last resort gave (DuPont 2017) stands. A remembered weak full-text
+  answer (`efts_name_mismatch` from the search's second pass, a filer named without the ticker) stands until the
+  name tier has a company that may replace it (`_may_replace`: its own Form 25 or 15 within 90 days of the date,
+  or a delisted company of exactly the expected name, `_delisted_under_the_name`; FB-026:
+  `TRI|2009-07-02|TRIAD HOSPITALS INC`, kept as TRI-S Security Corp, becomes Triad Hospitals, 1074771). So a
+  change to either rule takes effect on a warm cache with no new `__version__`. The recheck searches nothing: it
+  reads the name index and the issuers' copies, and an issuer it has not read before is one request, once. On the
+  consumer's seed list it reads the tier's ranking for 107 of the 1,404 kept name-search answers (the others are
+  a company of exactly the name's words) and resolves two again, both Bunge's. The older rule of the exact holder
+  (FB-004) resolves a few answers again at every run, and each gets the answer it had (Aaron's Holdings 2020,
+  Ferguson 2024, NorthStar Asset Management 2017, Pulte Homes 2010).
 
 ## A merger payout is gated; `delistings.csv` carries both the gated and the raw read
 

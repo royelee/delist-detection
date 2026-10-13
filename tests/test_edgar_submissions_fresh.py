@@ -72,14 +72,16 @@ def test_without_fresh_after_a_stale_copy_is_served(tmp_path):
     assert session.calls == []
 
 
-def test_an_unstamped_copy_is_dated_by_its_file_time(tmp_path):
+def test_a_copy_with_no_fetch_date_is_fresh_for_no_caller_whatever_its_file_time(tmp_path):
+    """FB-028: Exxon Mobil's filing list was cached in May 2026, before copies kept a fetch date. The cache was
+    copied on 2026-10-02, which set every file's time to that day, and the copy counted as fetched a week after the
+    run date. Its 8-K of 2026-07-01 and Form 25 of 2026-07-02 were read by no run."""
     client, session, cp = _client(tmp_path, {"name": "Old Co"})
-    _set_mtime(cp, date(2026, 9, 1))
-    assert client.submissions(42, fresh_after=EVENT)["name"] == "Old Co"
-    assert session.calls == []
-    _set_mtime(cp, date(2026, 5, 26))
+    _set_mtime(cp, date(2026, 10, 2))                          # the file's time says nothing of the fetch
+    assert client.submissions(42)["name"] == "Old Co" and session.calls == []       # no day asked: any copy
     assert client.submissions(42, fresh_after=EVENT)["name"] == "Fresh Co"
     assert session.calls == [URL]
+    assert client.submissions(42, fresh_after=EVENT)["name"] == "Fresh Co" and session.calls == [URL]   # stamped now
 
 
 @pytest.mark.parametrize("status", [403, 429])
@@ -214,3 +216,4 @@ def test_a_run_date_hides_the_filings_made_after_it(tmp_path):
     later = EdgarClient(cache_dir=tmp_path, session=_Session(), today=date(2026, 10, 10))
     assert later.submissions(42)["filings"]["recent"]["accessionNumber"] == ["a3", "a2", "a1"]
     assert FILED_AFTER_RUN_DATE not in later.submissions(42)
+

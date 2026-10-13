@@ -11,7 +11,7 @@ from delist_detection.endings.classifier import DelistClassifier
 from delist_detection.outputs.reconstruction import DelistRecord
 from delist_detection.vocabulary.crsp_codes import CrspBucket
 from delist_detection.endings.delistings import Delisting, DelistingFinder
-from delist_detection.sources.edgar import EdgarBlocked, EdgarSubmission
+from delist_detection.sources.edgar import EdgarBlocked, EdgarSubmission, submissions_fresh_after
 from delist_detection.sources.ftd import FtdRow
 from delist_detection.endings.last_trade import LastTrade
 from delist_detection.terms.llm_merger_extractor import ClosingDividend, MergerTerms
@@ -703,6 +703,67 @@ def test_open_ticker_history_row_gets_its_exchange_from_issuer_submissions(fake_
     th = ticker_history(tmp_path)
     live = [r for r in th if r["sec_id"] == "BBG000LIVE01"]
     assert live[0]["valid_to"] == "" and live[0]["exchange"] == "NASDAQ"
+
+
+# --- FB-028: the search for an ending reads the issuer from a copy as fresh as its last sighting asks ---
+
+def test_the_delisting_search_reads_a_security_still_seen_at_the_end_about_its_last_sighting(fake_edgar, tmp_path):
+    """Exxon Mobil 2026: the search read the issuer's filing list at whatever age the cache held, a copy of May 2026,
+    and no run as of 2026-09-25 saw the Form 25 of 2026-07-02. The issuer of a security is read from a copy fetched
+    by its last sighting plus 45 days, or by the run date when that comes first."""
+    index, clients = _clients(fake_edgar)
+    asked: dict[int, list] = {}
+    plain = fake_edgar.submissions
+
+    def _submissions(cik, fresh_after=None):
+        asked.setdefault(int(cik), []).append(fresh_after)
+        return plain(cik, fresh_after) if int(cik) != 777 else {
+            "tickers": ["LIVE"], "exchanges": ["Nasdaq"], "name": "LIVE CO", "formerNames": [], "sic": ""}
+
+    fake_edgar.submissions = _submissions
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+    want = submissions_fresh_after(date(2025, 6, 30), clients.as_of)           # LIVE's last sighting
+    assert want in asked[777]
+
+
+def test_the_delisting_search_reads_a_security_it_leaves_open_as_of_the_run_date(fake_edgar, tmp_path):
+    """FB-028's runs: 18 open securities had no fails row in the 45 days before the run date (White Mountains,
+    Boston Beer, Thomson Reuters), so a copy of their issuer's list fetched two days before it counted as fresh. A
+    security the search finds no ending for, on or after its last sighting, has its issuers read as of the run date
+    and is searched again. One whose ending the search found is not: AET's list is asked for its last sighting
+    only."""
+    index, clients = _clients(fake_edgar)
+    asked: dict[int, list] = {}
+    plain = fake_edgar.submissions
+
+    def _submissions(cik, fresh_after=None):
+        asked.setdefault(int(cik), []).append(fresh_after)
+        return plain(cik, fresh_after) if int(cik) != 777 else {
+            "tickers": ["LIVE"], "exchanges": ["Nasdaq"], "name": "LIVE CO", "formerNames": [], "sic": ""}
+
+    fake_edgar.submissions = _submissions
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+    as_of = clients.as_of or date.today()
+    assert submissions_fresh_after(date(2025, 6, 30), as_of) < as_of       # the case: a sighting older than 45 days
+    assert as_of in asked[777]
+    assert as_of not in asked[1122304]
+
+
+def test_a_security_that_went_on_after_a_row_is_left_open_by_the_search():
+    """Light & Wonder 2025 (FB-028's runs): its Form 25 row of 2025-11-13 is a move off the exchange that the
+    security went on from, as itself, under LNWO. A row whose successor is the security itself ends nothing, so the
+    search leaves the security open and its issuer is read as of the run date."""
+    from types import SimpleNamespace
+
+    def row(sid, day, successor):
+        return SimpleNamespace(sec_id=sid, delist_date=day, record=SimpleNamespace(successor_sec_id=successor))
+
+    left_open = pipeline._left_open
+    assert left_open([], "2026-08-01") and left_open([], None)
+    assert not left_open([row("A", "2018-12-09", None)], "2018-11-28")           # an ending after the last sighting
+    assert left_open([row("A", "2026-06-05", None)], "2026-09-01")               # seen after it: Fifth Third's transfer
+    assert left_open([row("A", "2025-11-13", "A")], "2025-11-12")                # it went on as itself: LNW to LNWO
+    assert not left_open([row("A", "2025-11-13", "B")], "2025-11-12")            # a continuation into another security
 
 
 # --- a per-security failure that isn't EdgarBlocked/OpenFigiBlocked is logged, not fatal ---

@@ -159,3 +159,22 @@ def test_the_role_refusals_are_logged_once_as_one_line(fake_edgar, monkeypatch):
             NS(sec_id="C", record=NS(evidence={}))]
     pipeline._log_role_refusals(ctx, rows)
     assert lines == ["role refusal: 2 rows (A, B)"]
+
+
+def test_an_added_securitys_issuer_is_read_as_of_the_run_date(fake_edgar, monkeypatch):
+    """FB-028's runs: the open securities still read from a copy older than the run date were the ones the run added
+    (new Seagate, new Sinclair, new Gates, new Clear Channel Outdoor): stage 5 never searches them, so nothing made
+    their issuer's list current. Each added security's issuer is read as of the run date, an acquirer's too."""
+    asked: dict[int, list] = {}
+    plain = fake_edgar.submissions
+
+    def _submissions(cik, fresh_after=None):
+        asked.setdefault(int(cik), []).append(fresh_after)
+        return plain(cik, fresh_after)
+
+    monkeypatch.setattr(fake_edgar, "submissions", _submissions)
+    acquirer = Security("BBG000ACQ001", 888002, "COMMON", "ACQUIRER CORP", "Common Stock", False, "ticker")
+    _ends(fake_edgar, monkeypatch, {SID: AddedSuccessor(_security(), "NEWC", "2016-09-08"),
+                                    "BBG000ACQ001": AddedAcquirer(acquirer, "ACQ", "2020-02-03")}, listed=True)
+    for cik in (CIK, 888002):          # a copy fetched on the run date or later (the fixture's record has no run date)
+        assert any(day is not None and day >= date(2026, 9, 25) for day in asked[cik]), cik

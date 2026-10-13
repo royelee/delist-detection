@@ -1,13 +1,13 @@
 {
   "as_of": "2026-09-25",
   "cache_answers": {
-    "archives": 10757,
+    "archives": 10812,
     "company_tickers": 12,
-    "full_text_search": 1205,
-    "submissions": 30877,
-    "submissions_page": 9976
+    "full_text_search": 1453,
+    "submissions": 27865,
+    "submissions_page": 10970
   },
-  "code_version": "372033c-dirty",
+  "code_version": "7c7e370-dirty",
   "continuation_filings": [
     {
       "delist_date": "2021-03-14",
@@ -36,32 +36,33 @@
     }
   ],
   "degraded_answers": {},
-  "disputes": 157,
+  "disputes": 154,
   "handoffs": {
-    "conflicts": 11,
-    "continuations_by_filing": 45,
-    "continuations_by_timing": 25,
-    "handoffs": 80,
+    "conflicts": 10,
+    "continuations_by_filing": 47,
+    "continuations_by_timing": 24,
+    "handoffs": 81,
     "rows_added": 19,
     "takeovers": 10
   },
   "latency_ms": {},
   "merger_terms": {
-    "answers": 852,
+    "answers": 854,
     "asked": 0,
     "failed": 0,
-    "from_cache": 852,
+    "from_cache": 854,
     "model": "claude-sonnet-5-5"
   },
   "not_covered": {},
+  "open_issuers_read_before_as_of": 0,
   "rejected_queries": {},
   "resolution_degraded": 0,
   "review": {
     "accepted": 0,
-    "check": 492,
+    "check": 496,
     "cleared": 0,
     "fix": 39,
-    "info_hidden": 624,
+    "info_hidden": 626,
     "unmatched_decisions": 0
   },
   "schema_version": 4,

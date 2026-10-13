@@ -206,6 +206,13 @@ def _search_security(finder: DelistingFinder, registrants: SuccessorRegistrants,
     return found, review, regs, listed
 
 
+def _left_open(found: Sequence[Delisting], last_seen: str | None) -> bool:
+    """Whether the search leaves the security open: it found no real ending dated on or after the security's last
+    sighting (none at all; only ones the security was seen after: Fifth Third's listing transfer of June 2026; or
+    only rows it went on from as itself: Light & Wonder's move off Nasdaq of 2025-11-13, since when it is LNWO)."""
+    return not any(is_real_ending(e) and (not last_seen or e.delist_date >= last_seen) for e in found)
+
+
 def _warm_delisting_search(clients: Clients, ordered: list[Security], listing: dict[str, dict],
                            contexts: SecurityContexts, ftd: FtdIndex, workers: int,
                            retired: frozenset[str] = frozenset(), behind_clock: bool = False) -> None:
@@ -386,10 +393,33 @@ def _find_delistings(ctx: _RunContext, securities: dict[str, Security], sec_cusi
             # listed_today and the context live inside the try too: a FIGI/EDGAR
             # error there must become a reviewable row for this one security,
             # not abort the whole overnight run.
-            found, found_review, regs, listed[s.sec_id] = _search_security(
-                finder, registrants, contexts, s,
-                lambda cik: _listed_now(clients.figi, clients, s, contexts, ftd, listing.get(s.sec_id), retired,
-                                        behind_clock, cik))
+            # The search reads the filings of the security's issuer, and of the other CIK in force, with no day of
+            # its own. So each is made current first for the security's last sighting: a copy fetched by that day
+            # plus 45 days, or by the run date when that comes first, which is every security still seen at the
+            # data's end (FB-028: Exxon Mobil's list was a copy of May 2026, and no run as of 2026-09-25 read its
+            # Form 25 of 2026-07-02).
+            ciks = [cik for cik in (s.issuer_cik, other_ciks.get(s.sec_id)) if cik is not None]
+            for cik in ciks:
+                if last_seen:
+                    clients.issuers.profile(cik, about=last_seen)
+
+            def search() -> tuple[list[Delisting], list[ReviewItem], list[Registrant], bool | None]:
+                return _search_security(
+                    finder, registrants, contexts, s,
+                    lambda cik: _listed_now(clients.figi, clients, s, contexts, ftd, listing.get(s.sec_id), retired,
+                                            behind_clock, cik))
+
+            found, found_review, regs, listed[s.sec_id] = search()
+            # A security the search leaves open is read as of the run date: its last sighting says nothing of how old
+            # a copy may be, since a security with no fails row for 45 days is seen that long before the data's end
+            # (FB-028: 18 open securities of the 2026-09-25 run, White Mountains among them, were read from a copy
+            # fetched two days before it). Its issuers, a successor registrant in force among them, are made current
+            # for the run date and it is searched again.
+            in_force = [*ciks, *(r.cik for r in regs)]
+            if _left_open(found, last_seen) and any(clients.issuers.read_before(c, ctx.as_of) for c in in_force):
+                for cik in in_force:
+                    clients.issuers.profile(cik, about=ctx.as_of)
+                found, found_review, regs, listed[s.sec_id] = search()
             if regs:
                 later[s.sec_id] = regs
         except FATAL:
@@ -1101,6 +1131,11 @@ def _successor_endings(ctx: _RunContext, finder: DelistingFinder, added: Mapping
     mark = ctx.meter.start()
     for sid, a in sorted(added.items()):
         cik = a.security.issuer_cik
+        if cik is not None:
+            # stage 5 never searches a security the run adds, so nothing made its issuer's list current: each is
+            # read as of the run date (FB-028: new Seagate, new Sinclair, new Gates and new Clear Channel Outdoor
+            # were the open securities still read from a copy older than the run date)
+            clients.issuers.profile(cik, about=ctx.as_of)
         if isinstance(a, AddedAcquirer) or cik is None or sid in securities:
             continue
         rows = list(getattr(a, "rows", []))
@@ -1686,6 +1721,15 @@ def _scorecard(ctx: _RunContext, read: RunSnapshot, config: run_scorecard.Scorec
     return card
 
 
+def _old_open_issuers(clients: Clients, history: Iterable[Mapping[str, Any]], as_of: date) -> int:
+    """How many issuers of the securities the run leaves open (a `security_history` interval with no end) it read
+    from a copy of their filing list fetched before the run date, or with no fetch date (FB-028). Stage 5 reads each
+    such issuer about the security's last sighting, so this is 0 unless a read failed or a stage read an issuer the
+    search did not."""
+    ciks = {int(r["issuer_id"]) for r in history if not r.get("end_date") and str(r.get("issuer_id") or "").isdigit()}
+    return sum(1 for cik in sorted(ciks) if clients.issuers.read_before(cik, as_of))
+
+
 def _merger_terms_usage(extractor) -> dict | None:
     """run_manifest.json's `merger_terms`: the LLM reader's model and where its answers came from (FB-004), or None
     for a run with no LLM reader (or a test's double of one, which keeps no account)."""
@@ -1826,7 +1870,9 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
                                                    handoffs=handoffs.counts,
                                                    continuation_filings=continuation_entries(confirmations),
                                                    disputes=counts["disputes"],
-                                                   merger_terms=_merger_terms_usage(clients.llm_extractor)))
+                                                   merger_terms=_merger_terms_usage(clients.llm_extractor),
+                                                   open_issuers_read_before_as_of=_old_open_issuers(
+                                                       clients, tables["security_history"], ctx.as_of)))
     return RunSummary(counts, dict(Counter(e.record.bucket.value for e in delistings)),
                       dict(Counter(s.figi_source for s in securities.values())), dict(flags), dict(triaged.counts),
                       scorecard_drops=card["drops"], golden_failures=card["golden_failures"],

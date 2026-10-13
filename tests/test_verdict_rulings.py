@@ -327,6 +327,15 @@ def test_a_merger_with_a_contingent_right_beside_its_cash_is_uncertain_and_keeps
     assert _reasons(plain) == ()
 
 
+def test_a_merger_that_stands_against_an_unchecked_handoff_is_uncertain():
+    """FB-027 (consensus of 2026-10-13): Exxon Mobil 2026 was a `confirmed` merger beside a handoff the library's own
+    review row called a conflict, and the successor had no issuer to look for a filing under. The row's flag is the
+    reason, with the successor it names. A continuation carries no such doubt."""
+    row = ending("A", "2015-03-13", "merger", flags="handoff_unchecked:BBG023CY9MM1", **GOOD)
+    assert _reasons(row) == ("handoff_unchecked:BBG023CY9MM1",)
+    assert _reasons(ending("A", "2015-03-13", "merger", **GOOD)) == ()
+
+
 def test_a_merger_whose_filings_name_a_closing_dividend_without_an_amount_is_uncertain():
     """FB-023's follow-up (Two Harbors 2026): the row keeps its cash and its dlret, and the verdict says a dividend
     the filings name is not in the value."""

@@ -183,7 +183,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   - The last trade's sources, flags and facts (`LastTrade`, `end_day`, `effective_date`, `cites_form25`, and over a
     row `of_row`, `effective_of`, `published`, `end_day_of`; endings/last_trade.py's module entry) and stage 9g's answer,
     `ContinuationReading` (the verdict's input beside the tables).
-- `vocabulary/names.py` — issuer-name tokens and agreement, a leaf (FB-006: `names_agree` and `description_names` share
+- `vocabulary/names.py` — issuer-name tokens and agreement, a leaf (FB-027: `written_out`, two names that are one
+  name word for word, each word the same or one side's written short, no word left out: stricter than
+  `names_agree`, for a lookup that has only the name to go on; FB-006: `names_agree` and `description_names` share
   one word equivalence, `_word_matches`: plural S, in-order abbreviation or truncation of at least four letters on
   either side (never the only word shared), the vendor's `_VENDOR_ABBREVIATIONS` (PPTYS), run-together words; a name
   with no word of three letters compares as one string, `2U INC` and `2U, Inc.`; FB-009: letters and digits run
@@ -206,7 +208,19 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
 - `sources/edgar.py` — throttled, on-disk-cached SEC client. `submissions()`,
   `recent_filings()`, `fetch_filing_text()`/`fetch_filing_raw()` (HTML-stripped
   and raw text caches), `company_tickers()`, and `full_text_search()`, the optional capability
-  `capabilities.FULL_TEXT_SEARCH`, which this adapter offers. Owns `EdgarBlocked`, `resolve_user_agent()`, and
+  `capabilities.FULL_TEXT_SEARCH`, which this adapter offers. `recent_filings()` reads the main file's recent block
+  and then each older page, each filing once, as copies of one filing list (`_whole_list`). EDGAR moves the oldest
+  rows of the recent block into page 001 as the issuer files, a full page hands its oldest rows to the next, and a
+  new page is added at the end. So a filing is lost from the cache whenever a copy is newer than the copy of the
+  block after it (FB-025: new Cigna's main file was fetched again beside a page cached ten days before, its 8-K12B
+  of 2018-12-20 was in neither, and its handoff fell to timing). The cached copies are read as they are when each
+  page was fetched under this copy of the main file (`LIST_KEY`, the main file's `_list_id`: its recent accession
+  numbers and its page list, so a main file fetched again and found unchanged keeps its pages), or, for pages
+  cached before that was kept, when the list has one page with the listed row count. Any other list is fetched
+  again from the top, the main file first and then every page in order, which can hold a filing twice and never
+  lose one. `submissions()` fetching a main file again takes the pages the cache holds with it, so the cache is one
+  list between runs too (FB-028's runs: McEwen). `submissions()` and `recent_filings()` answer as of the run date
+  (`_as_filed_by`): filings dated after it are left out, and the names are left as the copy has them. No clock time is written into the cache, so two runs still leave the same bytes. Owns `EdgarBlocked`, `resolve_user_agent()`, and
   `sec_get()`: the one SEC request path (`sec_limiter.throttle`, User-Agent,
   `sec_stats` counting, `retry_request`, `EdgarBlocked` on 403/429) that
   `EdgarClient` and `sources/sec_http.py` share.
@@ -318,7 +332,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   client's text cache and Form 25 parsing.
 - `sources/cik_lookup.py` — SEC's company-name index, `cik-lookup-data.txt`, as a local name -> CIK search:
   `CikLookupClient` (the download, cached 30 days under `cache/sec_data/cik_lookup/`) and `CikNameIndex` (exact, then
-  character-prefix matches, and `containing`, the entries holding a whole word, FB-004 part c); the ticker resolver's
+  character-prefix matches, `containing`, the entries holding a whole word, FB-004 part c, and `beginning`, the
+  entries whose name begins with a whole word, an apostrophe aside, FB-027); the ticker resolver's
   name tier and the acquirer ticker read it (the ticker resolver's entry has the rules).
 - `sources/llm_client.py` — the injectable LLM client for JSON extraction: an adapter has `extract(system, user, schema) ->
   dict` and states its `model`; `OpenAIJsonClient` is the one provided, `default_llm_client` builds it from the repo
@@ -617,7 +632,16 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `cik-lookup-data.txt` (`sources/cik_lookup.py`: `CikLookupClient`, cached 30 days
   under `cache/sec_data/cik_lookup/`, and `CikNameIndex`, exact then
   character-prefix matches, read through their submissions JSON as the live
-  search answered, `_index_candidates`: the one active holder of the exact
+  search answered; the candidates are ranked by the words they share with the observed name, then one that EDGAR
+  names with exactly those words before one with more, FB-026: "BUNGE LIMITED" is BUNGE LTD and not BUNGE LIMITED
+  FINANCE CORP, then by date and order found, `_name_search` (a remembered answer the ranking now puts behind such
+  a company is resolved again, `_still_named`); where the full-text tier gave only a weak answer (a filer of a Form
+  25 near the date under another name), a candidate replaces it only with its own Form 25 or 15 within 90 days of
+  the date (PEAK, WE) or as a delisted company of exactly the expected name: a Form 25 or 15 in the 1,500 days
+  before the date and no periodic report after it (`_may_replace`, `_delisted_under_the_name`, FB-026: seeds of
+  2008 that still name Triad Hospitals, delisted in July 2007, are Triad's and not TRI-S Security's; a live
+  issuer of the name replaces nothing, BWC), and a remembered weak answer is checked against the same rule
+  (`_still_named`); `_index_candidates`: the one active holder of the exact
   name, else the 25-NSE/25/15-12G form filter's one filer the query names
   (`_one_filer`), else the exact name; when none of those candidates is accepted, the last resort
   `_agreeing_issuer` (FB-004 part c, DD): the one CIK listed under the same name written with its words run
@@ -712,7 +736,15 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   the others made): the one issuer of the other eras holding a CUSIP of the era's issuer code (its first six
   characters) over the same dates, when it had filed by the era's first sighting; no name check, the code is the
   evidence (FNFV Group, a tracking stock, on Fidelity National Financial's 31620R105; UHALB on U-Haul Holding);
-  eras of two issuers or none give nothing. Rule C also runs over first-pass answers:
+  eras of two issuers or none give nothing. Rule E (FB-027, `successor_registrant`, before the others, for a
+  derived era, and never dropped for a link to a later line of the ticker: Aaron's Holdings 2020, whose line rule
+  C gave to the company it spun off six weeks later): the company SEC's name list holds under the era's own name written out word
+  for word (`names.written_out`, among the entries beginning with the name's first word,
+  `CikNameIndex.beginning`) that filed an 8-K12B or 8-K12G3 within `line_follow.FILING_DAYS` of the step's first
+  day, through guard G. The fails files write EXXONMOBIL HLDGS CORPORATION and AARONS HLDGS CO INC where the list
+  has EXXONMOBIL HOLDINGS CORP and AARON'S HOLDINGS COMPANY, INC., and the resolver asks the list by exact name
+  and by prefix, so the line after Exxon Mobil's and Aaron's holding-company reorganizations had no issuer. The
+  name alone is never taken, and the resolver and its kept answers are not changed. Rule C also runs over first-pass answers:
   where the CUSIP evidence points elsewhere, the first pass's answer stands
   and the check flag `issuer_cusip_disagrees` names both CIKs. Sub-plan 5h: `check_names` (stage 2b, never
   saved): a first-pass name-search answer is replaced by the one other CIK SEC's name index lists under exactly the
@@ -926,7 +958,10 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   Liberty Ventures group's, so QRTEA's rename on the same CUSIP is followed; an unread Form 25 counts), a description that names no name in force (a holding word does not
   count, `names.description_names`: ExxonMobil Holdings, XOM 2026, keeps the name), a class conflict, a
   registrant that merged out or that another CIK's 8-K12B/12G3 replaces (`other_registrant`, the CIK of
-  `successor_filer`, which also gives the day it filed: stage 5's successor registrants), no filing stating
+  `successor_filer`, which also gives the day it filed: stage 5's successor registrants; the stage asks it under
+  the issuer's EDGAR name of the day and then under each of the line's own names of other words,
+  `registrant_names`, FB-026: the search is of a phrase, SEC's name list has NOBLE CORP, and the Swiss company's
+  8-K12G3 of 2009-03-27 names "Noble Corporation", the name the line was observed under), no filing stating
   the change, or a failed `other_registrant` read (`read_failed`); the registrant carries on by a periodic report in `PERIODIC_FORMS`, which includes the small-business
   forms 10-K405, 10-KSB, 10-KSB40 and 10-QSB, or by a registered investment company's report in
   `INVESTMENT_COMPANY_FORMS` (N-CSR, N-CSRS, N-Q, N-CEN, NPORT-P, NSAR-A, NSAR-B: Altaba 2017), each for a period
@@ -1074,7 +1109,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   before), `apply_handoffs` (a continuation's missing `exchange_transfer` row
   or its successor, `handoff_continuation`/`handoff_rebucketed`/
   `handoff_conflict`; a takeover's `ticker_successor_sec_id` or
-  `handoff_takeover_no_delisting`; a rule-6 merger, sub-plan 5f, stands as a `handoff_conflict`; every continuation,
+  `handoff_takeover_no_delisting`; a rule-6 merger, sub-plan 5f, stands as a `handoff_conflict`; a merger that
+  stands on timing between two issuers against a successor with no issuer carries `handoff_unchecked:<successor>`,
+  FB-027, which the verdict reads; every continuation,
   the row it writes included, is `rewrites.continuation` with `Rule.HANDOFF`, a rewritten merger's value dropped from
   `payouts=`; the ambiguous Form 25 is the finder's item's typed `filing`),
   `drop_resolved_shared`. Run by

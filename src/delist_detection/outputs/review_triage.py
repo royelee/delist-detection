@@ -274,6 +274,13 @@ CATALOG: dict[str, FlagInfo] = {
                  "says otherwise (a reconciled merger payout, a liquidation, or another successor) and was left "
                  "as it is.",
         f"Read both securities' filings around the date and decide which is right; {_accept_if('the row is')}."),
+    "handoff_unchecked": FlagInfo(
+        "check", "A merger row was left standing against a handoff found by timing (see its `handoff_conflict` "
+                 "row), and the successor named after the colon has no issuer, so no filing of the successor's could "
+                 "be looked for (FB-027). The ending is uncertain (`handoff_unchecked:<successor>`) until the "
+                 "successor has an issuer and the handoff is checked.",
+        "Find the successor's issuer (the registrant that filed an 8-K12B, or the acquirer's own filings around the "
+        f"date) and pin its cik on an observation of the successor; {_accept_if('the merger row is right')}."),
     "handoff_takeover_no_delisting": FlagInfo(
         "check", "Another security of the run took over this security's ticker (an acquirer renamed into it), but "
                  "this security has no delisting row to record that on (ticker_successor_sec_id).",
@@ -332,7 +339,9 @@ CATALOG: dict[str, FlagInfo] = {
         "check", "The resolver found no issuer CIK for this ticker era by its ticker or name, so it inferred one "
                  "from SEC fails-to-deliver CUSIP evidence (the issuer of an era sharing its CUSIP, shared_cusip, "
                  "or of the new CUSIP its own switched to after a rename, cusip_handoff; the issuer code of its "
-                 "CUSIP, cusip_issuer) or from the ranking of "
+                 "CUSIP, cusip_issuer; for the line after a CUSIP change, the company SEC's name list holds under "
+                 "its name written out that filed a successor registration at the change, successor_registrant) or "
+                 "from the ranking of "
                  "8-Ks naming the ticker (efts_frequency_renamed); the reason says which. Such an answer is never "
                  "saved in the resolver cache.",
         "Confirm the issuer named in the reason is the company that traded under the ticker then (its EDGAR "

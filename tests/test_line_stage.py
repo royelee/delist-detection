@@ -14,7 +14,7 @@ from delist_detection.identity.figi_resolution import FigiCandidate
 from delist_detection.sources.ftd import FtdIndex, FtdRow
 from delist_detection.identity.identity import Identity
 from delist_detection.identity.issuer_record import IssuerRecord
-from delist_detection.identity.line_follow import MAX_ROUNDS, MAX_TEXTS, follow_lines
+from delist_detection.identity.line_follow import MAX_ROUNDS, MAX_TEXTS, follow_lines, registrant_names
 from delist_detection.identity.observations import Observation, TickerEra
 from delist_detection.sources.openfigi import OpenFigiUnavailable
 from delist_detection.pipeline import Clients
@@ -705,6 +705,73 @@ def test_a_step_whose_other_filers_listing_answered_from_a_stale_copy_is_followe
     lines = _follow([_Spec("BBGA", 1, "AA", ["A1"])], rows, edgar=_other_filer(stale)(_stating(rows)))
     assert sorted(_flags(lines)) == [("BBGA", "line_followed"), ("BBGA", "resolution_degraded")]
     assert lines.cusips == {"BBGA": ["A1", "A2"]}
+
+
+# --- FB-026: the other-registrant search asks under each of the line's names -----------------------------------
+
+class _Named(_Edgar):
+    """An issuer EDGAR names NOBLE CORP whose successor's 8-K12G3 writes the name out: the search finds the
+    registration only under the phrase "NOBLE CORPORATION"."""
+
+    def __init__(self, filings):
+        super().__init__(filings, name="NOBLE CORP")
+        self.asked = []
+
+    def full_text_search(self, q, forms, lo, hi):
+        self.asked.append(q)
+        if q != '"NOBLE CORPORATION"':
+            return []
+        return [{"_source": {"ciks": ["0000000999"], "display_names": ["Noble Corp / Switzerland (CIK 0000000999)"],
+                             "form": "8-K12G3", "file_date": "2012-03-01"}}]
+
+
+def test_the_other_registrant_search_asks_under_the_lines_observed_name_when_edgars_name_finds_nothing():
+    """FB-026, Noble 2009: SEC's name list has NOBLE CORP, the Swiss company's 8-K12G3 names "Noble Corporation",
+    and the line was observed as NOBLE CORPORATION. The phrase search under EDGAR's name finds nothing, so the
+    switch to the Swiss CUSIP was followed as the Cayman company's own. Asked under the observed name too, the
+    registration is found and the step is refused."""
+    rows = _line("AA", ["A1", "A2"], desc="NOBLE CORP")
+    edgar = _Named(_stating(rows))
+    lines = _follow([_Spec("BBGA", 1, "AA", ["A1"], name="NOBLE CORPORATION")], rows, edgar=edgar)
+    assert edgar.asked == ['"NOBLE CORP"', '"NOBLE CORPORATION"']
+    assert _flags(lines) == [("BBGA", "line_follow_refused:other_registrant")]
+    assert lines.cusips == {"BBGA": ["A1"]}
+
+
+def test_the_other_registrant_search_asks_once_when_the_lines_name_has_edgars_words():
+    """A line observed under EDGAR's own words (another case, a period more) is one phrase: one search."""
+    rows = _line("AA", ["A1", "A2"], desc="NOBLE CORP")
+    edgar = _Named(_stating(rows))
+    lines = _follow([_Spec("BBGA", 1, "AA", ["A1"], name="Noble Corp.")], rows, edgar=edgar)
+    assert edgar.asked == ['"NOBLE CORP"']
+    assert _flags(lines) == [("BBGA", "line_followed")] and lines.cusips == {"BBGA": ["A1", "A2"]}
+
+
+def test_a_failed_search_under_one_name_is_no_answer_unless_another_name_finds_the_registrant():
+    """A search that failed under EDGAR's name and found the registrant under the observed one is an answer; one
+    that failed under a name and found nothing under the others is `read_failed`."""
+    class FirstDown(_Named):
+        def full_text_search(self, q, forms, lo, hi):
+            if q == '"NOBLE CORP"':
+                self.asked.append(q)
+                SEC_STATS.degraded("failed_request")
+                return []
+            return super().full_text_search(q, forms, lo, hi)
+
+    rows = _line("AA", ["A1", "A2"], desc="NOBLE CORP")
+    found = _follow([_Spec("BBGA", 1, "AA", ["A1"], name="NOBLE CORPORATION")], rows, edgar=FirstDown(_stating(rows)))
+    assert ("BBGA", "line_follow_refused:other_registrant") in _flags(found)
+    none = _follow([_Spec("BBGA", 1, "AA", ["A1"], name="NOBLE HOLDING")], rows, edgar=FirstDown(_stating(rows)))
+    assert sorted(_flags(none)) == [("BBGA", "line_follow_refused:read_failed"), ("BBGA", "resolution_degraded")]
+
+
+def test_registrant_names_are_edgars_name_then_each_line_name_of_other_words():
+    sub = {"name": "NOBLE CORP", "formerNames": []}
+    day = date(2009, 3, 30)
+    assert registrant_names(sub, day, ["NOBLE CORPORATION", "NOBLE CORPORATION", "Noble Corp.", ""]) \
+        == ["NOBLE CORP", "NOBLE CORPORATION"]
+    assert registrant_names(None, day, ["NOBLE CORPORATION"]) == ["NOBLE CORPORATION"]     # no record: the line's
+    assert registrant_names(None, day, []) == []
 
 
 # --- FB-003: the run log names each refused step ---------------------------------------------------------------

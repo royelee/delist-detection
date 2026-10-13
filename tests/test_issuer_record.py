@@ -362,3 +362,17 @@ def test_a_failed_read_of_the_successor_issuers_filings_in_the_handoff_stage_is_
     handoff = [r for r in review if r["review_flags"] == "resolution_degraded" and "handoff search" in r["reason"]]
     assert [(r["sec_id"], r["ticker"]) for r in handoff] == [("BBGHCOLD001", "HC")]
     assert "the handoff search (HC to BBGHCNEW001) rested on a failed EDGAR request" in handoff[0]["reason"]
+
+
+# --- FB-028: which copies a run held that were fetched before a day -------------------------------------------------
+
+def test_a_held_copy_is_read_before_a_day_when_it_was_fetched_earlier_or_carries_no_fetch_date():
+    """The count run_manifest.json writes for the issuers of the securities a run leaves open."""
+    e = _Edgar({7: _Seq([{"name": "OLD COPY", FETCHED_KEY: "2026-09-16"}]), 8: _Seq([{"name": "NO DATE"}]),
+                9: _Seq([{"name": "FRESH", FETCHED_KEY: "2026-09-25"}])})
+    r = IssuerRecord(e, today=date(2026, 9, 25))
+    for cik in (7, 8, 9):
+        r.profile(cik)
+    assert [r.read_before(cik, date(2026, 9, 25)) for cik in (7, 8, 9)] == [True, True, False]
+    assert r.read_before(7, date(2026, 9, 16)) is False
+    assert r.read_before(404, date(2026, 9, 25)) is False            # an issuer with no record was not read at all

@@ -52,9 +52,9 @@ from .carried_price import price_carried, step_price_ratio
 from .issuer_record import IssuerRecord
 from ..outputs.manifest import StageMeter
 from ..vocabulary.names import (
-    description_matches, description_name, description_names, names_agree, names_an_issuer,
+    description_matches, description_name, description_names, names_agree, names_an_issuer, plain_words, written_out,
 )
-from .line_follow import SUCCESSOR_FORMS, SWITCH, LineStep, composites, step_refusal
+from .line_follow import FILING_DAYS, SUCCESSOR_FORMS, SWITCH, LineStep, composites, step_refusal
 from .observations import (
     ERA_GAP_DAYS, DerivedFrom, Fold, Observation, ObservationError, ObservationIndex, TickerEra, eras_by_key,
     number_eras,
@@ -81,6 +81,7 @@ NAME_IN_FORCE = "name_in_force"     # 2b's source: the one other holder of the n
 TICKER_ROWS = "ticker_rows"         # 2b's source: the one other holder of the name its ticker's fails rows describe
 LATER_TICKER = "later_ticker"       # 2b's source: a backfilled row's issuer, the company SEC lists its ticker under
 LATER_ROWS_DAYS = 400               # the ticker's rows this long from its first row after the era say whose it became
+SUCCESSOR_NAMED_MAX = 25            # rule E reads the filings of at most this many companies of the era's name
 ROWS_DECIDED = frozenset({TICKER_ROWS, LATER_TICKER})      # 2b's answers that refute the era's observed name on its dates
 OBSERVED_ALIVE_DAYS = TickerResolver.OBSERVED_ALIVE_DAYS    # filed within this of a day: the issuer was operating
 EXCHANGE_CIKS = TickerResolver.EXCHANGE_CIKS                # the exchanges' CIKs: never an issuer
@@ -1333,6 +1334,13 @@ class EraIssuers:
         whatever the key order (MHP shares its CUSIP with MHFI, whose CUSIP
         switched to SPGI's). At the fixed point every answer is checked again.
 
+        E (`successor_registrant`, FB-027), before the others, for a derived era: the company SEC's name list holds
+        under the era's name written out word for word that filed a successor registration at the CUSIP change
+        (`_successor_registrant`), through the guard. Its answer stands whatever the era links to later: six weeks
+        after Aaron's Holdings took over Aaron's line in 2020 it spun off The Aaron's Company, which took the ticker
+        under a new CUSIP and had been renamed from Aaron's SpinCo a month before, and rule C read the holding
+        company's line as that company's own after a rename.
+
         Rule C also runs over the eras the first pass answered (unpinned, with
         enough rows): where it gives another issuer, the first pass's answer
         stands and the disagreement is returned for review (LSTR@2008's name
@@ -1345,7 +1353,10 @@ class EraIssuers:
         out: dict[str, InferredIssuer] = {}
         for e in todo:
             self._reset()
-            got = self._named(e, self._frequency_renamed(e, rows[e.key], last_seen[e.key]), last_seen[e.key])
+            # E before the others: a derived era's own successor registration at its start is the strongest evidence
+            # the pass has, and nothing below takes its answer away
+            got = self._named(e, self._successor_registrant(e, rows[e.key]), last_seen[e.key]) \
+                or self._named(e, self._frequency_renamed(e, rows[e.key], last_seen[e.key]), last_seen[e.key])
             if got is not None:
                 out[e.key] = got
             self._mark(e)
@@ -1387,6 +1398,8 @@ class EraIssuers:
             known, issuer_cusips = issuers_now()
             dropped = []
             for key, got in out.items():
+                if got.source == "successor_registrant":      # rule E's answer rests on no link, and a link drops none
+                    continue
                 self._reset()
                 found = self._linked_issuers(links[key], known, ftd, issuer_cusips,
                                              name_class_letter(by_key[key].name))
@@ -1439,6 +1452,39 @@ class EraIssuers:
         if not self.issuers.existed_by(cik, era.first):
             return None
         return InferredIssuer(cik, "cusip_issuer", f"its CUSIP's issuer code {sorted(codes)[0]} is the issuer's own")
+
+    def _successor_registrant(self, era: TickerEra, rows: list[FtdRow]) -> InferredIssuer | None:
+        """Rule E (`successor_registrant`, FB-027): a derived era, the line after a CUSIP change stage 4b refused,
+        whose issuer no lookup found because the fails files write its name short and SEC's name list is asked by
+        exact name and by prefix (EXXONMOBIL HLDGS CORPORATION for EXXONMOBIL HOLDINGS CORP, 2026; AARONS HLDGS CO INC
+        for AARON'S HOLDINGS COMPANY, INC., 2020). The companies the list holds under one of the era's names written
+        out word for word (`names.written_out`, among the entries that begin with the name's first word:
+        `CikNameIndex.beginning`), of those the ones that filed a successor registration (8-K12B, 8-K12G3) within
+        `FILING_DAYS` of the step's first day, through the guard. The name alone is not taken: a company the list
+        names so that filed no such registration at the change is no answer. The rule answers before the others
+        (`infer`). No name list, more than
+        `SUCCESSOR_NAMED_MAX` companies of the name, or an era the run did not derive: None."""
+        origin, index = era.derived_from, self.issuers.name_index()
+        first = parse_day(origin.first) if origin is not None else None
+        if first is None or index is None:
+            return None
+        named: dict[int, str] = {}
+        for nm in era.names:
+            words = plain_words(nm)
+            for h in index.beginning(words[0]) if words else ():
+                if h.cik not in EXCHANGE_CIKS and written_out(nm, h.name):
+                    named.setdefault(h.cik, h.name)
+        if not named or len(named) > SUCCESSOR_NAMED_MAX:
+            return None
+        registered = [c for c in sorted(named) if any(
+            f.form.split("/")[0] in SUCCESSOR_FORMS and (d := parse_day(f.filing_date)) is not None
+            and abs((d - first).days) <= FILING_DAYS for f in self.issuers.filings(c))]
+        cik = self._guard(registered, rows)
+        if cik is None:
+            return None
+        return InferredIssuer(cik, "successor_registrant",
+                              f"SEC's name list has its name as {named[cik]}, and that company filed a successor "
+                              f"registration within {FILING_DAYS} days of the CUSIP change of {origin.first}")
 
     def _named(self, era: TickerEra, got: InferredIssuer | None, last_seen: str) -> InferredIssuer | None:
         """`got`, when one of the era's observed names `names.description_matches`
