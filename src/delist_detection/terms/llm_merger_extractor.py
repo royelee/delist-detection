@@ -492,11 +492,12 @@ _EARLIER_DAYS = timedelta(days=60)
 _EARLIER_MAX = 20
 # FB-023's follow-up: a dividend whose record date follows the merger is paid to the acquirer, which then holds
 # every share (Athene 2022: "with a record date and payment date following the completion of the Mergers"). The
-# words must follow "record date" directly: a record date before the merger with a payment after it is the old
-# holders' dividend
+# words must follow "record date" directly, and what they name must be the merger's completion: a record date before
+# the merger with a payment after it, or one "after receipt of stockholder approval", is the old holders' dividend
 _RECORD_AFTER_MERGER = re.compile(
     r"(?i)\brecord dates?(?:\s+and\s+(?:a\s+)?payment dates?)?\s+(?:(?:that|which)\s+(?:is|are|will\s+be)\s+)?"
-    r"(?:following|after|subsequent\s+to)\s")
+    r"(?:following|after|subsequent\s+to)\s+(?:the\s+)?"
+    r"(?:completion|consummation|closing|effectiveness|effective\s+(?:time|date)|mergers?)\b")
 
 
 _EXCERPT_KEYWORDS = [

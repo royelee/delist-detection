@@ -784,6 +784,9 @@ def test_a_dividend_whose_record_date_follows_the_merger_is_not_the_old_holders(
     "conditioned upon the completion of the Merger and will be made immediately prior to or upon such completion",
     "a dividend with a record date of May 30, 2013, to be paid after the completion of the merger",
     "payable to holders of record as of the close of business one Business Day prior to the Closing Date",
+    # code review: "after" something that is not the merger's completion
+    "payable to holders of record as of a record date after receipt of stockholder approval and prior to the "
+    "Effective Time",
 ])
 def test_a_record_date_before_the_merger_keeps_the_dividend(tmp_path, quote):
     ext, _ = _dividend_ext(tmp_path, [{"closing_dividends": [_dividend(None, quote=quote)]}], text=_STUB_TEXT)

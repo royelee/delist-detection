@@ -489,11 +489,30 @@ def test_a_row_that_stands_against_the_handoff_keeps_its_kind_and_not_a_day_on_t
         out = apply_handoffs([HandoffDecision(p, "continuation", "8-K12B X", True)], [row],
                              {"OLD": _sec("OLD"), "NEW": _sec("NEW")}, [])
         assert row.record.bucket is CrspBucket.MERGER and [i.flag for i in out.review] == ["handoff_conflict"]
+        assert out.redated == ([row] if row.last_trade.day != lt.day else [])     # the rows the run reads again
         return row.last_trade.day, row.last_trade.source
 
     assert run(LastTrade(date(2016, 5, 18), "closing_day", ("last_trade_date_unconfirmed",))) == (
         date(2016, 5, 17), "last_sighting")
     assert run(LastTrade(date(2016, 5, 18), "midas", ())) == (date(2016, 5, 18), "midas")
+
+
+def test_a_target_that_traded_on_under_another_ticker_keeps_its_day():
+    """Code review of FB-022: A gave up the ticker T, traded on as T2 for two months and then merged. B's first day
+    under T says nothing about the day A stopped trading (`a_last_any` is later than `a_last`), so the closing day
+    stands. A target that stopped with the ticker is still capped."""
+    def run(a_last_any):
+        row = _delisting("OLD", "2022-09-20", CrspBucket.MERGER, "2022-09-09", ticker="TTWO")
+        row.last_trade = LastTrade(date(2022, 9, 9), "closing_day", ("last_trade_date_unconfirmed",))
+        p = HandoffPair("T", "OLD", "NEW", "2022-07-01", "2022-07-05", "2022-07-05", a_last_any)
+        out = apply_handoffs([HandoffDecision(p, "takeover", "", False)], [row],
+                             {"OLD": _sec("OLD"), "NEW": _sec("NEW")}, [])
+        assert row.record.ticker_successor_sec_id == "NEW"
+        return row.last_trade.day, out.redated
+    lived_on = run("2022-09-09")
+    assert lived_on == (date(2022, 9, 9), [])
+    day, redated = run("")
+    assert day == date(2022, 7, 1) and len(redated) == 1
 
 
 def test_a_takeover_fills_the_ticker_successor_on_the_targets_row():

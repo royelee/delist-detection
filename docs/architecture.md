@@ -1118,7 +1118,11 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   (a worked-out closing day, a last sighting, an unsourced fallback) never reaches B's first day under the ticker;
   from that day on it becomes the trading day before it. It applies to a continuation's kept row, to a takeover's
   row and to a row that stands against the handoff (old Charter 2016), and A's own last fails row is no cap (old
-  Caesars 2020). `anchor_day` (the day an ending is
+  Caesars 2020). A takeover's target or a standing row is not capped when A traded on under another ticker after
+  it gave this one up (`handoffs._before_taker`, `a_last_any`). A row capped this way keeps its value, which stages
+  7 and 8 read on the day it had before, so the run reads its close and its value again on its final day
+  (`HandoffOutcome.redated`, `pipeline._read_again`): its price requests are published for that day, and a second
+  pass finds the caller's answers under it. `anchor_day` (the day an ending is
   read around: its last trade, else its Form 25's filing date, else the anchor 8-K's, else its delisting date;
   `Delisting.anchor`: the successor searches and links, the R1 reading, the handoff pairs, stage 5b) and
   `first_day_after` (an added successor's first day after a last trade: the next trading day, at all three sites

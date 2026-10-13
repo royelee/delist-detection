@@ -323,6 +323,13 @@ def test_a_new_cusips_first_row_under_its_own_cusip_prefix_dates_the_first_day_l
     wen = "950587105"
     assert _first_days(("2008-09-29", wen, "950587", 0.01), ("2008-09-30", wen, "LMCAZZZZ", 0.01),
                        ("2008-10-01", wen, "LMCA", 5.3)) == ["2008-09-30", "2008-10-01"]
+    for masked in ("**********", "F104PAIROFF"):           # code review: the row that follows must be a ticker
+        got = ticker_sightings(
+            Security("BBG008NVB1C0", 1418135, "COMMON", "MONSTER BEVERAGE", "Common Stock", True, "cusip",
+                     eras=[TickerEra("MNST", "2015-06-30", "2015-06-30", [Observation("MNST", "2015-06-30", "M")])]),
+            FtdIndex([FtdRow("2015-06-15", new, "61174X", "MONSTER BEVERAGE CORP NEW", 0.01),
+                      FtdRow("2015-06-16", new, masked, "MONSTER BEVERAGE CORP NEW", 126.91)]), [new])
+        assert [s.day for s in got if s.source == "ftd" and s.day == "2015-06-15"] == []
     other = "531229870"                                    # digits that are not this CUSIP's own prefix date nothing
     era = TickerEra("LMCA", "2016-06-30", "2016-06-30", [Observation("LMCA", "2016-06-30", "LIBERTY MEDIA")])
     got = ticker_sightings(

@@ -3519,3 +3519,54 @@ def test_the_other_issuer_in_force_reads_no_derived_observation():
     s, era, resolutions, issuers = _security_with_era("BBG000P4BQM9", 109177, "SPB", obs)
     ctx = _in_force_run({109177: HRG, 1487730: OLD_SPB}, {"SPECTRUM BRANDS HOLDINGS INC": [109177, 1487730]})
     assert pipeline._other_issuers(ctx, [era], resolutions, issuers, {s.sec_id: s}) == {}
+
+
+def test_a_row_the_handoff_stage_redated_has_its_close_and_value_read_again(monkeypatch):
+    """FB-022, from the code review (old Charter 2016). Stage 9b moved the row's last trade to the day before its
+    ticker's taker, after stage 7 read its close and stage 8 valued it on the old day. Its requests are published
+    for the new day, so both stages read it again there: the close flags of the old read go, the new close and
+    value replace the old, and a review item the first valuation already raised is not raised twice."""
+    from delist_detection.outputs.review_triage import ReviewItem
+    from delist_detection.terms.merger_value import MergerValue, MergerValues
+
+    record = DelistRecord(ticker="CHTR", cik=1091667, observed_delist_date="2016-05-18", crsp_code=231,
+                          bucket=CrspBucket.MERGER, confidence="high", reason="M&A",
+                          evidence={"flags": ["last_trade_date_unconfirmed", "ftd_close_prior:1",
+                                              "acquirer_close_lagged"],
+                                    "ftd_close_row_date": "2016-05-18"},
+                          sec_id="OLD", delist_date="2016-05-28")
+    row = Delisting(sec_id="OLD", cik=1091667, ticker="CHTR", delist_date="2016-05-28", record=record,
+                    last_trade=LastTrade(date(2016, 5, 17), "last_sighting", ("last_trade_date_unconfirmed",)),
+                    form25=None, form25_sub=None, exchange="NASDAQ")
+    old_item = ReviewItem("OLD", "CHTR", 1091667, "acquirer_named", "seen before", delist_date="2016-05-28")
+    new_item = ReviewItem("OLD", "CHTR", 1091667, "error", "only on the second read", delist_date="2016-05-28")
+    asked = []
+
+    def closes_again(ctx, rows, *a, **k):
+        asked.append(("closes", [(r.sec_id, r.last_trade.day, list(r.flags)) for r in rows]))
+        return pipeline._Closes({row.key: 200.0}, {row.key: 203.36})
+
+    def values_again(ctx, rows, securities, cusips, ftd, closes, *a, **k):
+        asked.append(("values", [r.sec_id for r in rows], closes.closes[row.key]))
+        return MergerValues({row.key: MergerValue(row.key, payout=None, terms={"stock_ratio": 0.9042,
+                                                                                "acquirer_price": 230.0})},
+                            review=[old_item, new_item])
+
+    monkeypatch.setattr(pipeline, "_last_trade_closes", closes_again)
+    monkeypatch.setattr(pipeline, "_merger_values", values_again)
+
+    class _Ctx:
+        log = staticmethod(lambda *_: None)
+
+    closes = {row.key: 203.36}
+    values = MergerValues({row.key: MergerValue(row.key, terms={"stock_ratio": 0.9042, "acquirer_price": 227.41})})
+    extra = pipeline._read_again(_Ctx(), [row], closes, values, {}, {}, None, date(2007, 6, 1), Overrides(),
+                                 pipeline.PriceAnswers(), 0.15, {}, [old_item])
+    assert asked == [("closes", [("OLD", date(2016, 5, 17), ["last_trade_date_unconfirmed"])]),
+                     ("values", ["OLD"], 200.0)]
+    assert closes == {row.key: 200.0} and values.get(row.key).terms["acquirer_price"] == 230.0
+    assert "ftd_close_row_date" not in row.record.evidence and extra == [new_item]
+    # nothing re-dated, or a re-dated row with no value: nothing is valued again
+    asked.clear()
+    assert pipeline._read_again(_Ctx(), [], closes, values, {}, {}, None, date(2007, 6, 1), Overrides(),
+                                pipeline.PriceAnswers(), 0.15, {}, []) == [] and asked == []

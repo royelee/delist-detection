@@ -576,6 +576,41 @@ def _merger_values(ctx: _RunContext, delistings: list[Delisting], securities: di
     return values
 
 
+# the flags stages 7 and 8 leave on a row for the closes they read; a row read again takes the new read's
+_CLOSE_FLAGS = frozenset({"no_last_close", "ftd_close_lagged", "ftd_close_prior", "acquirer_close_lagged"})
+
+
+def _read_again(ctx: _RunContext, redated: list[Delisting], closes: dict[DelistingKey, float], values: MergerValues,
+                securities: dict[str, Security], sec_cusips: dict[str, list[str]], ftd: FtdIndex, ftd_lo: date,
+                overrides: Overrides, answers: PriceAnswers, tol: float,
+                sightings: Mapping[str, Sequence[Sighting]], seen: Sequence[ReviewItem]) -> list[ReviewItem]:
+    """9b (FB-022). A row the handoff stage moved to the day before its ticker's taker, and which keeps its kind,
+    had its close read (stage 7) and its merger valued (stage 8) on the day it had before. Its price requests are
+    published for the day it has now, so the caller's answers to them were looked up under the old day and never
+    read (old Charter 2016: its last close and New Charter's received close). Both stages read such a row again on
+    its final day: its close flags are the new read's, `closes` takes the new close, and the new value replaces the
+    old (`MergerValues.absorb`). Returns the review items the second valuation raises that `seen` does not hold."""
+    rows = [d for d in redated if d.last_trade.day is not None]
+    if not rows:
+        return []
+    for d in rows:
+        d.record.evidence["flags"] = [f for f in d.flags if flag_name(f) not in _CLOSE_FLAGS]
+        d.record.evidence.pop("ftd_close_row_date", None)
+        closes.pop(d.key, None)
+    again = _last_trade_closes(ctx, rows, securities, sec_cusips, ftd, ftd_lo, overrides, answers)
+    closes.update(again.closes)
+    mergers = [d for d in rows if d.record.bucket is CrspBucket.MERGER and values.get(d.key) is not None]
+    if not mergers:
+        return []
+    revalued = _merger_values(ctx, mergers, securities, sec_cusips, ftd, again, overrides, answers, tol, sightings,
+                              ftd_lo)
+    values.absorb(revalued)
+    ctx.log(f"handoffs: {len(rows)} kept rows read again on the day before their ticker's taker "
+            f"({', '.join(d.sec_id for d in rows)})")
+    held = {tuple(sorted(r.row().items())) for r in seen}
+    return [r for r in revalued.review if tuple(sorted(r.row().items())) not in held]
+
+
 R1_REBUCKETED = "r1_rebucketed"
 BY_TERMS, BY_OWN_REGISTRATION = "terms", "own_registration"
 
@@ -1701,6 +1736,8 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     added = {**values.added, **r1.added, **successors.added}     # the acquirers and successors the run adds
     handoffs = _handoffs(ctx, delistings, securities, search, sec_cusips, ftd, values, review, added)   # 9b
     review = handoffs.review
+    review += _read_again(ctx, handoffs.redated, closes, values, securities, sec_cusips, ftd, ftd_lo, overrides,
+                          prices, tol, search.sightings, review)
     _date_from_notices(ctx, handoffs.added, review)       # 9c: before the added rows' closes are read
     if handoffs.added:
         delistings += handoffs.added

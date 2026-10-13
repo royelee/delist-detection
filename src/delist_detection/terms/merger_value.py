@@ -737,6 +737,7 @@ def _gate(st: _Stage, mergers: list[Delisting], trade_day: Mapping[DelistingKey,
         ftd.around([d for d in trade_day.values() if d], before=10, after=10, symbols=acq_symbols)
 
     lagged_acquirer: set[DelistingKey] = set()
+    own_cusips = {e.key: frozenset(st.cusips.get(e.sec_id, ())) for e in mergers}
 
     def answered(path: str, key: DelistingKey) -> float | None:
         """The caller's received close for this merger, when its request is the one of this price path."""
@@ -759,7 +760,9 @@ def _gate(st: _Stage, mergers: list[Delisting], trade_day: Mapping[DelistingKey,
         # Priced on THAT merger's own last-trade day: many mergers can share a
         # delist_date, so a plain date->day map would misprice one with another's.
         day = trade_day.get(key)
-        got = ftd.close_after(day, symbol=ticker) if day and ticker else None
+        # by symbol, a row of the target's own CUSIPs is the target's close and never its acquirer's (old Charter
+        # 2016: New Charter took the ticker, and the old CUSIP's last row is dated the day after the last trade)
+        got = ftd.close_after(day, symbol=ticker, skip=own_cusips.get(key, ())) if day and ticker else None
         if got is None:
             return None
         if got[2]:

@@ -57,6 +57,15 @@ def test_a_short_ticker_no_exchange_phrase_finds_has_no_evidence():
     assert ticker_filing(other, 52988, "J", "2012-06-29", "2014-06-30") is None
 
 
+@pytest.mark.parametrize("ticker", ["ON", "IT", "A", "SO", "AN", "BE"])
+def test_a_short_ticker_that_is_an_english_word_is_never_searched(ticker):
+    """Code review: full-text search drops the colon, so "NYSE: ON" matches "began trading on the NYSE on May 5" in
+    the candidate's own filings. Such a ticker gets no evidence, as every short ticker did before."""
+    search = _Search([_hit(52988)])
+    assert evidence_for(52988, [EraEvidence(ticker, "2012-06-29", "2014-06-30", "name_search")], search) == ""
+    assert search.calls == []
+
+
 def test_no_cik_or_no_search_means_no_evidence():
     assert evidence_for(None, [ERA], _Search([_hit(1011006)])) == ""
     assert evidence_for(1011006, [ERA], None) == ""

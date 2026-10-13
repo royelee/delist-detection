@@ -26,6 +26,10 @@ SEARCH_FORMS = "8-K,10-K,10-Q,DEF 14A,25-NSE,20-F,6-K,40-F"
 SEARCH_PAD_DAYS = 365
 MIN_SEARCH_TICKER = 3
 EXCHANGE_PREFIXES = ("NYSE", "Nasdaq", "NYSE American", "NYSE MKT", "AMEX")   # tried in this order for a short ticker
+# Full-text search drops the colon, so "NYSE: ON" matches "began trading on the NYSE on May 5": a short ticker that
+# is an English word is never searched, with or without an exchange
+SHORT_WORDS = frozenset({"A", "I", "AM", "AN", "AS", "AT", "BE", "BY", "DO", "GO", "HE", "IF", "IN", "IS", "IT", "ME",
+                         "MY", "NO", "OF", "OH", "OK", "ON", "OR", "SO", "TO", "UP", "US", "WE"})
 
 
 @dataclass(frozen=True)
@@ -43,7 +47,7 @@ def ticker_filing(search: Callable, cik: int, ticker: str, first: str, last: str
     holds `cik`. The phrase is the ticker, or for one shorter than
     MIN_SEARCH_TICKER the ticker after each exchange of EXCHANGE_PREFIXES
     ("NYSE: GM"), the first that hits answering."""
-    if not ticker:
+    if not ticker or ticker.upper() in SHORT_WORDS:
         return None
     lo = date.fromisoformat(first) - timedelta(days=SEARCH_PAD_DAYS)
     hi = date.fromisoformat(last) + timedelta(days=SEARCH_PAD_DAYS)

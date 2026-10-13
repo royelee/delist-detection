@@ -165,6 +165,13 @@ def _no_symbol_yet(row: FtdRow) -> bool:
     return is_unassigned_symbol(row.symbol) or row.symbol == row.cusip[:6]
 
 
+def _is_ticker(symbol: str) -> bool:
+    """Whether a fails row's symbol is a ticker a security trades under: letters, and none of the forms that are no
+    ticker (`ftd.is_trading_symbol`: a deleted or unassigned symbol, a pair-off placeholder with digits) or SEC's
+    2007 mask (**********)."""
+    return any(ch.isalpha() for ch in symbol) and is_trading_symbol(symbol)
+
+
 def _first_days(rows: Sequence[FtdRow]) -> list[tuple[str, str]]:
     """FB-022: (day, ticker) of a CUSIP's first trading day under a ticker, where the fails rows show it: the row
     with no symbol yet (`_no_symbol_yet`: `<ticker>ZZZZ`, or the CUSIP's own prefix) dated the trading day before
@@ -183,7 +190,7 @@ def _first_days(rows: Sequence[FtdRow]) -> list[tuple[str, str]]:
         under: set[str] = set()                        # the tickers the CUSIP's earlier rows were under
         for z, nxt in zip(own, own[1:]):
             ticker = bare_ticker(nxt.symbol)
-            if (_no_symbol_yet(z) and not _no_symbol_yet(nxt) and ticker not in under
+            if (_no_symbol_yet(z) and _is_ticker(nxt.symbol) and ticker not in under
                     and (not is_unassigned_symbol(z.symbol) or bare_ticker(z.symbol[:-4]) == ticker)
                     and nxt.date == next_trading_day(date.fromisoformat(z.date)).isoformat()):
                 out.append((z.date, nxt.symbol))

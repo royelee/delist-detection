@@ -290,7 +290,9 @@
   ending. A day no exchange print gave is never the first day of the security that took the ticker, nor later
   (FB-022, `last_trade.before_successor`): a fails row is dated a trading day after the close it carries, so an old
   security's last row falls on its successor's first day, and that first day is read from the successor's own
-  unassigned-symbol row (`history._first_days`). A day that is not a confirmed exchange print no later than the Form 25 effective date
+  unassigned-symbol row (`history._first_days`). A row that keeps its value and is moved this way after stages 7
+  and 8 ran has its close and its value read again on the day it now carries (`pipeline._read_again`), so its
+  price requests and the caller's answers to them are keyed by one day. A day that is not a confirmed exchange print no later than the Form 25 effective date
   (`exit_kind.LastTrade.print_confirmed`; architecture step 4's ruling) makes the ending `uncertain`, with the
   failing part as its reason in `uncertain.csv`; a continuation's verdict does not judge its day. The price date and
   the price requests follow the published date; a continuation has no value and publishes no cash (cash paid to
