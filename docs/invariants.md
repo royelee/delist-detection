@@ -16,9 +16,11 @@
   `fetch_filing_text`/`full_text_search`/`sec_http` downloads retries up to 3
   attempts (2s/4s backoff, `edgar.retry_request`, inside `edgar.sec_get`); a 403/429 still raises
   `EdgarBlocked` at once, and a failure is never cached.
-  A filing list is a main file and older pages, and a cached page is never read against a main file that lists it
-  differently: it is fetched again (`EdgarClient._older_page`, FB-025), and a fetch that fails is a stale read,
-  which flags the row that rested on it.
+  A filing list is a main file and older pages, and its cached copies are read only as one list: each page
+  fetched under the copy of the main file it is read with. Any other list is fetched again from the top, the main
+  file first and the pages in order (`EdgarClient._whole_list`, FB-025), and a fetch that fails is a stale read,
+  which flags the row that rested on it. A run never leaves a filing list with fewer filings in its cached copies
+  than it found.
   The limiter (`sec_limiter.SEC_LIMITER`) is shared by every thread of the process
   and, through `~/.cache/delist_detection/sec_rate.lock`
   (`$DELIST_DETECTION_SEC_RATE_LOCK`), by every SEC client on the machine

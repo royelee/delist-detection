@@ -207,12 +207,16 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `recent_filings()`, `fetch_filing_text()`/`fetch_filing_raw()` (HTML-stripped
   and raw text caches), `company_tickers()`, and `full_text_search()`, the optional capability
   `capabilities.FULL_TEXT_SEARCH`, which this adapter offers. `recent_filings()` reads the main file's recent block
-  and then each older page, each filing once. EDGAR moves the oldest rows of the recent block into the first page
-  as the issuer files, so a page cached before the main file was fetched again lacks the rows that moved since
-  (FB-025: new Cigna's 8-K12B of 2018-12-20 was in neither copy, and its handoff fell to timing). A cached page is
-  read as it is only when it was checked against the listing the main file gives for it now (`LISTED_KEY`: row
-  count, first and last date), or, never checked, when it is the oldest page and has the listed row count; any
-  other copy is fetched again, once per listing (`_older_page`). Owns `EdgarBlocked`, `resolve_user_agent()`, and
+  and then each older page, each filing once, as copies of one filing list (`_whole_list`). EDGAR moves the oldest
+  rows of the recent block into page 001 as the issuer files, a full page hands its oldest rows to the next, and a
+  new page is added at the end. So a filing is lost from the cache whenever a copy is newer than the copy of the
+  block after it (FB-025: new Cigna's main file was fetched again beside a page cached ten days before, its 8-K12B
+  of 2018-12-20 was in neither, and its handoff fell to timing). The cached copies are read as they are when each
+  page was fetched under this copy of the main file (`LIST_KEY`, the main file's `_list_id`: its recent accession
+  numbers and its page list, so a main file fetched again and found unchanged keeps its pages), or, for pages
+  cached before that was kept, when the list has one page with the listed row count. Any other list is fetched
+  again from the top, the main file first and then every page in order, which can hold a filing twice and never
+  lose one. No clock time is written into the cache, so two runs still leave the same bytes. Owns `EdgarBlocked`, `resolve_user_agent()`, and
   `sec_get()`: the one SEC request path (`sec_limiter.throttle`, User-Agent,
   `sec_stats` counting, `retry_request`, `EdgarBlocked` on 403/429) that
   `EdgarClient` and `sources/sec_http.py` share.
