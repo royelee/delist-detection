@@ -1694,6 +1694,15 @@ def _scorecard(ctx: _RunContext, read: RunSnapshot, config: run_scorecard.Scorec
     return card
 
 
+def _old_open_issuers(clients: Clients, history: Iterable[Mapping[str, Any]], as_of: date) -> int:
+    """How many issuers of the securities the run leaves open (a `security_history` interval with no end) it read
+    from a copy of their filing list fetched before the run date, or with no fetch date (FB-028). Stage 5 reads each
+    such issuer about the security's last sighting, so this is 0 unless a read failed or a stage read an issuer the
+    search did not."""
+    ciks = {int(r["issuer_id"]) for r in history if not r.get("end_date") and str(r.get("issuer_id") or "").isdigit()}
+    return sum(1 for cik in sorted(ciks) if clients.issuers.read_before(cik, as_of))
+
+
 def _merger_terms_usage(extractor) -> dict | None:
     """run_manifest.json's `merger_terms`: the LLM reader's model and where its answers came from (FB-004), or None
     for a run with no LLM reader (or a test's double of one, which keeps no account)."""
@@ -1834,7 +1843,9 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
                                                    handoffs=handoffs.counts,
                                                    continuation_filings=continuation_entries(confirmations),
                                                    disputes=counts["disputes"],
-                                                   merger_terms=_merger_terms_usage(clients.llm_extractor)))
+                                                   merger_terms=_merger_terms_usage(clients.llm_extractor),
+                                                   open_issuers_read_before_as_of=_old_open_issuers(
+                                                       clients, tables["security_history"], ctx.as_of)))
     return RunSummary(counts, dict(Counter(e.record.bucket.value for e in delistings)),
                       dict(Counter(s.figi_source for s in securities.values())), dict(flags), dict(triaged.counts),
                       scorecard_drops=card["drops"], golden_failures=card["golden_failures"],

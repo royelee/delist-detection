@@ -25,7 +25,10 @@
   and its file time is never read, because a copied cache carries the day of the copy (`edgar._stamped_on`, FB-028).
   The search for an ending reads an issuer's filings with no day of its own, so stage 5 first makes the issuer's
   list current for the security's last sighting (`issuers.profile(cik, about=last_seen)`): a security still seen
-  at the data's end is read from a copy fetched on the run date.
+  at the data's end is read from a copy fetched on the run date. `run_manifest.json` counts the issuers of the
+  securities the run leaves open whose list it read from a copy fetched before the run date, or with no fetch
+  date (`open_issuers_read_before_as_of`, `pipeline._old_open_issuers`): 0 unless a read failed or a stage read
+  an issuer the search did not.
   The limiter (`sec_limiter.SEC_LIMITER`) is shared by every thread of the process
   and, through `~/.cache/delist_detection/sec_rate.lock`
   (`$DELIST_DETECTION_SEC_RATE_LOCK`), by every SEC client on the machine

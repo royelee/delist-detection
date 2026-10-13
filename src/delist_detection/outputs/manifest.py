@@ -60,7 +60,7 @@ def _latency(timings: dict[str, list[float]]) -> dict[str, dict[str, float]]:
 def build(*, as_of: date, sec_workers: int, counts: dict[str, int], timings: dict[str, list[float]],
           stages: dict[str, dict[str, int]], review_flags: dict[str, int], review: dict[str, int],
           handoffs: dict[str, int] | None = None, continuation_filings: list[dict[str, str]] | None = None,
-          disputes: int = 0, merger_terms: dict | None = None
+          disputes: int = 0, merger_terms: dict | None = None, open_issuers_read_before_as_of: int = 0
           ) -> dict:
     """The manifest of one run. `counts` and `timings` are sec_stats.SEC_STATS.since()
     of the run's start; `stages` is the pipeline's per-stage meter. `warm_failed`
@@ -99,6 +99,9 @@ def build(*, as_of: date, sec_workers: int, counts: dict[str, int], timings: dic
         "latency_ms": _latency(timings),
         "stages": stages,
         "resolution_degraded": review_flags.get("resolution_degraded", 0),
+        # FB-028: the issuers of the securities the run leaves open whose filing list it read from a copy fetched
+        # before the run date, or with no fetch date; 0 when every such issuer was read about the run date
+        "open_issuers_read_before_as_of": open_issuers_read_before_as_of,
         "review": review,
         "handoffs": handoffs or {},
         "continuation_filings": continuation_filings or [],

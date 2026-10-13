@@ -222,6 +222,7 @@ def test_the_manifest_records_what_the_run_rested_on(fake_edgar, tmp_path):
     # (Task 9), and the manifest reports every counter group the brief's own
     # _by_prefix helper would otherwise silently drop.
     assert set(m) == {"as_of", "code_version", "schema_version", "sec_workers", "sec_requests", "cache_answers",
+                      "open_issuers_read_before_as_of",
                       "degraded_answers", "warm_degraded", "rejected_queries", "not_covered", "warm_failed",
                       "latency_ms", "stages", "resolution_degraded", "review", "handoffs", "continuation_filings",
                       "disputes", "merger_terms"}
@@ -342,3 +343,10 @@ def test_the_issuer_names_read_is_metered_with_issuer_resolution_and_warmed(fake
     stages = json.loads((tmp_path / "run_manifest.json").read_text())["stages"]
     assert stages["issuer resolution"]["edgar_requests"] == 1
     assert names_reads[0].startswith("sec-warm")                # the warm pass read it first
+
+
+def test_the_manifest_counts_the_open_issuers_whose_list_was_fetched_before_the_run_date():
+    """FB-028: 0 on a run that read every open security's issuer about its run date."""
+    kw = dict(as_of=date(2026, 9, 25), sec_workers=1, counts={}, timings={}, stages={}, review_flags={}, review={})
+    assert manifest.build(**kw)["open_issuers_read_before_as_of"] == 0
+    assert manifest.build(**kw, open_issuers_read_before_as_of=3)["open_issuers_read_before_as_of"] == 3

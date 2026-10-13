@@ -167,6 +167,13 @@ class IssuerRecord:
             self._remember(cik, sub, refreshed=fresh is not None)
         return sub
 
+    def read_before(self, cik: int, day: date) -> bool:
+        """Whether the copy of the issuer's submissions JSON this record holds was fetched before `day`, or says
+        nothing of when (`_fetched`); False for an issuer with no record. For run_manifest.json's count of the
+        open securities whose issuer was read from a copy older than the run date (FB-028)."""
+        sub = self.profile(int(cik))
+        return sub is not None and not sub.get("__not_found__") and not _fetched(sub, day)
+
     def _remember(self, cik: int, sub: dict, *, refreshed: bool) -> None:
         """Keep a current copy's profile. A copy a refreshing read returned may be newer than the one the issuer's
         filing list and first filing came from: those are read again when its fetch day differs from the last
