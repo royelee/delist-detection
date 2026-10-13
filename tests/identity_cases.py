@@ -13,7 +13,7 @@ from __future__ import annotations
 import csv
 import gzip
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
@@ -40,7 +40,8 @@ STAGE3_CIKS = (1336917, 1469372, 1636519, 1507934, 1560385, 1019849, 891103, 180
                1288776, 1652044, 46619, 920760, 1339947, 1355096, 48898, 1138118, 104889, 1323854,
                1160497, 1466258, 1699150, 895126,
                777001, 739708,       # FB-004 part c: Bear Stearns and Clear Channel, whose stale snapshots outlived the merger
-               1331875)              # ... and Fidelity National Financial, whose tracking stock FNFV the run gave no issuer
+               1331875,              # ... and Fidelity National Financial, whose tracking stock FNFV the run gave no issuer
+               1349436)              # FB-014: SandRidge Energy, whose 2016 bankruptcy left the observed stock behind
 # Tickers whose eras the committed run left with no issuer (so STAGE3_CIKS cannot name them): their observations are kept
 EXTRA_TICKERS = ("FNFV",)
 # Stage 2b: era key -> (its observed name, the committed run's first-pass answer, a name search)
@@ -108,7 +109,10 @@ class FixtureEdgar:
         return [] if d is None else [EdgarSubmission(*f) for f in d["filings"]]
 
     def company_tickers(self):
-        return {}
+        """SEC's ticker map as the recorded issuers give it: each one's tickers (its submissions JSON's `tickers`),
+        keyed as `edgar.EdgarClient.company_tickers` keys them."""
+        return {t.upper(): {"cik_str": int(cik), "ticker": t, "title": d["name"]}
+                for cik, d in self._issuers.items() for t in d.get("tickers") or ()}
 
 
 class FixtureFigi:
@@ -169,10 +173,14 @@ class Cases:
     backend: Backend
     log: list[str] = field(default_factory=list)
 
-    def identify(self, tickers, answers: dict[str, tuple[int | None, str]]) -> Identity:
-        """The identity stage over the observations of `tickers`, the lookup answering `answers`."""
-        want = set(tickers)
-        index = ObservationIndex([o for o in self.backend.observations if o.ticker in want])
+    def identify(self, tickers, answers: dict[str, tuple[int | None, str]], seeds=None, pins=None) -> Identity:
+        """The identity stage over the observations of `tickers`, the lookup answering `answers`. `seeds`: the
+        (ticker, day) pairs to keep of them, as a seed-list input has (default: every observation). `pins`:
+        ticker -> the `sec_id` the caller pins its observations to."""
+        want, pins = set(tickers), pins or {}
+        index = ObservationIndex([replace(o, sec_id=pins[o.ticker]) if o.ticker in pins else o
+                                  for o in self.backend.observations if o.ticker in want
+                                  and (seeds is None or (o.ticker, o.as_of) in seeds)])
         clients = SimpleNamespace(resolver=CommittedLookup(answers), figi=self.backend.figi,
                                   ftd_client=self.backend.ftd_client, edgar=self.backend.edgar,
                                   issuers=IssuerRecord(self.backend.edgar, today=AS_OF, name_index=self.backend.index))

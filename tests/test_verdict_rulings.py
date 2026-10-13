@@ -310,6 +310,30 @@ def test_a_wind_down_with_no_value_read_is_uncertain():
     assert "value_pending:distributions" in _reasons(row)
 
 
+def test_a_merger_with_no_terms_read_is_uncertain():
+    """FB-016 (consensus of 2026-10-12): CureVac 2026's terms were not read, so it has no value and no fill, and the
+    verdict says why. A merger left at par with nothing refused (`merger_at_par` alone) is no longer written."""
+    row = ending("A", "2015-03-13", "merger", method="pending_terms", **{**GOOD, "dlret": ""})
+    assert _reasons(row) == ("value_pending:terms",)
+
+
+def test_a_merger_with_a_contingent_right_beside_its_cash_is_uncertain_and_keeps_its_value():
+    """FB-024 (consensus of 2026-10-12): TreeHouse 2026 paid $22.50 and a contingent value right. The row keeps the
+    cash and its dlret, the value of the part that was valued, and the verdict says a part is missing. A
+    continuation carries no such doubt."""
+    row = ending("A", "2015-03-13", "merger", flags="contingent_right_unvalued", **GOOD)
+    assert _reasons(row) == ("value_incomplete:contingent_right",) and row["dlret"] == "0.01"
+    plain = ending("A", "2015-03-13", "merger", **GOOD)
+    assert _reasons(plain) == ()
+
+
+def test_a_merger_whose_filings_name_a_closing_dividend_without_an_amount_is_uncertain():
+    """FB-023's follow-up (Two Harbors 2026): the row keeps its cash and its dlret, and the verdict says a dividend
+    the filings name is not in the value."""
+    row = ending("A", "2015-03-13", "merger", flags="closing_dividend_unstated", **GOOD)
+    assert _reasons(row) == ("value_incomplete:closing_dividend",) and row["dlret"] == "0.01"
+
+
 def test_an_observed_figi_security_with_no_issuer_is_uncertain():
     """FB-006: AMAT, EXPD, DD: a FIGI confirmed by CUSIP and no issuer CIK. Its seeds and endings are uncertain; a
     placeholder (its own rule) and a security the run added (no observation) are left alone."""
@@ -323,6 +347,23 @@ def test_an_observed_figi_security_with_no_issuer_is_uncertain():
     added = _verdicts(row, securities=[sec("A"), sec("B", cik="", observed=False)],
                       history=[iv("A", "AAA", "2010-01-04", "2015-03-02")])
     assert "issuer_unresolved" not in added.securities["B"].reasons
+
+
+def test_an_observed_security_open_under_a_bankruptcy_ticker_is_uncertain():
+    """FB-014: SandRidge's old stock stayed open under SDOCQ with no ending. A five-letter ticker ending in Q is an
+    OTC bankruptcy symbol, so an observed security whose open interval carries one has left its exchange and
+    nothing says how. A closed interval under one, an open ticker of another length and a security the run added
+    are left alone."""
+    estate = [iv("A", "AAA", "2010-01-04", "2016-05-18"), iv("A", "AAAAQ", "2016-05-19")]
+    assert "open_under_bankruptcy_ticker:AAAAQ" in _verdicts(history=estate).securities["A"].reasons
+    closed = [iv("A", "AAA", "2010-01-04", "2016-05-18"), iv("A", "AAAAQ", "2016-05-19", "2016-10-03")]
+    listed = [iv("A", "AAA", "2010-01-04", "2016-05-18"), iv("A", "AAAQ", "2016-05-19")]
+    for history in (closed, listed):
+        assert not any(r.startswith("open_under_bankruptcy_ticker")
+                       for r in _verdicts(history=history).securities["A"].reasons)
+    added = _verdicts(securities=[sec("A"), sec("B", observed=False)],
+                      history=[iv("A", "AAA", "2010-01-04"), iv("B", "BBBBQ", "2016-05-19")])
+    assert added.securities["B"].reasons == ()
 
 
 def test_a_form25_filed_name_check_needs_an_observed_name():

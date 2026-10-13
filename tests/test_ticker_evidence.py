@@ -3,7 +3,8 @@ from datetime import date
 import pytest
 
 from delist_detection.sources.edgar import EdgarBlocked, EdgarClient
-from delist_detection.identity.ticker_evidence import SEARCH_FORMS, EraEvidence, evidence_for, ticker_filing
+from delist_detection.identity.ticker_evidence import (EXCHANGE_PREFIXES, SEARCH_FORMS, EraEvidence, evidence_for,
+                                                       ticker_filing)
 
 
 class _Search:
@@ -38,9 +39,30 @@ def test_a_hit_from_another_filer_is_not_evidence():
     assert ticker_filing(_Search([_hit(999)]), 1011006, "YHOO", "2010-06-30", "2016-06-30") is None
 
 
-def test_a_short_ticker_is_never_searched():
-    search = _Search([_hit(52988)])
+def test_a_short_ticker_is_searched_with_its_exchange_in_front_and_never_bare():
+    """FB-003 follow-up (old General Motors, CIK 40730): a bare "GM" matches ordinary text, so it is never the
+    phrase; "NYSE: GM", as the company's own releases write it, is in 65 of its 8-Ks of 2007 to 2010."""
+    era = EraEvidence("GM", "2008-01-16", "2009-06-08", "name_search")
+    search = _Search([_hit(40730, "0000950152-09-000935")])
+    assert evidence_for(40730, [era], search) == "filing:0000950152-09-000935"
+    assert search.calls == [('"NYSE: GM"', SEARCH_FORMS, date(2007, 1, 16), date(2010, 6, 8), (40730,))]
+
+
+def test_a_short_ticker_no_exchange_phrase_finds_has_no_evidence():
+    search = _Search([])
     assert evidence_for(52988, [EraEvidence("J", "2012-06-29", "2014-06-30", "name_search")], search) == ""
+    assert [c[0] for c in search.calls] == [f'"{x}: J"' for x in EXCHANGE_PREFIXES]
+    assert '"J"' not in [c[0] for c in search.calls]
+    other = _Search([_hit(999)])                           # another filer's release naming the ticker is no evidence
+    assert ticker_filing(other, 52988, "J", "2012-06-29", "2014-06-30") is None
+
+
+@pytest.mark.parametrize("ticker", ["ON", "IT", "A", "SO", "AN", "BE"])
+def test_a_short_ticker_that_is_an_english_word_is_never_searched(ticker):
+    """Code review: full-text search drops the colon, so "NYSE: ON" matches "began trading on the NYSE on May 5" in
+    the candidate's own filings. Such a ticker gets no evidence, as every short ticker did before."""
+    search = _Search([_hit(52988)])
+    assert evidence_for(52988, [EraEvidence(ticker, "2012-06-29", "2014-06-30", "name_search")], search) == ""
     assert search.calls == []
 
 

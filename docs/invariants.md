@@ -232,7 +232,10 @@
   the mismatches it makes are settled under the judge's own keys, `loop_round.new_row_keys`) and commits the truth
   set: the truth file, the
   change log and the ledger together (`truth_set.TruthSet.commit`, `atomic_io.replace_all_on_success`); no script
-  writes one of them alone, and a sub-plan's rulings are data passed to `TruthSet.rule` (scripts/apply_5f/5h/5i). A
+  writes one of them alone, and a sub-plan's rulings are data passed to `TruthSet.rule` (scripts/apply_5f/5h/5i, apply_fb020_truth_rule.py for the
+  contract's `last_trade_date` rule of FB-019 and FB-020, apply_fb021_truth_rule.py for a `cash_per_share` cell
+  that leaves out a closing dividend, and apply_fb003_truth_rule.py for a row that names the old News Corp line's
+  former placeholder). A
   `pending` ledger row is never re-diagnosed automatically: the operator settles it or deletes the row. The loop
   stops after a round with no new error, or after 3 rounds. A sub-plan is accepted only when `D.mismatches` fell
   and `scripts/scorecard.py --check --base <commit>` passes (`D.unexplained_regressions` 0, `loop_round.unexplained`). `truth_build.UNSETTLED`: an OpenFIGI error or several US
@@ -250,10 +253,16 @@
   in `uncertain.csv`.** `kind` is seed | security | ending; `reason` holds
   `code` or `code:detail` items (outputs/verdict.py's docstring lists them). The
   verdict covers identity, exit kind and the last trade date, never the value
-  (except assumed par after a failed payout, LLM or terms gate, decision 4, and a wind-down with no value at all,
-  ruling G's `value_pending`: the spec's invariant). Ruling G (upstream feedback) adds `no_history`,
-  `history_after_last_trade`, `exchange_without_successor` and `kind_by_filing_history_only`, and a security reason,
-  `issuer_unresolved` (FB-006: an observed security with a FIGI and no issuer CIK). A seed whose
+  (except assumed par after a failed payout, LLM or terms gate, decision 4, and an ending with no value at all,
+  `value_pending`: a wind-down whose distributions are not read, ruling G, and a merger whose terms nothing
+  states, FB-016; the spec's invariant; and a value the library knows to be incomplete,
+  `value_incomplete:contingent_right`, FB-024: a merger whose terms note a contingent value right, a warrant or
+  another contingent payment beside the package, flagged `contingent_right_unvalued` by stage 8; the row keeps its
+  terms and its `dlret`, which is the value of the valued part, and a `--merger-terms` row takes no such doubt).
+  Ruling G (upstream feedback) adds `no_history`,
+  `history_after_last_trade`, `exchange_without_successor` and `kind_by_filing_history_only`, and two security
+  reasons, `issuer_unresolved` (FB-006: an observed security with a FIGI and no issuer CIK) and
+  `open_under_bankruptcy_ticker` (FB-014: an observed security open under a five-letter ticker ending in Q). A seed whose
   only problem is its security is counted, not listed. Pipeline stages 10e
   (ticker evidence: about one cached EDGAR search per placeholder without a
   ticker tier), 10f (verdicts), 10g (the contract) and 10h (scorecard) run
@@ -275,11 +284,20 @@
 - **The contract is written beside today's tables for one release (decision 6).** Stage 10g writes
   `output/contract/{security_history,delistings,seeds,price_requests,id_changes,payout_legs}.csv` from the tables about to be
   written and the verdicts; the scorecard (10h) reads the issuer from `contract/security_history.csv`. Contract
-  delistings hold one row per ended security, its last real ending; `last_trade_date` is published only when it
-  is publishable (`exit_kind.LastTrade.publishable`, read over the row by `exit_kind.published`: confirmed, from an
-  exchange print, no later than the Form 25 effective date; architecture step 4's ruling), and the price date and
-  the price requests follow the published date; a continuation has no value; assumed par, Shumway marks
-  and a transfer's 0.0 are `dlret_fill`. `--price-answers` (the requests plus a `price` column) feeds the closes and
+  delistings hold one row per ended security, its last real ending; `last_trade_date` is the day the library holds
+  for it, whatever its source (`exit_kind.published`; FB-019 and FB-020, which replaced decision 12's "blank when
+  uncertain"), so it is the day the security's history ends on, and it is blank only when no source dates the
+  ending. A day no exchange print gave is never the first day of the security that took the ticker, nor later
+  (FB-022, `last_trade.before_successor`): a fails row is dated a trading day after the close it carries, so an old
+  security's last row falls on its successor's first day, and that first day is read from the successor's own
+  unassigned-symbol row (`history._first_days`). A row that keeps its value and is moved this way after stages 7
+  and 8 ran has its close and its value read again on the day it now carries (`pipeline._read_again`), so its
+  price requests and the caller's answers to them are keyed by one day. A day that is not a confirmed exchange print no later than the Form 25 effective date
+  (`exit_kind.LastTrade.print_confirmed`; architecture step 4's ruling) makes the ending `uncertain`, with the
+  failing part as its reason in `uncertain.csv`; a continuation's verdict does not judge its day. The price date and
+  the price requests follow the published date; a continuation has no value and publishes no cash (cash paid to
+  the old security's holders at the step is a dividend of the price series, dated on the successor's first day:
+  FB-021); assumed par, Shumway marks and a transfer's 0.0 are `dlret_fill`. `--price-answers` (the requests plus a `price` column) feeds the closes and
   acquirer prices, so a second run changes values only: each stage reads the answer to its own request
   (`price_requests.PriceAnswers`; stage 7 a last close, stage 8 a stock leg's received close, stage 10a an OTC print
   or a plan's new-line close), and `pipeline.Overrides` holds only the caller's own files. What decides an identity,
@@ -313,7 +331,15 @@
   issuer's EDGAR names (current and former; `FigiResolver` drops such a match
   when another era's pin or CUSIP contradicts it, or when it would leave a
   same-class sibling era alone on the issuer's placeholder). The spec's third
-  route, an acquirer/successor name match, is not built (spec §17).
+  route, an acquirer/successor name match, is not built (spec §17). A pick is also withdrawn (FB-003, Fox 2019)
+  when the ticker's holder today had not filed anything by the era's first sighting, is another company than the
+  era's issuer and is no 8-K12B/8-K12G3 successor registration (`weak_eras_before_registrant`): the 2013 to 2019
+  sightings of FOXA are Twenty-First Century Fox's, not Fox Corporation's FIGI (whose first filing is of 2018-10-09).
+  A CUSIP change is not one line when another registrant replaced the class (`identity._Replaced`: the old
+  registrant's Form 25 and closing 8-K, the new one registered by a Form 10, a spin-off, and filing no 8-K12B/8-K12G3): the
+  old line ends there, with its own Form 25, and the new FIGI starts at its own CUSIP with the new issuer only. A
+  one-for-one reorganization (Merck 2009, Clearwire 2008, Express Scripts 2012, Disney 2019) stays one security with its issuer
+  change.
 
 ## A delisting is a Form 25 removal — not a rename, not a secondary withdrawal
 
@@ -379,6 +405,19 @@
   or none is one security; a placeholder folds into the FIGI line its new CUSIP names (contract/id_changes.csv
   names it); another composite is a line successor, linked by stage 9 as a continuation (an `unknown` row at the
   switch is rewritten, `line_continuation`: it drops `no_evidence_default` and gets medium confidence); so is a merger row at the switch when stage 4b followed the step (the old registrant carries on: TEAM, LSXMA, FWONA), unless its payout reconciled with the last close.
+  A held pick is not always the end (FB-003, News Corp 2013): when the own-ticker switch's CUSIP is another
+  issuer's security's and its rows do not name the issuer, while the issuer was renamed and a free switch's rows
+  (an 8-K or the renamed-CUSIP scan names it) name its EDGAR name in force, that switch is the issuer's own next
+  line, corroborated and decided as any step (NWS-A to Twenty-First Century Fox's FOXA on 90130A101, which has no
+  composite: the placeholder carries on, folding into the issuer's other placeholder that holds the CUSIP). Of
+  several, the one that began the day the held pick did.
+  A step may begin after the window (FB-015): the fails files hold a row only on a day with a fail, so a quiet
+  stock's new CUSIP can first appear years after the old one's last row (Ocwen: 2020-08-12, then 2023-07-14). A line
+  whose FIGI its own CUSIP or a pin confirms, and that the round found no step for, takes the first later CUSIP
+  under its own ticker when OpenFIGI names the line's own composite for it and the registrant carried on, and the
+  same CUSIP under a ticker EDGAR lists for the issuer (ONIT). Such a late step needs no filing near its first row,
+  a bankruptcy or an ended listing anywhere in the gap refuses it, and one that is not confirmed is dropped with no
+  review item.
   A step stage 4b refuses because another registrant took over (`merged_out`, `other_registrant`), or whose new rows do
   not name the issuer's name after the step (`name`) but name the old line's, is a line of the run when it follows an
   era of the same ticker and its CUSIP is not the ticker's next era's: the identity stage keeps those fails rows as an
@@ -542,6 +581,36 @@
   `run_snapshot` refuse every older commit's file. An election whose cash and stock legs together reconcile,
   when neither does alone, is its default package (`llm_election_package`, sub-plan 5e); either-or legs are never
   summed.
+- **A closing dividend declared before the closing 8-K is looked for only where the value is short (FB-023).**
+  After a gate pass, a merger whose kept value is more than 1% under its last close, with no dividend read and no
+  caller's terms, has its target's 8-Ks of the 60 days before the delisting asked the dividend question
+  (`LLMMergerTermsExtractor.earlier_dividend`, `merger_value._EarlierDividends`; Plains Exploration 2013). A
+  dividend counts only when it is less than twice the gap between the value and the close, so a merger not asked
+  can be short by less than 2% of its close. What is read joins the run's dividends before the gate runs again,
+  and every later pass decides on its own closes whether it counts. A merger only the caller's answers value (its
+  stock leg, its close) is asked after the answered pass, so the first pass is the same in both runs. A filing that
+  names a closing dividend and states no amount per share gives nothing to count (`ClosingDividend.amount` None);
+  when no search finds the amount and the last pass values the merger more than 1% under its close, the row is
+  flagged `closing_dividend_unstated` and is `uncertain` with `value_incomplete:closing_dividend`, its terms and
+  `dlret` kept (Two Harbors 2026). A dividend whose quoted record date follows the merger is the acquirer's and
+  is dropped when the answer is read, with or without an amount, so it puts no doubt on the row on any pass
+  (Athene 2022: "a record date and payment date following the completion of the Mergers").
+- **A closing dividend is read apart from the package and counts in the value only (FB-021).** It is cash the
+  target paid its holders because the deal closed (Extended Stay 2021: $1.75 a share beside the merger's $18.75).
+  `LLMMergerTermsExtractor.closing_dividend` reads it with a question of its own, for a merger either reader gave
+  terms for, from a closing filing whose text names a dividend with a dollar amount. The filings state a record
+  date and a payment date and no ex-date, so the last close decides: the dividend counts when the consideration
+  with it is nearer the last close than the consideration alone (`payout_gate._counted`), and the gate then checks
+  that total as it checks every value. When the consideration alone is nearer, the stock had gone ex-dividend, the
+  price series carries the payment, and it does not count (USG 2019). The decision is made on the closes each gate
+  pass reads, so a caller's answered close can change it, as it can change any value. A counted dividend is added
+  only to the table's cash (`MergerValues.table_terms`): `payout_per_share` and the contract's `cash_per_share`
+  are all the cash one share received, `raw_payout_per_share` stays the regex read, and `value_formula` names the
+  parts (`(18.75 + 1.75 dividend) / last_close − 1`). What the run's decisions read (`read_terms`, `reconciled`)
+  is the package without it, so the operator ruling of 2026-10-04 (a special dividend is never consideration)
+  still decides an ending's kind, and a continuation publishes no cash (Kraft 2015, Baker Hughes 2017). A
+  `--merger-terms` row takes no dividend: the caller states all the cash. No prompt version changed and no merger
+  is read again; the question's answers are cached under `{accession}_{model}_div1_{ticker}`.
 
 ## The golden set is the regression gate
 

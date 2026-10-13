@@ -393,6 +393,22 @@ def tie_candidates(f25: Form25, refs: Sequence[SecurityRef]) -> set[str]:
     return set(same) if len(same) > 1 else set()
 
 
+def every_class(f25: Form25, refs: Sequence[SecurityRef]) -> set[str]:
+    """FB-003 (Twenty-First Century Fox 2019, "Class A Common Stock & Class B Common Stock"): the siblings a Form 25
+    names class by class without telling them apart. It names two or more class letters, no sibling of its kind
+    carries a letter (its class's, or its fails descriptions' hint), and there are as many siblings of its kind as
+    classes named: each sibling is one of the classes, whichever is which. Empty otherwise. The text alone does not
+    say they all stopped: the trading record does (`delistings._tie_owner`)."""
+    kind = class_kind(f25.class_text)
+    same = [r for r in refs if r.kind == kind or (kind == "other" and r.kind == "common")]
+    letters = class_letters(f25.class_text)
+    if len(letters) < 2 or len(same) != len(letters):
+        return set()
+    if any(class_letter(r.share_class) is not None or r.letter_hint is not None for r in same):
+        return set()
+    return {r.sec_id for r in same}
+
+
 def class_letters(class_text: str) -> set[str]:
     """Every class letter the Form 25's text names."""
     return {class_letter(label) for label, _ in _lettered_segments(class_text)} - {None}

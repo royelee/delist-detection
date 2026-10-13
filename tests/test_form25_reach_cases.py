@@ -214,15 +214,18 @@ def test_a_security_listed_today_reads_no_form25_from_before_its_first_sighting(
     assert fc.find("BBG00B4Z2YX0", edgar=edgar) == ([], []) and edgar.raws_read == []
 
 
-@pytest.mark.parametrize("sec_id,day", [("BBG00GVR8YQ9", "2023-03-12"), ("BBG001QD41M9", "2024-12-28"),
-                                         ("BBG000D9DMK0", "2024-05-30")], ids=["LIN", "APTV", "LH"])
-def test_the_sibling_slack_keeps_an_old_redomiciled_line_from_a_false_ending(sec_id, day, monkeypatch):
-    """Must not change (binding, 2026-10-04): the old lines of Linde, Aptiv and Labcorp. The 30-day slack keeps the
-    new line alive at its Form 25, so the filing stays ambiguous between the two lines and the old line takes no
-    ending of its own; with a sibling alive only from its own first sighting, the old line would end there."""
+@pytest.mark.parametrize("sec_id,without_slack", [("BBG00GVR8YQ9", []), ("BBG001QD41M9", []),
+                                                   ("BBG000D9DMK0", ["2024-05-30"])], ids=["LIN", "APTV", "LH"])
+def test_the_sibling_slack_keeps_an_old_redomiciled_line_from_a_false_ending(sec_id, without_slack, monkeypatch):
+    """Must not change (binding, 2026-10-04): the old lines of Linde, Aptiv and Labcorp. The new line is alive at
+    its Form 25, so the filing stays ambiguous between the two lines and the old line takes no ending of its own.
+    For Labcorp that rests on the 30-day slack: with a sibling alive only from its own first sighting, the old line
+    would end there. Linde's and Aptiv's new lines no longer need it (FB-022): each new CUSIP's first trading day,
+    its ZZZZ row, is the day of the Form 25, where the first row under the ticker came a day later (the old lines
+    ended 2023-03-12 and 2024-12-28 without the slack before)."""
     assert fc.outcome(sec_id)[0] == []
     monkeypatch.setattr(delistings, "SIBLING_ALIVE_BEFORE_DAYS", 0)
-    assert [r[0] for r in fc.outcome(sec_id)[0]] == [day]
+    assert [r[0] for r in fc.outcome(sec_id)[0]] == without_slack
 
 
 def test_reading_a_cik_in_force_over_part_of_the_span_would_give_perrigo_a_2013_row():
@@ -334,7 +337,7 @@ def test_abraxis_with_no_cusip_and_no_volume_ends_on_its_last_sighting():
     d = _unexplained("CIK1409012-COMMON")
     assert (d.delist_date, d.last_trade.source, d.record.bucket.value, d.cik) == (
         "2009-06-08", "last_sighting", "unknown", 1409012)
-    assert d.flags == ["last_trade_date_unconfirmed", "unexplained_ending"] and not d.last_trade.publishable(None)
+    assert d.flags == ["last_trade_date_unconfirmed", "unexplained_ending"] and not d.last_trade.print_confirmed(None)
 
 
 def test_alberto_culver_under_the_wrong_issuer_ends_on_the_last_day_its_fails_rows_show_it_trading():

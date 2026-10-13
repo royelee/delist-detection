@@ -71,6 +71,17 @@ def _reads(edgar: _Edgar, what: str, cik: int = 7) -> int:
     return edgar.calls.count((what, cik))
 
 
+def test_recent_days_tell_no_filing_from_a_list_that_is_not_known():
+    """FB-015: a company EDGAR holds no filing of was not filing; one whose JSON holds no filings block, or cannot be
+    read, is not judged."""
+    empty = {"name": "MANPOWER INC /DE/", "formerNames": [], "filings": {"recent": {"form": [], "filingDate": []}}}
+    r = IssuerRecord(_Edgar({7: HALYARD, 8: empty, 9: {"name": "NO BLOCK CO", "formerNames": []}}, {}))
+    assert r.recent_days(7, "25") == [date(2018, 6, 29)] and r.recent_days(7, "S-") == []
+    assert len(r.recent_days(7)) == len(HALYARD["filings"]["recent"]["form"])
+    assert r.recent_days(8) == [] and r.recent_days(9) is None and r.recent_days(404) is None
+    assert r.recent_form_dates(9, "25") == [] and r.recent_form_dates(404, "25") == []
+
+
 # --- each issuer read once per run --------------------------------------------------------------------------------
 
 def test_each_issuer_is_read_once_and_answers_from_that_read():
@@ -255,6 +266,49 @@ def test_a_name_index_that_cannot_be_loaded_is_none_and_not_asked_again_but_a_re
 
 
 # --- warm passes ----------------------------------------------------------------------------------------------------
+
+class _Tickers:
+    """An EDGAR client that answers only SEC's ticker map: its answers in turn (an exception is raised)."""
+
+    def __init__(self, *answers):
+        self.answers, self.reads = list(answers), 0
+
+    def company_tickers(self):
+        self.reads += 1
+        got = self.answers.pop(0) if len(self.answers) > 1 else self.answers[0]
+        if isinstance(got, Exception):
+            raise got
+        return got
+
+
+TICKER_MAP = {"GHC": {"cik_str": 104889, "ticker": "GHC", "title": "Graham Holdings Co"},
+              "BF-B": {"cik_str": "14693", "ticker": "BF-B", "title": "BROWN FORMAN CORP"}}
+
+
+def test_the_ticker_map_is_read_once_a_run_and_names_the_company_a_ticker_is_listed_under():
+    """`listed_under`: the CIK SEC's ticker map lists a ticker under, tickers compared as the tables spell them; the
+    map is read once and again after `forget` (a run starts)."""
+    edgar = _Tickers(TICKER_MAP)
+    record = IssuerRecord(edgar)
+    assert record.listed_under("GHC") == 104889 and record.listed_under("bf.b") == 14693
+    assert record.listed_under("WPO") is None and edgar.reads == 1
+    assert record.shadow().listed_under("GHC") == 104889 and edgar.reads == 1
+    record.forget()
+    assert record.listed_under("GHC") == 104889 and edgar.reads == 2
+
+
+def test_a_ticker_map_that_cannot_be_read_is_unknown_recorded_degraded_and_read_again():
+    """The record's failure policy: a failed read answers None, is logged (under `NO_ISSUER`: the map is no
+    issuer's) and is not remembered; a refusal stops the run."""
+    edgar = _Tickers(requests.ConnectionError("down"), TICKER_MAP)
+    record = IssuerRecord(edgar)
+    watch = record.watch()
+    assert record.listed_under("GHC") is None
+    assert watch.ciks == {IssuerRecord.NO_ISSUER} and watch.failed == {IssuerRecord.NO_ISSUER}
+    assert record.listed_under("GHC") == 104889 and edgar.reads == 2
+    with pytest.raises(EdgarBlocked):
+        IssuerRecord(_Tickers(EdgarBlocked("403"))).listed_under("GHC")
+
 
 def test_a_shadow_starts_from_what_is_remembered_and_keeps_its_own_reads():
     e = _Edgar({1: {"name": "A"}, 2: {"name": "B"}})

@@ -91,9 +91,11 @@ class _Edgar:
     def __init__(self, filings=None, *, texts=None, name=NAME):
         self.filings, self.texts, self.name, self.read = filings, texts or {}, name, []
         self.former = []        # EDGAR's former names: {"name", "from", "to"}
+        self.listed = []        # the tickers EDGAR lists for the issuer today (on the NYSE)
 
     def submissions(self, cik, fresh_after=None):
-        return {"name": self.name, "formerNames": self.former, "tickers": [], "exchanges": []}
+        return {"name": self.name, "formerNames": self.former, "tickers": list(self.listed),
+                "exchanges": ["NYSE"] * len(self.listed)}
 
     def recent_filings(self, cik):
         return list(self.filings)
@@ -155,6 +157,115 @@ def test_a_chain_of_switches_is_followed_up_to_max_rounds_and_no_further():
     short = _follow([_Spec("BBGA", 1, "AA", ["C1"])], _line("AA", ["C1", "C2", "C3"]))
     assert short.cusips["BBGA"] == ["C1", "C2", "C3"]
     assert [f for _, f in _flags(short)] == ["line_followed", "line_followed"]
+
+
+# --- FB-015: a line that goes on after a gap in the fails rows ----------------------------------------------------
+
+def _weekly(ticker, cusip, start, n=6):
+    return [FtdRow((date.fromisoformat(start) + timedelta(weeks=w)).isoformat(), cusip, ticker, NAME, 5.0 + w * 0.01)
+            for w in range(n)]
+
+
+LATE = _line("AA", ["C1"]) + _weekly("AA", "C2", "2014-06-02")       # C1's last row is 2012-02-20: a two-year gap
+
+
+def test_a_line_goes_on_after_a_gap_when_openfigi_names_its_own_composite():
+    """Ocwen 2020: the post-split CUSIP's first fails row is three years after the old CUSIP's last. The window sees
+    no step; the late one is taken because OpenFIGI names the line's own composite for the new CUSIP, which is asked
+    alone once R1 let the step through."""
+    figi = _Figi({"C2": _answer("BBGA", "AA")})
+    lines = _follow([_Spec("BBGA", 1, "AA", ["C1"])], LATE, edgar=_Edgar([LATER_10Q]), figi=figi)
+    assert lines.cusips["BBGA"] == ["C1", "C2"] and figi.asked == ["C2"]
+    assert _flags(lines) == [("BBGA", "line_followed")]
+    assert "after a gap in the fails rows" in lines.review[0].reason
+
+
+@pytest.mark.parametrize("answers", [{"C2": _answer("BBGX", "AA")}, {}])
+def test_a_late_step_openfigi_does_not_confirm_is_dropped_without_a_review_item(answers):
+    """Another composite (a recycled ticker's new holder that carries the name) or no answer: the line stays as the
+    window left it, with a log line and no finding."""
+    logged = []
+    lines = _follow([_Spec("BBGA", 1, "AA", ["C1"])], LATE, edgar=_Edgar([LATER_10Q]), figi=_Figi(answers),
+                    log=logged.append)
+    assert lines.cusips["BBGA"] == ["C1"] and _flags(lines) == [] and lines.refused == []
+    assert any("late step not followed" in line and "not_own_composite" in line for line in logged)
+
+
+def test_a_late_step_is_asked_only_of_a_line_its_own_cusip_confirms():
+    """A ticker pick is today's holder of the ticker, so its composite for a later CUSIP confirms nothing (old
+    SandRidge, FB-014); a placeholder has no composite."""
+    for spec in (_Spec("BBGA", 1, "AA", ["C1"], source="ticker"), _Spec("CIK1-COMMON", 1, "AA", ["C1"])):
+        figi = _Figi({"C2": _answer(spec.sec_id, "AA")})
+        lines = _follow([spec], LATE, edgar=_Edgar([LATER_10Q]), figi=figi)
+        assert lines.cusips[spec.sec_id] == ["C1"] and figi.asked == []
+
+
+def test_a_late_step_the_registrant_did_not_carry_on_to_is_dropped_before_openfigi_is_asked():
+    figi = _Figi({"C2": _answer("BBGA", "AA")})
+    lines = _follow([_Spec("BBGA", 1, "AA", ["C1"])], LATE, edgar=_Edgar([]), figi=figi)      # no periodic report after
+    assert lines.cusips["BBGA"] == ["C1"] and figi.asked == [] and _flags(lines) == []
+
+
+def test_a_late_rename_is_followed_to_the_ticker_edgar_lists_for_the_issuer():
+    """Ocwen 2024: the same CUSIP's first row under ONIT is eight weeks after its last under OCN; EDGAR lists ONIT
+    for the issuer, so the next round takes it."""
+    class Listed(_Edgar):
+        def submissions(self, cik, fresh_after=None):
+            return {**super().submissions(cik), "tickers": ["AB"], "exchanges": ["NYSE"]}
+
+    rows = LATE + _weekly("AB", "C2", "2014-09-15")          # C2's last row under AA is 2014-07-07
+    lines = _follow([_Spec("BBGA", 1, "AA", ["C1"])], rows, edgar=Listed([LATER_10Q]),
+                    figi=_Figi({"C2": _answer("BBGA", "AB")}))
+    assert lines.cusips["BBGA"] == ["C1", "C2"] and lines.securities["BBGA"].line_tickers == frozenset({"AB"})
+    assert [f for _, f in _flags(lines)] == ["line_followed", "line_followed"]
+    unlisted = _follow([_Spec("BBGA", 1, "AA", ["C1"])], rows, edgar=_Edgar([LATER_10Q]),
+                       figi=_Figi({"C2": _answer("BBGA", "AB")}))
+    assert unlisted.securities["BBGA"].line_tickers == frozenset()
+
+
+# --- FB-003, News Corp 2013: a renamed issuer's line goes on when a spin-off keeps its ticker -------------------------
+
+def _news_corp(*, spun_off=True, renamed=True):
+    """The old News Corp's class A (CIK 5, AA, C1), the spin-off that kept AA on C2 (BBGNEW, another issuer), and the
+    renamed issuer's class A on C3 under AB, held by the run's second placeholder of the issuer (the sightings FOXA
+    2013 to 2019 took, `CIK5-CLASS-A`). EDGAR dates the rename the day before C2 and C3 began."""
+    rows = _line("AA", ["C1"], desc="OLD NEWS CO")
+    began = _monday(WEEKS)
+    for cusip, ticker, desc, price in (("C2", "AA", "NEW NEWS CO", 5.0), ("C3", "AB", "RENAMED FOX INC", 6.0)):
+        rows += [FtdRow((date.fromisoformat(began) + timedelta(weeks=w)).isoformat(), cusip, ticker, desc,
+                        price + w / 100) for w in range(WEEKS)]
+    edgar = _Edgar(_stating(rows), name="RENAMED FOX INC")
+    edgar.former = [{"name": "OLD NEWS CO", "from": "2004-01-01T00:00:00.000Z",
+                     "to": (date.fromisoformat(began) - timedelta(days=1)).isoformat() + "T00:00:00.000Z"}] \
+        if renamed else []
+    edgar.listed = ["AB"]
+    specs = [_Spec("CIK5-COMMON", 5, "AA", ["C1"]),
+             _Spec("CIK5-CLASS-A", 5, "AB", ["C3"], name="RENAMED FOX INC CLASS A")]
+    if spun_off:
+        specs.append(_Spec("BBGNEW", 6, "AA", ["C2"], first="2012-06-01", last="2012-12-31"))
+    return specs, rows, edgar
+
+
+def test_a_line_goes_on_to_the_renamed_issuers_cusip_when_a_spin_off_keeps_its_ticker():
+    """NWS-A 2007 to 2013: the new News Corp (another issuer's security of the run) holds NWSA's next CUSIP, which
+    stopped the follow. The old issuer, renamed Twenty-First Century Fox, went on as FOXA on a CUSIP of its own, held
+    by its other placeholder (the FOXA sightings): the line folds into it."""
+    specs, rows, edgar = _news_corp()
+    lines = _follow(specs, rows, edgar=edgar, figi=_Figi({"C2": _answer("BBGNEW", "AA", "NEW NEWS CO")}))
+    assert lines.renames == {"CIK5-COMMON": "CIK5-CLASS-A"} and lines.refused == []
+    assert set(lines.cusips["CIK5-CLASS-A"]) == {"C1", "C3"}
+    assert lines.cusips["BBGNEW"] == ["C2"]
+    assert [f for _, f in _flags(lines)] == ["line_followed"]
+
+
+def test_a_spin_offs_hold_of_the_ticker_stops_the_follow_when_the_issuer_was_not_renamed():
+    """The same rows with an EDGAR name that does not agree with C3's description: nothing is the issuer's own next
+    line, and the line stays as it was (a rule that took any free CUSIP would join unrelated stock)."""
+    specs, rows, edgar = _news_corp()
+    edgar.name = "SOMETHING ELSE ENTIRELY INC"
+    edgar.former = []
+    lines = _follow(specs, rows, edgar=edgar, figi=_Figi({"C2": _answer("BBGNEW", "AA", "NEW NEWS CO")}))
+    assert lines.renames == {} and lines.cusips["CIK5-COMMON"] == ["C1"]
 
 
 def _fingerprint(lines):

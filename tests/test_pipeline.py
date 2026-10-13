@@ -14,7 +14,7 @@ from delist_detection.endings.delistings import Delisting, DelistingFinder
 from delist_detection.sources.edgar import EdgarBlocked, EdgarSubmission
 from delist_detection.sources.ftd import FtdRow
 from delist_detection.endings.last_trade import LastTrade
-from delist_detection.terms.llm_merger_extractor import MergerTerms
+from delist_detection.terms.llm_merger_extractor import ClosingDividend, MergerTerms
 from delist_detection.identity.observations import Observation, ObservationIndex, TickerEra
 from delist_detection.terms.acquirers import acquirer_cik
 from delist_detection.pipeline import Clients, Overrides, run
@@ -93,6 +93,11 @@ def _clients(fake_edgar, ftd_rows=None, extra_obs=()):
     resolver = TickerResolver(fake_edgar, observed_names=index.name_on, cik_pins=index.cik_pin_on)
     return index, Clients(edgar=fake_edgar, resolver=resolver, classifier=DelistClassifier(fake_edgar, resolver),
                           figi=_Figi(), ftd_client=ftd)
+
+
+# the caller's terms for the fixture's one merger: with none read, its ending is uncertain (`value_pending:terms`,
+# FB-016), which is not what most tests here are about
+AET_TERMS = Overrides(merger_terms={("BBG000FJLFX8", "2018-12-09"): {"cash_per_share": 210.10}})
 
 
 def test_end_to_end_tables(fake_edgar, tmp_path):
@@ -868,6 +873,12 @@ def _two_stock_mergers(fake_edgar, monkeypatch):
         def extract(self, record, security_name=""):
             return self.mapping.get((record.sec_id, record.delist_date))
 
+        def closing_dividend(self, record, security_name=""):
+            return None
+
+        def earlier_dividend(self, record, security_name=""):
+            return None
+
     clients.llm_extractor = _LLMByKey({
         ("BBGSEC001", "2020-06-15"): terms1,
         ("BBGSEC002", "2020-06-15"): terms2,
@@ -1154,8 +1165,9 @@ def _gone_universe(fake_edgar, rows, *, listed=False):
 
 def test_a_closed_history_with_no_ending_gets_an_unknown_ending_the_verdict_doubts(fake_edgar, tmp_path):
     """FB-004 part d: not listed today and nothing ends it, so it gets the agreed blank-kind ending (end-of-era branch
-    6: nothing found), dated by the last day its own CUSIP's fails rows show it trading, unconfirmed and unpublished,
-    flagged `unexplained_ending`; its history ends there and the contract's verdict is uncertain."""
+    6: nothing found), dated by the last day its own CUSIP's fails rows show it trading, unconfirmed (the contract
+    publishes the day, FB-020), flagged `unexplained_ending`; its history ends there and the contract's verdict is
+    uncertain."""
     rows = _ftd("GONE", "11111A101", "GONE INC", ["2012-07-02", "2012-09-04", "2013-01-02", "2013-04-02"])
     for i, r in enumerate(rows):
         rows[i] = FtdRow(r.date, r.cusip, r.symbol, r.description, 10.0 + i)
@@ -1167,7 +1179,8 @@ def test_a_closed_history_with_no_ending_gets_an_unknown_ending_the_verdict_doub
     assert (d["last_trade_date"], d["last_trade_date_source"]) == ("2013-04-01", "fails_rows")
     assert {"unexplained_ending", "last_trade_date_unconfirmed"} <= set(d["review_flags"].split(";"))
     (c,) = read_table("contract_delistings", tmp_path / "contract" / "delistings.csv")
-    assert (c["sec_id"], c["exit_kind"], c["last_trade_date"], c["verdict"]) == ("BBGGONE0001", "", "", "uncertain")
+    assert (c["sec_id"], c["exit_kind"], c["last_trade_date"], c["verdict"]) == (
+        "BBGGONE0001", "", "2013-04-01", "uncertain")
     assert [(r["valid_from"], r["valid_to"]) for r in ticker_history(tmp_path)] == [("2012-06-29", "2013-04-01")]
     review = read_table("review", table_path(tmp_path, "review"))
     assert not any(r["review_flags"] == "ended_without_delisting" for r in review)     # the ending replaces its row
@@ -1311,6 +1324,12 @@ def test_a_lagged_acquirer_close_flags_the_delisting(fake_edgar, tmp_path, monke
     class _LLM:
         def extract(self, record, security_name=""):
             return MergerTerms("stock", None, 1.0, "ACQUIRER CO", "ACQ", "high", "8-K:X", "")
+
+        def closing_dividend(self, record, security_name=""):
+            return None
+
+        def earlier_dividend(self, record, security_name=""):
+            return None
 
     clients.llm_extractor = _LLM()
     run(index, clients, Overrides(last_trade_closes={"BBGSEC201": 100.0, "BBGSEC202": 150.0}), out_dir=tmp_path,
@@ -2537,7 +2556,7 @@ def test_run_reports_floor_drops_and_failing_golden_cases(fake_edgar, tmp_path):
     golden = [TruthCase(case_id="AET", group="golden", ticker="AET", on="2017-06-30", issuer_cik="999", status="pass")]
     config = ScorecardConfig(floor={"G.pass": 1, "L1.coverage_tickers": 1.0}, golden=golden)
     logged = []
-    summary = run(index, clients, Overrides(), out_dir=tmp_path, log=logged.append, scorecard=config)
+    summary = run(index, clients, AET_TERMS, out_dir=tmp_path, log=logged.append, scorecard=config)
     assert summary.scorecard_drops == ["G.pass: 1 -> 0"]               # coverage holds at 1.0
     assert summary.golden_failures == ["AET: issuer_cik 1122304 != 999"]
     assert "scorecard drop: G.pass: 1 -> 0" in logged
@@ -2567,14 +2586,85 @@ def test_a_limit_subset_is_never_compared_to_the_floor(fake_edgar, tmp_path):
 
 def test_every_run_writes_uncertain_csv(fake_edgar, tmp_path):
     index, clients = _clients(fake_edgar)
-    summary = run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+    summary = run(index, clients, AET_TERMS, out_dir=tmp_path, log=lambda *_: None)
     assert read_table("uncertain", table_path(tmp_path, "uncertain")) == []
     assert summary.uncertain == {"seed": 0, "security": 0, "ending": 0}
 
 
+def test_a_merger_with_no_terms_read_has_no_fill_and_says_why(fake_edgar, tmp_path):
+    """FB-016 (CureVac 2026): nothing states AET's terms in this run (no payout reader, no LLM, no caller's row), so
+    the ending has no value and no par fill, in the table and in the contract, and the verdict is uncertain with the
+    reason `value_pending:terms`. It was a confirmed row with a fill of 0.000000 and the flag `merger_at_par`."""
+    index, clients = _clients(fake_edgar)
+    summary = run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+    (d,) = read_table("delistings", table_path(tmp_path, "delistings"))
+    assert (d["bucket"], d["dlret_method"], d["dlret"], d["terminal_value"]) == ("merger", "pending_terms", "", "")
+    assert "merger_at_par" not in d["review_flags"].split(";")
+    (c,) = read_table("contract_delistings", tmp_path / "contract" / "delistings.csv")
+    assert (c["exit_kind"], c["dlret"], c["dlret_fill"], c["value_rule"], c["verdict"]) == (
+        "merger", "", "", "unknown", "uncertain")
+    assert [(r["kind"], r["sec_id"], r["reason"]) for r in read_table("uncertain", table_path(tmp_path, "uncertain"))] \
+        == [("ending", "BBG000FJLFX8", "value_pending:terms")]
+    assert summary.uncertain == {"seed": 0, "security": 0, "ending": 1}
+
+
+def test_a_closing_dividend_is_in_the_value_of_a_merger_and_named_in_its_formula(fake_edgar, tmp_path):
+    """FB-021 (Extended Stay 2021): the merger paid $210.10 and the target paid a $2.50 dividend because the deal
+    closed, against a 212.70 last close. The value reads all the cash a holder of the last close received; the
+    contract's `cash_per_share` is that sum and its formula names the dividend. The row was -1.2% without it."""
+    class _LLM:
+        def extract(self, record, security_name=""):
+            return MergerTerms("cash", 210.10, None, "CVS HEALTH", None, "high", "8-K:X", "", package_basis="fixed")
+
+        def closing_dividend(self, record, security_name=""):
+            return ClosingDividend(2.50, "8-K:X", "a special dividend of $2.50 per share")
+
+        def earlier_dividend(self, record, security_name=""):
+            return None
+
+    index, clients = _clients(fake_edgar)
+    clients.llm_extractor = _LLM()
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+    (d,) = read_table("delistings", table_path(tmp_path, "delistings"))
+    assert (d["payout_per_share"], d["terminal_value"], d["dlret"], d["dlret_method"], d["payout_source"]) == (
+        "212.600000", "212.600000", "-0.000470", "cash_only", "llm")
+    (c,) = read_table("contract_delistings", tmp_path / "contract" / "delistings.csv")
+    assert (c["exit_kind"], c["value_rule"], c["cash_per_share"], c["dlret"], c["terms_gate"], c["verdict"]) == (
+        "merger", "cash", "212.600000", "-0.000470", "passed", "confirmed")
+    assert c["value_formula"] == "(210.10 + 2.50 dividend) / last_close − 1"
+
+
+def test_a_merger_that_paid_a_contingent_right_beside_its_cash_is_uncertain_and_keeps_its_value(fake_edgar, tmp_path):
+    """FB-024 (TreeHouse 2026): the terms note one CVR per share beside the cash. The row keeps the cash and the
+    dlret of the cash, carries the flag, and its verdict is uncertain with `value_incomplete:contingent_right`."""
+    class _LLM:
+        def extract(self, record, security_name=""):
+            return MergerTerms("cash", 210.10, None, "CVS HEALTH", None, "high", "8-K:X", "", package_basis="fixed",
+                               contingent_note="One contractual contingent value right (CVR) per share.")
+
+        def closing_dividend(self, record, security_name=""):
+            return None
+
+        def earlier_dividend(self, record, security_name=""):
+            return None
+
+    index, clients = _clients(fake_edgar)
+    clients.llm_extractor = _LLM()
+    summary = run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+    (d,) = read_table("delistings", table_path(tmp_path, "delistings"))
+    assert (d["payout_per_share"], d["dlret"], d["dlret_method"]) == ("210.100000", "-0.012224", "cash_only")
+    assert "contingent_right_unvalued" in d["review_flags"].split(";")
+    (c,) = read_table("contract_delistings", tmp_path / "contract" / "delistings.csv")
+    assert (c["value_rule"], c["cash_per_share"], c["dlret"], c["verdict"]) == (
+        "cash", "210.100000", "-0.012224", "uncertain")
+    assert [(r["kind"], r["sec_id"], r["reason"]) for r in read_table("uncertain", table_path(tmp_path, "uncertain"))] \
+        == [("ending", "BBG000FJLFX8", "value_incomplete:contingent_right")]
+    assert summary.uncertain == {"seed": 0, "security": 0, "ending": 1}
+
+
 def test_a_sighting_after_the_ending_is_an_uncertain_seed_but_not_an_uncertain_security(fake_edgar, tmp_path):
     index, clients = _clients(fake_edgar, extra_obs=(Observation("AET", "2019-06-28", "AETNA INC", cik=1122304),))
-    summary = run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+    summary = run(index, clients, AET_TERMS, out_dir=tmp_path, log=lambda *_: None)
     rows = read_table("uncertain", table_path(tmp_path, "uncertain"))
     assert rows == [{"kind": "seed", "ticker": "AET", "sec_id": "BBG000FJLFX8", "date": "2019-06-28",
                      "reason": "outside_security_history", "candidates": ""}]
@@ -2701,6 +2791,12 @@ def _stock_merger_whose_gate_reads_the_close(fake_edgar, monkeypatch):
     class _LLM:
         def extract(self, record, security_name=""):
             return MergerTerms("stock", None, 2.0, "ACQUIRER CO", "ACQ", "high", "8-K:X1", "", package_basis="fixed")
+
+        def closing_dividend(self, record, security_name=""):
+            return None
+
+        def earlier_dividend(self, record, security_name=""):
+            return None
 
     clients.llm_extractor = _LLM()
     return index, clients
@@ -3006,6 +3102,12 @@ class _CashLLM:
     def extract(self, record, security_name=""):
         self.asked.append((record.ticker, record.sec_id))
         return MergerTerms("cash", 40.9, None, "ACQUIRER CO", None, "high", "8-K:0000004242-14-000020", "")
+
+    def closing_dividend(self, record, security_name=""):
+        return None
+
+    def earlier_dividend(self, record, security_name=""):
+        return None
 
 
 def test_the_ending_of_a_line_successor_the_run_added_is_valued(fake_edgar, tmp_path):
@@ -3417,3 +3519,54 @@ def test_the_other_issuer_in_force_reads_no_derived_observation():
     s, era, resolutions, issuers = _security_with_era("BBG000P4BQM9", 109177, "SPB", obs)
     ctx = _in_force_run({109177: HRG, 1487730: OLD_SPB}, {"SPECTRUM BRANDS HOLDINGS INC": [109177, 1487730]})
     assert pipeline._other_issuers(ctx, [era], resolutions, issuers, {s.sec_id: s}) == {}
+
+
+def test_a_row_the_handoff_stage_redated_has_its_close_and_value_read_again(monkeypatch):
+    """FB-022, from the code review (old Charter 2016). Stage 9b moved the row's last trade to the day before its
+    ticker's taker, after stage 7 read its close and stage 8 valued it on the old day. Its requests are published
+    for the new day, so both stages read it again there: the close flags of the old read go, the new close and
+    value replace the old, and a review item the first valuation already raised is not raised twice."""
+    from delist_detection.outputs.review_triage import ReviewItem
+    from delist_detection.terms.merger_value import MergerValue, MergerValues
+
+    record = DelistRecord(ticker="CHTR", cik=1091667, observed_delist_date="2016-05-18", crsp_code=231,
+                          bucket=CrspBucket.MERGER, confidence="high", reason="M&A",
+                          evidence={"flags": ["last_trade_date_unconfirmed", "ftd_close_prior:1",
+                                              "acquirer_close_lagged"],
+                                    "ftd_close_row_date": "2016-05-18"},
+                          sec_id="OLD", delist_date="2016-05-28")
+    row = Delisting(sec_id="OLD", cik=1091667, ticker="CHTR", delist_date="2016-05-28", record=record,
+                    last_trade=LastTrade(date(2016, 5, 17), "last_sighting", ("last_trade_date_unconfirmed",)),
+                    form25=None, form25_sub=None, exchange="NASDAQ")
+    old_item = ReviewItem("OLD", "CHTR", 1091667, "acquirer_named", "seen before", delist_date="2016-05-28")
+    new_item = ReviewItem("OLD", "CHTR", 1091667, "error", "only on the second read", delist_date="2016-05-28")
+    asked = []
+
+    def closes_again(ctx, rows, *a, **k):
+        asked.append(("closes", [(r.sec_id, r.last_trade.day, list(r.flags)) for r in rows]))
+        return pipeline._Closes({row.key: 200.0}, {row.key: 203.36})
+
+    def values_again(ctx, rows, securities, cusips, ftd, closes, *a, **k):
+        asked.append(("values", [r.sec_id for r in rows], closes.closes[row.key]))
+        return MergerValues({row.key: MergerValue(row.key, payout=None, terms={"stock_ratio": 0.9042,
+                                                                                "acquirer_price": 230.0})},
+                            review=[old_item, new_item])
+
+    monkeypatch.setattr(pipeline, "_last_trade_closes", closes_again)
+    monkeypatch.setattr(pipeline, "_merger_values", values_again)
+
+    class _Ctx:
+        log = staticmethod(lambda *_: None)
+
+    closes = {row.key: 203.36}
+    values = MergerValues({row.key: MergerValue(row.key, terms={"stock_ratio": 0.9042, "acquirer_price": 227.41})})
+    extra = pipeline._read_again(_Ctx(), [row], closes, values, {}, {}, None, date(2007, 6, 1), Overrides(),
+                                 pipeline.PriceAnswers(), 0.15, {}, [old_item])
+    assert asked == [("closes", [("OLD", date(2016, 5, 17), ["last_trade_date_unconfirmed"])]),
+                     ("values", ["OLD"], 200.0)]
+    assert closes == {row.key: 200.0} and values.get(row.key).terms["acquirer_price"] == 230.0
+    assert "ftd_close_row_date" not in row.record.evidence and extra == [new_item]
+    # nothing re-dated, or a re-dated row with no value: nothing is valued again
+    asked.clear()
+    assert pipeline._read_again(_Ctx(), [], closes, values, {}, {}, None, date(2007, 6, 1), Overrides(),
+                                pipeline.PriceAnswers(), 0.15, {}, []) == [] and asked == []

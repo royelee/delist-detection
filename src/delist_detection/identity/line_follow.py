@@ -20,7 +20,15 @@ the FIGI lines another composite continues (`successors`, which stage 9 links) a
   read is never remembered, a refusal (`fatal.FATAL`) or an OpenFIGI outage stops the run, and a degraded read of a
   CIK gives each of that CIK's steps a `resolution_degraded` item, as it does a security with no step;
 - the folds: a placeholder folds into the FIGI line its new CUSIP names, and a ticker-tier line into its next CUSIP's
-  composite when the ticker answered with today's holder (`_today_holder_fold`, sub-plan 5h).
+  composite when the ticker answered with today's holder (`_today_holder_fold`, sub-plan 5h);
+- the late steps (FB-015): a line with no step in the window may have gone on after a gap in the fails rows, which
+  hold a row only on a day with a fail (Ocwen: the old CUSIP's last row is 2020-08-12, the post-split CUSIP's first
+  2023-07-14, and its first under ONIT eight weeks after its last under OCN). A line whose FIGI its own CUSIP or a
+  pin confirms is asked for one (`candidate_steps(late=True)`) once the round found it no other step: the first
+  later CUSIP under its own ticker, taken only when OpenFIGI names the line's own composite for it, or its own
+  CUSIP under a ticker EDGAR lists for the issuer or its 8-K names. A late step that is not confirmed is dropped
+  with no review item (and a log line, unless its rows do not name the issuer or the registrant did not carry on:
+  a recycled ticker's later holder): the line stays as the window left it.
 
 The rules are functions over what was read. `candidate_steps` finds a line's next step in the fails rows (pure).
 `corroborate` checks the step against the issuer's EDGAR record (R1, pure over what the stage read). `decide` applies
@@ -60,7 +68,7 @@ from ..vocabulary.identifiers import (bare_ticker, class_letter, description_cla
                                       descriptions_class_letter, fits_class, is_placeholder, name_class_letter,
                                       normalize_ticker)
 from ..outputs.review_triage import ReviewItem
-from .security_master import SWITCH_DAYS, SWITCH_TAIL_DAYS, EraResolution, Security, cusip_job
+from .security_master import CONFIRMED_SOURCES, SWITCH_DAYS, SWITCH_TAIL_DAYS, EraResolution, Security, cusip_job
 from ..vocabulary.trading_calendar import add_trading_days
 
 if TYPE_CHECKING:
@@ -106,7 +114,8 @@ class LineStep:
     first-day "...ZZZZ" symbol, its post-split "...D" symbol, or a new ticker of the issuer) or NEW_SYMBOL (the same
     CUSIP under a new ticker). `old_last` is the old CUSIP's last row under the line's tickers once a fail still
     settling at the last close is set aside (`ftd.settled_last`); `first` is the new rows' first row; `symbol` the
-    ticker they trade under; `descriptions` the new rows' descriptions in their first `NAME_DAYS` days."""
+    ticker they trade under; `descriptions` the new rows' descriptions in their first `NAME_DAYS` days; `late`: the
+    new rows begin after the window (FB-015: the fails files held no row of the line in between)."""
     sec_id: str
     kind: str
     old_cusip: str
@@ -115,6 +124,7 @@ class LineStep:
     old_last: str
     first: str
     descriptions: tuple[str, ...] = ()
+    late: bool = False
 
 
 @dataclass(frozen=True)
@@ -207,9 +217,37 @@ def _one_switch(switches: Mapping[str, LineStep], tickers: Collection[str]) -> l
     return picks if len(picks) == 1 else []
 
 
+def _names_issuer(step: LineStep, issuer_names: Callable[[date], Collection[str]]) -> bool:
+    """Whether a new CUSIP's rows name the issuer: a description of its first `NAME_DAYS` days agrees with a name the
+    issuer carried from the first row on (`issuer_names(first day)`)."""
+    names = issuer_names(date.fromisoformat(step.first))
+    return any(description_names(d, n) for d in step.descriptions for n in names)
+
+
+def _issuers_next_line(dropped: LineStep, switches: Mapping[str, LineStep], holders: Mapping[str, Collection[str]],
+                       sec_id: str, tickers: Collection[str],
+                       issuer_names: Callable[[date], Collection[str]]) -> list[LineStep]:
+    """FB-003 (News Corp 2013): the step to take when the switch `_one_switch` picked (`dropped`, under the line's own
+    ticker) is another issuer's security's stock. The ticker went on as a spun-off company's stock (the new News
+    Corp kept NWSA), and the old issuer was renamed (Twenty-First Century Fox) and went on under a CUSIP of its own
+    and another ticker (FOXA). That is the issuer's own next line when `dropped`'s rows do not name the issuer (a
+    stock of another company) and a free switch's rows do: its CUSIP is held by no other security, its first row is
+    in the window (`candidate_steps` found it) and its description agrees with the issuer's name in force then. Of
+    several, those that began the day `dropped` did (the spin-off's class A and the old issuer's class A trade from
+    the same day, and a class B from another), then `_one_switch`. A line the issuer did not rename (LMCA 2016: a
+    leftover class of the same company) has none."""
+    if _names_issuer(dropped, issuer_names):
+        return []
+    free = {c: st for c, st in switches.items() if c != dropped.new_cusip and not _others(holders, c, sec_id)
+            and _names_issuer(st, issuer_names)}
+    return _one_switch({c: st for c, st in free.items() if st.first == dropped.first} or free, tickers)
+
+
 def candidate_steps(sec_id: str, cusips: Sequence[str], tickers: Collection[str], ftd: FtdIndex, *,
                     holders: Mapping[str, Collection[str]] = {}, extra_symbols: Collection[str] = (),
-                    extra_cusips: Collection[str] = (), days: int = LINE_DAYS, data_end: str | None = None) -> list[LineStep]:
+                    extra_cusips: Collection[str] = (), days: int = LINE_DAYS, data_end: str | None = None,
+                    late: bool = False,
+                    issuer_names: Callable[[date], Collection[str]] | None = None) -> list[LineStep]:
     """The next steps of a security's line in the fails rows (pure). Its `line_end` opens a window from `days`
     trading days before the settled row to `days` after the line's last row (a fail still settling at the last
     close can run weeks past the settled row: QRTEA's QVCGA began the day after QRTEA's last row, 14 trading days
@@ -230,7 +268,18 @@ def candidate_steps(sec_id: str, cusips: Sequence[str], tickers: Collection[str]
       security of the run holds the old CUSIP too, or when two symbols qualify.
 
     Of several switches, the one under the line's own ticker is taken, else the one with the shortest symbol
-    (`_one_switch`)."""
+    (`_one_switch`). When that one is dropped because another security holds its CUSIP, and `issuer_names` (the
+    names the issuer carried from a day on) is given, the issuer's own next line is looked for instead
+    (`_issuers_next_line`, FB-003: News Corp 2013 and Twenty-First Century Fox's FOXA).
+
+    With `late` (FB-015), a line with no step of a kind in the window may take one that begins after it, marked
+    `LineStep.late`:
+
+    - SWITCH: the CUSIP of the first row under one of `tickers` after the window, when that CUSIP's first row
+      under any symbol is after the window too, it has at least `MIN_NEW_ROWS` rows and no other security holds it
+      (the old line must have stopped, as above);
+    - NEW_SYMBOL: the old CUSIP's first row under one of `extra_symbols` (a ticker EDGAR lists for the issuer or
+      its 8-K names), after the window, with at least `MIN_NEW_ROWS` rows; none when two qualify."""
     end = line_end(cusips, tickers, ftd)
     if end is None:
         return []
@@ -260,7 +309,22 @@ def candidate_steps(sec_id: str, cusips: Sequence[str], tickers: Collection[str]
             descs = tuple(sorted({x.description for x in new_rows if x.date <= until}))
             switches[c] = LineStep(sec_id, SWITCH, end.cusip, c, _line_symbol_of(new_rows, own, s), end.settled,
                                    first, descs)
-        steps += [st for st in _one_switch(switches, own) if not _others(holders, st.new_cusip, sec_id)]
+        picks = _one_switch(switches, own)
+        kept = [st for st in picks if not _others(holders, st.new_cusip, sec_id)]
+        if picks and not kept and issuer_names is not None:
+            kept = _issuers_next_line(picks[0], switches, holders, sec_id, own, issuer_names)
+        steps += kept
+        nxt = min((r for t in sorted(own) for r in ftd.by_symbol(t) if r.date > hi and r.cusip not in cusips),
+                  key=lambda r: (r.date, r.cusip), default=None) if late and not switches else None
+        if nxt is not None:
+            new_rows = ftd.by_cusip(nxt.cusip)
+            if new_rows and new_rows[0].date > hi and len(new_rows) >= MIN_NEW_ROWS \
+                    and not _others(holders, nxt.cusip, sec_id):
+                first = new_rows[0].date
+                until = (date.fromisoformat(first) + timedelta(days=NAME_DAYS)).isoformat()
+                descs = tuple(sorted({x.description for x in new_rows if x.date <= until}))
+                steps.append(LineStep(sec_id, SWITCH, end.cusip, nxt.cusip, _line_symbol_of(new_rows, own, nxt.symbol),
+                                      end.settled, first, descs, late=True))
 
     if not _others(holders, end.cusip, sec_id):
         renamed: dict[str, list[FtdRow]] = {}
@@ -268,10 +332,14 @@ def candidate_steps(sec_id: str, cusips: Sequence[str], tickers: Collection[str]
             if r.symbol not in own and is_line_symbol(r.symbol) and not is_otc_symbol(r.symbol, own):
                 renamed.setdefault(r.symbol, []).append(r)
         symbols = {s: rs for s, rs in renamed.items() if lo <= rs[0].date <= hi and len(rs) >= MIN_NEW_ROWS}
+        after = not symbols and late
+        if after:
+            symbols = {s: rs for s, rs in renamed.items()
+                       if s in extra_symbols and rs[0].date > hi and len(rs) >= MIN_NEW_ROWS}
         if len(symbols) == 1:
             [(s, rs)] = symbols.items()
             steps.append(LineStep(sec_id, NEW_SYMBOL, end.cusip, end.cusip, s, end.settled, rs[0].date,
-                                  tuple(sorted({x.description for x in rs[:MIN_NEW_ROWS]}))))
+                                  tuple(sorted({x.description for x in rs[:MIN_NEW_ROWS]})), late=after))
     return sorted(steps, key=lambda st: (st.first, st.kind))
 
 
@@ -342,10 +410,14 @@ def _filed(f: EdgarSubmission) -> date | None:
         return None
 
 
+def _between(filings: Sequence[EdgarSubmission], lo: date, hi: date,
+             keep: Callable[[EdgarSubmission], bool]) -> list[EdgarSubmission]:
+    return [f for f in filings if keep(f) and (d := _filed(f)) is not None and lo <= d <= hi]
+
+
 def _near(filings: Sequence[EdgarSubmission], day: date, before: int, after: int,
           keep: Callable[[EdgarSubmission], bool]) -> list[EdgarSubmission]:
-    lo, hi = day - timedelta(days=before), day + timedelta(days=after)
-    return [f for f in filings if keep(f) and (d := _filed(f)) is not None and lo <= d <= hi]
+    return _between(filings, day - timedelta(days=before), day + timedelta(days=after), keep)
 
 
 def eightks_near(filings: Sequence[EdgarSubmission], day: date,
@@ -388,10 +460,16 @@ def corroborate(step: LineStep, *, filings: Sequence[EdgarSubmission], sub: Mapp
     - "no_filing" (a switch only): no 8-K item 5.03 or 3.03, own 8-K12B/8-K12G3 or 8-K text stating a reverse
       split or naming the new CUSIP within `FILING_DAYS`, and no EDGAR rename within `RENAME_DAYS`.
 
-    The evidence names the filing (a new symbol of the same CUSIP needs none: "same CUSIP")."""
+    The evidence names the filing (a new symbol of the same CUSIP needs none: "same CUSIP").
+
+    A late step (`LineStep.late`, FB-015) happened somewhere between the old rows' last day and the new rows'
+    first, so the "bankruptcy" and "otc_move" windows open at the old rows' last day and run to the new rows'
+    first, and a late switch needs no filing near its first row ("no_filing" is not asked: the stage takes it only
+    on the line's own composite, R2). Its evidence is "after a gap in the fails rows"."""
     first = date.fromisoformat(step.first)
-    if _near(filings, first, BANKRUPTCY_BEFORE_DAYS, BANKRUPTCY_AFTER_DAYS,
-             lambda f: f.form.startswith("8-K") and "1.03" in f.item_set):
+    since = date.fromisoformat(step.old_last) if step.late else first      # the day the step's windows open at
+    if _between(filings, since - timedelta(days=BANKRUPTCY_BEFORE_DAYS), first + timedelta(days=BANKRUPTCY_AFTER_DAYS),
+                lambda f: f.form.startswith("8-K") and "1.03" in f.item_set):
         return "", "bankruptcy"
     if step.kind == NEW_SYMBOL:
         issuer_names = edgar_names(sub) if isinstance(sub, Mapping) else ()
@@ -406,9 +484,10 @@ def corroborate(step: LineStep, *, filings: Sequence[EdgarSubmission], sub: Mapp
                 return not names_only_other_group(" ".join(item_sections(text, "3.01")), line_name, issuer_names)
             return f.form.startswith("15")
 
-        if any(ends_listing(f) for f in _near(filings, first, FILING_DAYS, FILING_DAYS, lambda f: (
-                (f.form.startswith("8-K") and "3.01" in f.item_set) or f.form.startswith("25")
-                or f.form.startswith("15")))):
+        if any(ends_listing(f) for f in _between(
+                filings, since - timedelta(days=FILING_DAYS), first + timedelta(days=FILING_DAYS), lambda f: (
+                    (f.form.startswith("8-K") and "3.01" in f.item_set) or f.form.startswith("25")
+                    or f.form.startswith("15")))):
             return "", "otc_move"
     if step.kind == SWITCH:
         lo = first
@@ -431,6 +510,8 @@ def corroborate(step: LineStep, *, filings: Sequence[EdgarSubmission], sub: Mapp
         return "", "other_registrant"
     if step.kind == NEW_SYMBOL:
         return "same CUSIP", ""
+    if step.late:
+        return "after a gap in the fails rows", ""
     coded = _near(filings, first, FILING_DAYS, FILING_DAYS,
                   lambda f: f.form.startswith("8-K") and bool({"5.03", "3.03"} & f.item_set))
     if coded:
@@ -641,6 +722,11 @@ class _Reads:
         listed = [normalize_ticker(t) for t in (sub.get("tickers") or [])] if isinstance(sub, dict) else []
         return {t for t in listed if is_line_symbol(t)}
 
+    def names_from(self, cik: int | None) -> Callable[[date], list[str]]:
+        """The names the issuer carried from a day to `NAME_DAYS` after it (`evidence.names_between`), asked only
+        when a step's own-ticker switch is dropped (`candidate_steps`)."""
+        return lambda day: self.issuers.names_between(cik, day, day + timedelta(days=NAME_DAYS)) if cik else []
+
     def text_sources(self, s: Security, end: LineEnd) -> tuple[set[str], set[str]]:
         """The tickers and CUSIPs the issuer's own 8-Ks around a line's end name as the stock's new ones (APY's
         ChampionX "CHX", Liz Claiborne's "316645100" and "FNP"): read only when one of them is an 8-K item 5.03
@@ -832,11 +918,19 @@ def follow_lines(identity: "Identity", clients: LineSources, *, as_of: date,
             ftd.follow(symbols=spellings_of(todo))
         holders = _cusip_holders(out.cusips)
 
-        def steps_of(sid: str) -> list[LineStep]:
+        def steps_of(sid: str, late: bool = False) -> list[LineStep]:
             return candidate_steps(sid, out.cusips.get(sid, []), own(sid), ftd,
                                    holders=holders_for(out.securities[sid], out.securities, out.cusips, holders, ftd),
                                    extra_symbols=extra.get(sid, ()), extra_cusips=named.get(sid, ()),
-                                   data_end=ftd.data_end())
+                                   data_end=ftd.data_end(), late=late,
+                                   issuer_names=reads.names_from(out.securities[sid].issuer_cik))
+
+        def late_steps() -> dict[str, list[LineStep]]:
+            """The late steps of the confirmed lines the round found no step for (see the module docstring)."""
+            return {sid: found for sid in todo
+                    if not steps[sid] and (s := out.securities.get(sid)) is not None
+                    and s.figi_source in CONFIRMED_SOURCES and not is_placeholder(sid)
+                    and (found := steps_of(sid, late=True))}
 
         steps = {sid: steps_of(sid) for sid in todo}
         new_symbols: set[str] = set()
@@ -874,7 +968,14 @@ def follow_lines(identity: "Identity", clients: LineSources, *, as_of: date,
         if new_cusips or new_symbols:
             ftd.follow(cusips=new_cusips, symbols=new_symbols)
             steps = {sid: steps_of(sid) for sid in todo}
-        switch_cusips = sorted({v[0].new_cusip for v in steps.values() if v and v[0].kind == SWITCH})
+        late = late_steps()
+        late_cusips = {st.new_cusip for v in late.values() for st in v if st.kind == SWITCH}
+        if late_cusips:          # a late CUSIP's rows under other symbols decide whether it is the line's next
+            ftd.follow(cusips=late_cusips)
+            late = late_steps()
+        steps.update(late)
+        # a late switch asks OpenFIGI on its own, and only once R1 let it through
+        switch_cusips = sorted({v[0].new_cusip for v in steps.values() if v and v[0].kind == SWITCH and not v[0].late})
         figi_answers = dict(zip(switch_cusips, clients.figi.map([cusip_job(c) for c in switch_cusips]))) \
             if switch_cusips else {}
         moved: set[str] = set()
@@ -887,6 +988,8 @@ def follow_lines(identity: "Identity", clients: LineSources, *, as_of: date,
             watch = reads.issuers.watch()          # this step's reads
             evidence, refused = reads.corroborate(step, s, own(sid), as_of)
             what = f"{step.old_cusip} -> {step.new_cusip} under {step.symbol} from {step.first}"
+            if step.late and step.kind == SWITCH and not refused:
+                figi_answers[step.new_cusip] = clients.figi.map([cusip_job(step.new_cusip)])[0]
             decision = None if refused else decide(
                 step, s, composites(figi_answers[step.new_cusip]) if step.kind == SWITCH else None, out.securities,
                 described=described_letter(out.cusips.get(sid, []), ftd),
@@ -899,7 +1002,10 @@ def follow_lines(identity: "Identity", clients: LineSources, *, as_of: date,
                 if lifted:
                     decision = Decision(FOLD, lifted[0], candidate=decision.candidate)
             decision = _today_holder_fold(decision, s, out.resolutions, own(sid))
-            if decision is not None and decision.kind == REFUSED:
+            if decision is not None and step.late and step.kind == SWITCH \
+                    and (decision.kind != ATTACH or decision.composite != sid):
+                refused = "not_own_composite"     # R2 for a late switch: OpenFIGI names the line's own composite
+            elif decision is not None and decision.kind == REFUSED:
                 refused = decision.why
             elif decision is not None and decision.kind in (ATTACH, FOLD) and step.kind == SWITCH \
                     and taken.setdefault(step.new_cusip, decision.composite or sid) != (decision.composite or sid):
@@ -911,6 +1017,11 @@ def follow_lines(identity: "Identity", clients: LineSources, *, as_of: date,
                 flagged.add(sid)
                 items.append(degraded_item(sid, step.symbol, cik, f"the line follow ({what})",
                                            "; run again once SEC answers", last_seen=step.old_last))
+            if refused and step.late:      # no finding: the line stays as the window left it
+                counts["late_not_followed"] += 1
+                if refused not in ("name", "merged_out"):     # those two are a recycled ticker's later holder: not logged
+                    log(f"line follow: late step not followed: {sid} {what} ({refused})")
+                continue
             if refused:
                 counts[f"refused:{refused}"] += 1
                 refusals.append(RefusedStep(sid, step, refused))

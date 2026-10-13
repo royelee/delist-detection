@@ -85,6 +85,34 @@ def test_a_tie_stays_when_two_siblings_stop_at_the_form25(fake_edgar):
         assert events == [] and "form25_unmatched" in [r.flag for r in review]
 
 
+def _two_classes(fake_edgar, twin_first="2018-03-23", n=22):
+    old, _, rows, _ = _world(fake_edgar, class_text="Class A Common Stock & Class B Common Stock")
+    twin = _sec("BBG_TWIN", CIK, "TWNC", twin_first, "2018-08-24", "OLDCO INC")
+    rows = [*[r for r in rows if r.cusip == "OLD000001"], *_trading("TWNC", twin_first, n=n, cusip="TWN000001")]
+    return old, twin, rows, {OLD: ["OLD000001"], "BBG_TWIN": ["TWN000001"]}
+
+
+def test_a_form25_that_names_both_classes_ends_both_lines_that_stopped_at_it(fake_edgar):
+    """FB-003 (Twenty-First Century Fox 2019): the 25-NSE names "Class A Common Stock & Class B Common Stock", the
+    issuer's two lines carry no class letter, and neither trades on (Fox Corporation's stock is another issuer's).
+    Both stopped near the filing and the text names as many classes as there are lines: each is removed by it."""
+    old, twin, rows, cusips = _two_classes(fake_edgar)
+    for sid in (OLD, "BBG_TWIN"):
+        events, review = _find(fake_edgar, sid, [old, twin], cusips, rows)
+        assert [(e.sec_id, e.form25_sub.accession) for e in events] == [(sid, "f1")]
+        assert not any(r.flag == "form25_unmatched" for r in review)
+
+
+def test_both_classes_named_does_not_end_a_line_that_trades_on(fake_edgar):
+    """One of the two lines trades on after the Form 25: it is not one of the classes removed, and nothing says the
+    other is, so the Form 25 stays unmatched for both."""
+    old, twin, rows, cusips = _two_classes(fake_edgar, n=60)
+    twin = _sec("BBG_TWIN", CIK, "TWNC", "2018-03-23", "2019-06-28", "OLDCO INC")
+    for sid in (OLD, "BBG_TWIN"):
+        events, _ = _find(fake_edgar, sid, [old, twin], cusips, rows)
+        assert all(e.form25_sub is None for e in events)
+
+
 def test_a_sibling_that_stopped_long_before_the_form25_does_not_own_it(fake_edgar):
     """The old line was last sighted 200 days before the filing: a Form 25 this late is not its ending, so the
     tie (the new line goes on) is not broken in its favour."""

@@ -13,8 +13,9 @@ behind it: which ending clips the history (`CONTINUATION_BUCKETS`, the continues
 successor or another security owns a ticker, and whether the security is still listed today (AON 2012)."""
 from __future__ import annotations
 
+from bisect import bisect_right
 from collections import Counter, defaultdict
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from functools import cached_property
@@ -23,10 +24,10 @@ from typing import NamedTuple
 from .added_securities import AddedSecurity
 from ..vocabulary.crsp_codes import CrspBucket
 from ..vocabulary.exit_kind import LastTrade, end_day
-from ..sources.ftd import FtdIndex, is_deleted_symbol, is_trading_symbol, is_unassigned_symbol, settled_last
+from ..sources.ftd import FtdIndex, FtdRow, is_deleted_symbol, is_trading_symbol, is_unassigned_symbol, settled_last
 from ..vocabulary.identifiers import bare_ticker
 from ..vocabulary.names import description_matches, description_names
-from ..vocabulary.trading_calendar import add_trading_days
+from ..vocabulary.trading_calendar import add_trading_days, next_trading_day
 from .observations import TickerEra
 from ..outputs.review_triage import ReviewItem
 from .security_master import Security
@@ -119,12 +120,13 @@ def ticker_sightings(sec: Security, ftd: FtdIndex, cusips: Sequence[str]) -> lis
     ("BF-B" / "BFB": snapshots write both, FTD keys rows by the separator form)
     is written one way per security: a spelling it was observed under, the one
     with a separator first. So Hubbell's merged class keeps "HUBB" while class
-    B, observed as "HUB-B" and "HUBB", is "HUB-B". A row under a deleted
+    B, observed as "HUB-B" and "HUBB", is "HUB-B", until the day the line itself
+    lost the separator (`_bare_since`: one security holding both, FB-013). A row under a deleted
     symbol ("ORLYXXXX") is a fail still settling after the delisting, not a
     sighting of trading: it opens and extends no range, and counts in no
     `seen_after`, `last_seen` or sibling span (`trading_record.TradingRecord`)."""
     return _sightings([Sighting(o.as_of, e.ticker, OBSERVATION) for e in sec.eras for o in e.caller_observations],
-                      {e.ticker for e in sec.eras}, ftd, cusips)
+                      {e.ticker for e in sec.eras}, ftd, cusips, sec.figi_ticker)
 
 
 def span_sightings(ticker: str, days: Iterable[str], ftd: FtdIndex, cusips: Sequence[str]) -> list[Sighting]:
@@ -133,17 +135,111 @@ def span_sightings(ticker: str, days: Iterable[str], ftd: FtdIndex, cusips: Sequ
     return _sightings([Sighting(d, ticker, SPAN) for d in days], {ticker}, ftd, cusips)
 
 
-def _sightings(seen: list[Sighting], tickers: Iterable[str], ftd: FtdIndex, cusips: Sequence[str]) -> list[Sighting]:
+def _sightings(seen: list[Sighting], tickers: Iterable[str], ftd: FtdIndex, cusips: Sequence[str],
+               figi_ticker: str = "") -> list[Sighting]:
     """`seen` and the FTD rows of `cusips`, each ticker spelled one way: a spelling of `tickers`, the one with a
-    separator first (`ticker_sightings`)."""
+    separator first (`ticker_sightings`), and the bare one from the day the line lost the separator
+    (`_bare_since`, which `figi_ticker`, OpenFIGI's ticker for the line, must bear out)."""
     # SEC's 2007 fails files mask some symbols (**********), and a new CUSIP's first rows carry the ticker with
-    # "ZZZZ" appended (FMDZZZZ): neither is a ticker
-    out = seen + [Sighting(r.date, r.symbol, FTD) for r in ftd.trading_rows(cusips)
-                  if any(ch.isalpha() for ch in r.symbol) and not is_unassigned_symbol(r.symbol)]
+    # "ZZZZ" appended (FMDZZZZ) or the CUSIP's own first characters (61174X): none is a ticker
+    listed = ftd.trading_rows(cusips)
+    rows = [r for r in listed if any(ch.isalpha() for ch in r.symbol) and not _no_symbol_yet(r)]
+    tickers = set(tickers)
     label: dict[str, str] = {}
-    for t in sorted(set(tickers), key=lambda t: ("-" not in t, t)):
+    for t in sorted(tickers, key=lambda t: ("-" not in t, t)):
         label.setdefault(bare_ticker(t), t)
-    return sorted({s._replace(value=label.get(bare_ticker(s.value), s.value)) for s in out})
+    since = _bare_since(seen, rows, tickers, figi_ticker)
+
+    def spelled(value: str, day: str) -> str:
+        bare = bare_ticker(value)
+        return bare if day >= since.get(bare, "~") else label.get(bare, value)
+
+    return sorted({Sighting(s.day, spelled(s.value, s.day), s.source) for s in seen}
+                  | {Sighting(r.date, spelled(r.symbol, r.date), FTD) for r in rows}
+                  | {Sighting(day, spelled(ticker, day), FTD) for day, ticker in _first_days(listed)})
+
+
+def _no_symbol_yet(row: FtdRow) -> bool:
+    """A new CUSIP's fails row from before the files give it its symbol: the ticker with "ZZZZ" appended
+    (`is_unassigned_symbol`), or the CUSIP's own first six characters (Monster 2015: 61174X on 61174X109)."""
+    return is_unassigned_symbol(row.symbol) or row.symbol == row.cusip[:6]
+
+
+def _is_ticker(symbol: str) -> bool:
+    """Whether a fails row's symbol is a ticker a security trades under: letters, and none of the forms that are no
+    ticker (`ftd.is_trading_symbol`: a deleted or unassigned symbol, a pair-off placeholder with digits) or SEC's
+    2007 mask (**********)."""
+    return any(ch.isalpha() for ch in symbol) and is_trading_symbol(symbol)
+
+
+def _first_days(rows: Sequence[FtdRow]) -> list[tuple[str, str]]:
+    """FB-022: (day, ticker) of a CUSIP's first trading day under a ticker, where the fails rows show it: the row
+    with no symbol yet (`_no_symbol_yet`: `<ticker>ZZZZ`, or the CUSIP's own prefix) dated the trading day before
+    the CUSIP's first row under the ticker. A fails row carries the close of the trading day before its date, so
+    that first row is the close of the unassigned row's day and the security traded then (Liberty Media 2016: the
+    tracking stock's CUSIP has LMCAZZZZ on 04-18 and LMCA from 04-19, at the close of 04-18; the old stock's last
+    row, on 04-18, carries the close of 04-15). An unassigned row the ticker does not follow on the next trading
+    day is no sighting: an earlier unassigned day, a gap, another ticker's ZZZZ row, or an old CUSIP's settling
+    rows after it traded under the ticker (MSG 2015)."""
+    by_cusip: dict[str, list[FtdRow]] = {}
+    for r in rows:
+        by_cusip.setdefault(r.cusip, []).append(r)
+    out: list[tuple[str, str]] = []
+    for own in by_cusip.values():
+        own = sorted(own, key=lambda r: r.date)
+        under: set[str] = set()                        # the tickers the CUSIP's earlier rows were under
+        for z, nxt in zip(own, own[1:]):
+            ticker = bare_ticker(nxt.symbol)
+            if (_no_symbol_yet(z) and _is_ticker(nxt.symbol) and ticker not in under
+                    and (not is_unassigned_symbol(z.symbol) or bare_ticker(z.symbol[:-4]) == ticker)
+                    and nxt.date == next_trading_day(date.fromisoformat(z.date)).isoformat()):
+                out.append((z.date, nxt.symbol))
+            if not _no_symbol_yet(z):
+                under.add(bare_ticker(z.symbol))
+    return out
+
+
+def _bare_since(seen: Sequence[Sighting], rows: Sequence[FtdRow], tickers: Collection[str],
+                figi_ticker: str) -> dict[str, str]:
+    """FB-013: {bare ticker: the day the security's ticker lost its separator}, for a security observed under both
+    spellings whose line really changed ticker (Hubbell's class B: HUB-B until its CUSIP changed on 2015-12-28,
+    HUBB since), not one a snapshot merely wrote two ways (BF-B and BFB). SEC's fails files write both the same
+    (HUBB on every row), so the rows cannot tell; these must all hold:
+
+    - `figi_ticker`, OpenFIGI's ticker for the line, is the bare spelling (a line still quoted with a separator,
+      BF/B, FCE/A, keeps the one spelling whatever a snapshot wrote);
+    - the security's rows under the ticker are two or more CUSIPs', one after another;
+    - from one of those CUSIPs on (not the first), the caller saw the bare spelling alone under it and never the
+      separator again under a later one. An observation belongs to the CUSIP whose rows had begun by its day.
+
+    The day is that CUSIP's first row. Anything else is one spelling, the separator's, as before: a backfilled
+    sighting of the bare ticker under the old CUSIP (HUBB in a 2012 snapshot) stays the old ticker's."""
+    if not figi_ticker or figi_ticker != bare_ticker(figi_ticker) or figi_ticker not in tickers:
+        return {}
+    bare = figi_ticker
+    if sum(1 for t in tickers if t != bare and bare_ticker(t) == bare) != 1:
+        return {}
+    spans: dict[str, list[str]] = {}                   # CUSIP -> [first, last] day of its rows under the ticker
+    for r in rows:
+        if bare_ticker(r.symbol) == bare:
+            span = spans.setdefault(r.cusip, [r.date, r.date])
+            span[0], span[1] = min(span[0], r.date), max(span[1], r.date)
+    ordered = sorted(spans.values())
+    if len(ordered) < 2 or any(b[0] <= a[1] for a, b in zip(ordered, ordered[1:])):
+        return {}
+    starts = [first for first, _ in ordered]
+    under: list[set[str]] = [set() for _ in ordered]   # the spellings the caller saw under each CUSIP
+    for s in seen:
+        if s.source == OBSERVATION and bare_ticker(s.value) == bare:
+            under[max(bisect_right(starts, s.day) - 1, 0)].add(s.value)
+    turned = None
+    for i, spellings in enumerate(under):
+        if spellings - {bare}:
+            if turned is not None:
+                return {}                              # the separator seen again after the bare spelling stood alone
+        elif spellings and turned is None:
+            turned = i
+    return {bare: starts[turned]} if turned else {}
 
 
 def cusip_sightings(sec: Security, ftd: FtdIndex, cusips: Sequence[str],

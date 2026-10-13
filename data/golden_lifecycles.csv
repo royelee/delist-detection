@@ -27,8 +27,8 @@ J,golden,J,2020-06-30,52988,JEC;J,active,,,,,,J,pass,,library PR #6,,2022 holdin
 FOXA-2020,golden,FOXA,2020-06-30,1754301,,active,,,,,,,pass,,spec golden list,,Fox Corp class A
 FOX-2020,golden,FOX,2020-06-30,1754301,,active,,,,,,,pass,,spec golden list,,Fox Corp class B
 MRK-2008,golden,MRK,2008-06-30,64978,,,,,,,,,pass,,,,one composite FIGI across the 2009 Schering-Plough merger; old Merck & Co was the issuer in 2008
-FOXA-2015,golden,FOXA,2015-06-30,1308161,,,,merger,,,,,known_wrong,reset-4b,,,Twenty-First Century Fox class A; acquired by Disney 2019; output maps it to Fox Corp's FIGI
-FOX-2015,golden,FOX,2015-06-30,1308161,,,,merger,,,,,known_wrong,reset-4b,,,Twenty-First Century Fox class B; as FOXA-2015
+FOXA-2015,golden,FOXA,2015-06-30,1308161,,,,merger,,,,,pass,,,,"Twenty-First Century Fox class A; acquired by Disney 2019; output maps it to Fox Corp's FIGI; the library now matches, was known_wrong until reset-4b"
+FOX-2015,golden,FOX,2015-06-30,1308161,,,,merger,,,,,pass,,,,"Twenty-First Century Fox class B; as FOXA-2015; the library now matches, was known_wrong until reset-4b"
 YHOO,golden,YHOO,2010-06-30,1011006,YHOO;AABA,,,liquidation,,,,,known_wrong,reset-4a,https://www.sec.gov/Archives/edgar/data/1011006/000119312519262790/d794671dex991.htm,,renamed Altaba (AABA) 2017-06-16; dissolved 2019-10-04 after a stockholder-approved liquidation
 PDLI,golden,PDLI,2015-06-30,882104,,,,liquidation,,,,,pass,,,,"voluntary delisting to wind down; paid distributions; the library now matches, was known_wrong until reset-4d"
 EXBD,golden,EXBD,2010-06-30,1066104,EXBD;CEB,,2012-09-01,,,,,,pass,,https://www.sec.gov/Archives/edgar/data/1066104/000119312512322777/d387593dex991.htm,,ticker changed to CEB 2012-08-13; same company and listing

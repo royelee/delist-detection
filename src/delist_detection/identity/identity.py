@@ -45,14 +45,16 @@ from typing import Any, Protocol
 from ..outputs.degraded import degraded_item
 from ..filings.evidence import bankruptcy_8ks, names_between, parse_day, renamed_near
 from ..sources.ftd import FTD_START, FtdIndex, FtdRow
-from ..vocabulary.identifiers import is_placeholder, name_class_letter, placeholder_id, share_class_from_name
+from ..vocabulary.identifiers import (
+    bare_ticker, is_placeholder, name_class_letter, placeholder_id, share_class_from_name,
+)
 from .carried_price import price_carried, step_price_ratio
 from .issuer_record import IssuerRecord
 from ..outputs.manifest import StageMeter
 from ..vocabulary.names import (
     description_matches, description_name, description_names, names_agree, names_an_issuer,
 )
-from .line_follow import SWITCH, LineStep, composites, step_refusal
+from .line_follow import SUCCESSOR_FORMS, SWITCH, LineStep, composites, step_refusal
 from .observations import (
     ERA_GAP_DAYS, DerivedFrom, Fold, Observation, ObservationError, ObservationIndex, TickerEra, eras_by_key,
     number_eras,
@@ -77,6 +79,9 @@ GUARD_NAME_DAYS = 30     # a name the candidate took up to this long after a row
 RENAME_NEAR_DAYS = 90    # a switch's issuer was renamed this close to it
 NAME_IN_FORCE = "name_in_force"     # 2b's source: the one other holder of the name that carried it over the era
 TICKER_ROWS = "ticker_rows"         # 2b's source: the one other holder of the name its ticker's fails rows describe
+LATER_TICKER = "later_ticker"       # 2b's source: a backfilled row's issuer, the company SEC lists its ticker under
+LATER_ROWS_DAYS = 400               # the ticker's rows this long from its first row after the era say whose it became
+ROWS_DECIDED = frozenset({TICKER_ROWS, LATER_TICKER})      # 2b's answers that refute the era's observed name on its dates
 OBSERVED_ALIVE_DAYS = TickerResolver.OBSERVED_ALIVE_DAYS    # filed within this of a day: the issuer was operating
 EXCHANGE_CIKS = TickerResolver.EXCHANGE_CIKS                # the exchanges' CIKs: never an issuer
 
@@ -118,9 +123,10 @@ class Identity:
     by era key, for the eras whose issuer is known: the one source of an era's CIK), each era's FIGI resolution,
     the securities, each security's CUSIPs over its whole life (`cusips`), the identity review items, each era's
     lookup tier (`tiers`: the first pass's, or the source of the 2b or second-pass rule that answered it) and the
-    eras whose ticker's fails rows decided their issuer (`rows_decided`, 2b's `ticker_rows`: their observed name
-    was refuted, so the issuer in force keeps their CIK), and `verdicts`, what the check of the derived eras found
-    (`identify`): by (ticker, new CUSIP) pair, `NOT_MADE`, `WITHOUT_OLD_ISSUER` or `FOLD_REFUSED`."""
+    eras whose ticker's fails rows decided their issuer (`rows_decided`, 2b's `ticker_rows` and `later_ticker`:
+    their observed name is not the issuer's on their dates, so the issuer in force keeps their CIK), and `verdicts`,
+    what the check of the derived eras found (`identify`): by (ticker, new CUSIP) pair, `NOT_MADE`,
+    `WITHOUT_OLD_ISSUER` or `FOLD_REFUSED`."""
     eras: list[TickerEra]
     era_by_key: dict[str, TickerEra]
     ftd: FtdIndex
@@ -240,7 +246,7 @@ def identify(index: ObservationIndex, clients: Sources, *, as_of: date, limit: i
     cusips = _security_cusips(securities, resolutions, ftd)                                              # 4
     return Identity(eras, era_by_key, ftd, found.issuers, resolutions, securities, cusips, review,
                     {k: r.source for k, r in found.answers.items()},
-                    frozenset(k for k, v in found.inferred.items() if v.source == TICKER_ROWS), verdicts)
+                    frozenset(k for k, v in found.inferred.items() if v.source in ROWS_DECIDED), verdicts)
 
 
 def _pair_of(era: TickerEra, derive: Mapping[tuple[str, str], DerivedFrom]) -> tuple[str, str] | None:
@@ -585,6 +591,136 @@ def _went_bankrupt(ftd: FtdIndex, record: IssuerRecord) -> _WentBankrupt:
     return _WentBankrupt(ftd, record)
 
 
+REPLACED_DAYS = 45                # the old registrant's Form 25 and closing 8-K lie this close to the new CUSIP's first
+                                  # row, and the new registrant's Form 10 this long after it
+REGISTRATION_LEAD_DAYS = 180      # ... and that Form 10 this long before it
+REGISTRATION_FORMS = ("10-12B", "10-12G")    # a Form 10: stock registered to be handed out (a spin-off), never
+                                             # exchanged for another company's; an 8-A lists a class however it came
+CLOSING_ITEMS = frozenset({"2.01", "5.01"})                      # an 8-K's completed acquisition, a change in control
+
+
+class _Replaced:
+    """Whether another registrant took a class's place at a CUSIP switch, and the old one did not become it (FB-003;
+    Twenty-First Century Fox and Fox Corporation, 2019): the stock of the new CUSIP is another company's, not the old
+    stock under a new registrant. All of these hold, for the switch from `old` (the issuer `old_cik`'s CUSIP) to `new`
+    (the issuer `new_cik`'s), whose first fails row is the day of the change:
+
+    - the old registrant filed a Form 25 within `REPLACED_DAYS` of that day (its listing ended);
+    - and an 8-K of its own, within the same days, with item 2.01 or 5.01 (the closing of an acquisition, a change in
+      control: Disney bought Twenty-First Century Fox on 2019-03-20);
+    - and the new registrant registered its stock by a Form 10-12B/10-12G from `REGISTRATION_LEAD_DAYS` before that
+      day to `REPLACED_DAYS` after (Fox Corporation: the Form 10-12B of 2019-01-07). A Form 10 registers shares that
+      are handed out, a spin-off. Shares issued one for one for the old company's are registered by an S-4 and
+      listed by an 8-A (Clearwire 2008), which is the same stock under a new registrant: one line;
+    - and the new registrant filed no 8-K12B or 8-K12G3 within `REPLACED_DAYS` of it: that is a successor
+      registration, the same stock under a new holding company (Disney 2019, Express Scripts 2012).
+
+    A new registrant that never registered anew (Merck 2009: Schering-Plough was already listed, and took Merck's
+    name) leaves the switch one line, as the old rule had it. A filings read that failed or was stale counts as no
+    replacement, and its CIKs are kept in `degraded` for the review rows."""
+
+    def __init__(self, ftd: FtdIndex, record: IssuerRecord) -> None:
+        self.ftd, self.record, self.degraded = ftd, record, set()
+
+    def __call__(self, old: str, new: str, old_cik: int | None, new_cik: int | None) -> bool:
+        rows = self.ftd.by_cusip(new)
+        day = parse_day(rows[0].date) if rows else None
+        if old_cik is None or new_cik is None or old_cik == new_cik or day is None:
+            return False
+        reads = self.record.watch()
+        old_filings, new_filings = self.record.filings(old_cik), self.record.filings(new_cik)
+        if reads.tripped():
+            self.degraded |= {old_cik, new_cik}
+
+        def filed(filings: Sequence[Any], lead: int, keep: Callable[[Any], bool]) -> bool:
+            return any(keep(f) and (d := parse_day(f.filing_date)) is not None
+                       and day - timedelta(days=lead) <= d <= day + timedelta(days=REPLACED_DAYS) for f in filings)
+
+        closing = lambda f: f.form.startswith("8-K") and bool(CLOSING_ITEMS & f.item_set)
+        return (filed(old_filings, REPLACED_DAYS, lambda f: f.form.startswith("25"))
+                and filed(old_filings, REPLACED_DAYS, closing)
+                and filed(new_filings, REGISTRATION_LEAD_DAYS, lambda f: f.form.split("/")[0] in REGISTRATION_FORMS)
+                and not filed(new_filings, REPLACED_DAYS, lambda f: f.form.split("/")[0] in SUCCESSOR_FORMS))
+
+
+class _RegistrantAfter:
+    """Whether the company SEC lists a ticker under today (`IssuerRecord.listed_under`) had not filed anything by an
+    era's first sighting (`first`), is another company than a given issuer and is no successor registration of it
+    (FB-003: FOXA is Fox Corporation's, CIK 1754301, whose first filing is of 2018-10-09, not Twenty-First Century
+    Fox's, whose FOXA era began in 2013). A holder that
+    has an 8-K12B or 8-K12G3 of its own is a holding company that took an issuer's place one for one, which the
+    pick may rightly name. A read that failed or was stale counts as no, and its CIK is kept in `degraded`."""
+
+    def __init__(self, record: IssuerRecord) -> None:
+        self.record, self.degraded = record, set()
+
+    def __call__(self, ticker: str, cik: int | None, first: str) -> bool:
+        holder = self.record.listed_under(ticker)
+        if cik is None or holder is None or holder == cik:
+            return False
+        reads = self.record.watch()
+        filed = self.record.first_filed(holder)
+        successor = any(f.form.split("/")[0] in SUCCESSOR_FORMS for f in self.record.filings(holder))
+        if reads.tripped():
+            self.degraded.add(holder)
+            return False
+        day = parse_day(first)
+        return filed is not None and day is not None and filed > day and not successor
+
+
+LEFT_BEHIND_SETTLE_DAYS = 30   # an old CUSIP's fails rows this long after another CUSIP took its ticker are still settling
+
+
+class _LeftBehind:
+    """Whether a line was left behind by its issuer's bankruptcy while its ticker went on as other shares (FB-014;
+    decision 9: post-bankruptcy equity is a new security). `own` are the line's CUSIPs and `ticker` one it traded
+    under. All of these hold:
+
+    - after the last day the line's own CUSIPs traded under the ticker, the ticker's fails rows are another CUSIP's;
+    - the line's own CUSIPs have no trading row later than `LEFT_BEHIND_SETTLE_DAYS` after that CUSIP's first row
+      (the old stock stopped; a line that trades on beside the ticker's new holder was not cancelled);
+    - the line went through a bankruptcy between its CUSIPs and that one (`_WentBankrupt`).
+
+    SandRidge Energy 2016: the old CUSIP left SD for SDOC and SDOCQ and stopped on 2016-10-13, and the stock issued
+    under the plan holds SD from 2016-10-07. OpenFIGI names today's composite for the new CUSIP only, so a ticker
+    pick for the old line is the new stock's id (`security_master.weak_lines_left_behind`), and EDGAR's listing of
+    SD is the new stock's (`left_behind_placeholders`). A new CUSIP with no bankruptcy (Equinix 2015, Thomson
+    Reuters 2018: shares that went on under a CUSIP the line follow could not confirm) leaves nothing behind."""
+
+    def __init__(self, ftd: FtdIndex, went_bankrupt: Callable[[str, str, int | None], bool]) -> None:
+        self.ftd, self.went_bankrupt = ftd, went_bankrupt
+
+    def __call__(self, ticker: str, own: Collection[str], cik: int | None) -> bool:
+        own = set(own)
+        rows = self.ftd.trading_rows(sorted(own))
+        bare = bare_ticker(ticker)
+        under = [r.date for r in rows if bare_ticker(r.symbol) == bare]
+        if not under:
+            return False
+        left = max(under)
+        later = [r for r in self.ftd.by_symbol(ticker) if r.cusip not in own and r.date > left]
+        if not later:
+            return False
+        took = min(later, key=lambda r: r.date)
+        settled = (date.fromisoformat(took.date) + timedelta(days=LEFT_BEHIND_SETTLE_DAYS)).isoformat()
+        if max(r.date for r in rows) > settled:
+            return False
+        return any(self.went_bankrupt(old, took.cusip, cik) for old in sorted(own))
+
+
+def left_behind_placeholders(securities: Mapping[str, Security], cusips: Mapping[str, Sequence[str]], ftd: FtdIndex,
+                             record: IssuerRecord) -> tuple[set[str], set[int]]:
+    """The placeholder securities a bankruptcy left behind while their ticker went on as other shares (`_LeftBehind`,
+    over each of their eras' tickers and their own CUSIPs), and the issuer CIKs whose filings read failed or was
+    stale while asking (counted as no bankruptcy). Such a placeholder is not the line EDGAR lists under its ticker
+    today: the listing is the later shares'."""
+    went_bankrupt = _went_bankrupt(ftd, record)
+    left = _LeftBehind(ftd, went_bankrupt)
+    out = {s.sec_id for s in securities.values() if is_placeholder(s.sec_id) and cusips.get(s.sec_id)
+           and any(left(t, cusips[s.sec_id], s.issuer_cik) for t in sorted({e.ticker for e in s.eras}))}
+    return out, set(went_bankrupt.degraded)
+
+
 def _resolve_securities(eras: list[TickerEra], era_by_key: dict[str, TickerEra], ftd: FtdIndex,
                         handoffs: Sequence[Handoff], found: _Issuers, clients: Sources, log: Callable[[str], None]
                         ) -> tuple[dict[str, EraResolution], dict[str, Security], list[ReviewItem]]:
@@ -604,11 +740,14 @@ def _resolve_securities(eras: list[TickerEra], era_by_key: dict[str, TickerEra],
     issuers = found.issuers
     cusips = candidate_cusips(eras, ftd, issuers)
     went_bankrupt = _went_bankrupt(ftd, clients.issuers)
+    replaced, registrant_after = _Replaced(ftd, clients.issuers), _RegistrantAfter(clients.issuers)
     resolutions, detached = resolve_with_identity_guard(
         FigiResolver(clients.figi, log=log, cusip_span=lambda c: _trading_span(ftd, c),
                      foreign=foreign_ticker_eras(eras, ftd, issuers)),
         eras, issuers=issuers, cusips=cusips, handoffs=handoffs, unconfirmed=guarded_eras(eras, ftd),
-        bankrupt_between=went_bankrupt)
+        bankrupt_between=went_bankrupt, left_behind=_LeftBehind(ftd, went_bankrupt), replaced=replaced,
+        registrant_after=registrant_after)
+    unread = went_bankrupt.degraded | replaced.degraded | registrant_after.degraded
     securities = build_securities(resolutions, era_by_key, issuers)
     review: list[ReviewItem] = detached_review(detached, era_by_key, resolutions, issuers)
     for key, res in resolutions.items():
@@ -624,10 +763,11 @@ def _resolve_securities(eras: list[TickerEra], era_by_key: dict[str, TickerEra],
                                          f"{e.key} {e.name or ''}: issuer resolution",
                                          "; its answer was used for this run but not saved", last_seen=e.last))
     for e in eras:        # the composite guard asked this issuer's filings and the read failed: it kept the pick
-        if (cik_of(issuers, e.key) in went_bankrupt.degraded
+        if (cik_of(issuers, e.key) in unread
                 and resolutions[e.key].source not in ("pin", "cusip")):
             review.append(degraded_item(resolutions[e.key].sec_id or "", e.ticker, cik_of(issuers, e.key),
-                                         f"{e.key} {e.name or ''}: the check for a bankruptcy between its CUSIPs",
+                                         f"{e.key} {e.name or ''}: the check for a bankruptcy or a replaced registrant "
+                                         f"between its CUSIPs",
                                          "; the era was kept on the composite its pick gave", last_seen=e.last))
     for e in eras:
         inferred = found.inferred.get(e.key)
@@ -1058,15 +1198,27 @@ class EraIssuers:
           rows under ERA say ERA GROUP INC, the company later renamed Bristow Group Inc; the old Bristow Group
           traded as BRS).
 
-        A pinned era, one with no name or no name index, keeps its answer. Answers keyed by era."""
+        Before either, an era whose ticker the fails data does not show near its dates (`guarded_eras`) is asked
+        whether its row was backfilled (`later_ticker`, `_later_ticker`, which needs no name index).
+
+        A pinned era, one with no name or (for the two rules above) no name index, keeps its answer. Answers keyed by
+        era."""
         index = self.issuers.name_index()
         out: dict[str, InferredIssuer] = {}
-        if index is None:
-            return out
+        guarded = guarded_eras(eras, ftd)
         for e in sorted(eras, key=lambda e: e.key):
             res = answers.get(e.key)
             if res is None or res.cik is None or res.source != "name_search" or e.cik_pin is not None \
                     or e.sec_id_pin or not e.name:
+                continue
+            if e.key in guarded:
+                self._reset()
+                later = self._later_ticker(e, res.cik, ftd)
+                self._mark(e)
+                if later is not None:
+                    out[e.key] = later
+                    continue
+            if index is None:
                 continue
             holders = sorted({h.cik for h in index.split_search(e.name)[0]} - {res.cik} - EXCHANGE_CIKS)
             if not holders:
@@ -1081,6 +1233,45 @@ class EraIssuers:
                 out[e.key] = got
             self._mark(e)
         return out
+
+    def _later_ticker(self, era: TickerEra, first: int, ftd: FtdIndex) -> InferredIssuer | None:
+        """FB-013: the issuer of a backfilled row, one a snapshot wrote under the ticker and name its company took
+        later (GHC 2012-06-29, GRAHAM HOLDINGS COMPANY: Washington Post Co took both on 2013-11-29; the name search
+        answered Graham Corp, whose name compares as the same one word). For an era whose ticker the fails data does
+        not show near its dates (the caller checks `guarded_eras`), the company SEC's ticker map lists the ticker
+        under (`IssuerRecord.listed_under`), when all of these hold:
+
+        - it is not the answer, and it had filed by the era's first sighting;
+        - the ticker's first rows after the era (one CUSIP's, up to `LATER_ROWS_DAYS` from its first row, at least
+          `ERA_MIN_ROWS`) are its rows (guard G's `_fits_rows`): the ticker did trade later, as that company's;
+        - it carried a name agreeing with the observed one at some point from the era's first sighting to the last
+          of those rows.
+
+        None when the ticker's last rows before the era are the answer's own (`_fits_rows`, at least `ERA_MIN_ROWS`
+        of one CUSIP): a ticker the answer's company traded under and then left is a stale row of that company, not
+        a backfilled one. The ticker map alone decides nothing: it lists today's holder, and the rows and the name
+        must place that holder at the ticker's next use after the era."""
+        holder = self.issuers.listed_under(era.ticker)
+        if holder is None or holder == first or holder in EXCHANGE_CIKS:
+            return None
+        rows = ftd.by_symbol(era.ticker)
+        before, after = [r for r in rows if r.date < era.first], [r for r in rows if r.date > era.last]
+        if not after:
+            return None
+        stale = [r for r in before if r.cusip == before[-1].cusip]
+        if len(stale) >= ERA_MIN_ROWS and self._fits_rows(first, stale):
+            return None
+        start = parse_day(after[0].date)
+        until = (start + timedelta(days=LATER_ROWS_DAYS)).isoformat()
+        later = [r for r in after if r.cusip == after[0].cusip and r.date <= until]
+        lo, hi = parse_day(era.first), parse_day(later[-1].date)
+        if (len(later) < ERA_MIN_ROWS or lo is None or not self.issuers.existed_by(holder, era.first)
+                or not self._fits_rows(holder, later) or not self._carried_over(holder, era.name, lo, hi)):
+            return None
+        return InferredIssuer(holder, LATER_TICKER,
+                              f"no fails row is under {era.ticker} near {era.first}; its rows from {later[0].date} "
+                              f"({later[0].description}) are {holder}'s, which SEC lists {era.ticker} under and "
+                              f"which carried the name by then, not {first}'s")
 
     def _carried_over(self, cik: int, name: str, lo: date, hi: date) -> bool:
         """Whether the CIK carried a name agreeing with `name` at some point in [lo, hi] (its submissions JSON)."""

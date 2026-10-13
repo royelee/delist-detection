@@ -361,6 +361,9 @@ verdict is always `uncertain`, so a reader must not filter it away as "no ending
 `merger_value.MergerValues.contract_inputs` hands it the `--merger-terms` row, the LLM terms and regex read from before the payout gate, and the acquirer's
 sec_id): a merger's terms come from the override, else the delistings.csv row (`terms_gate` passed, or blank
 when no last close existed), else the pre-gate read (`terms_gate=failed`; a failed election publishes both legs as read).
+`cash_per_share` is all the cash one share received: a dividend the target paid because the deal closed is in it when the
+payout gate counted it (FB-021: the total is nearer the last close than the consideration alone), and `value_formula`
+names the parts, `(18.75 + 1.75 dividend) / last_close − 1`. Terms the gate did not keep take no dividend.
 The scorecard counts endings by `R2.7.value_rule.<rule>` and `R2.7.payout_rule_known`.
 10h, the scorecard.
 
@@ -644,6 +647,13 @@ answer with whoever holds the ticker or the name *today*, so:
   observation (`superseded_placeholders`): EDGAR's ticker list names the
   issuer's current line, which would otherwise keep an old placeholder's range
   open over every later line.
+- Nor is it when a bankruptcy left its line behind while its ticker went on as
+  other shares, observed or not (`left_behind_placeholders`, FB-014): its own
+  CUSIPs stopped, another CUSIP holds the ticker since, and the issuer went
+  through a bankruptcy between them (SandRidge 2016: the SD that EDGAR lists
+  today is the stock issued under the plan). A ticker or name pick for such a
+  line is withdrawn first (`weak_lines_left_behind`), so the old stock is a
+  placeholder and never carries the new stock's FIGI.
 
 **The placeholder-splitting guard** (controller ruling, superseding the
 original all-or-none-withdrawal design): an issuer's placeholder holds every
@@ -736,7 +746,7 @@ security-master rebuild — see the spec's §8.7):
 
 | Trigger | CRSP code | Bucket |
 |---|---|---|
-| Non-equity security kind (from the Form 25 class text / OpenFIGI `securityType` / name keywords: warrant, unit, right, fund, debt) | 600 | EXPIRATION |
+| Non-equity security kind (from the Form 25 class text / OpenFIGI `securityType` / name keywords: warrant, unit, right, fund, debt). A unit whose issuer's Form 25s all remove stock (STAY 2021's "Paired Shares", FB-018) is searched and classified as the stock it is | 600 | EXPIRATION |
 | Form `REVOKED` present | 573 | COMPLIANCE_FAILURE |
 | 8-K item 1.03 whose own Item 1.03 section reports a bankruptcy, searched 540 days before to 30 days after the anchor date (an unreadable section still counts, flagged `bankruptcy_text_missing`). Exception: when that 1.03 is more than 180 days before the anchor and a change-in-control 8-K (5.01, or 2.01 with 3.01 or 3.03) falls within 30 days of it, the merger path wins instead and the row is flagged `bankruptcy_before_merger` | 470 | LIQUIDATION |
 | A rename near the anchor, or a 3.01 notice that reads as a listing transfer rather than a deficiency, with the company still reporting results afterward. Yields to the merger path whenever a nearby 8-K shows an acquisition (5.01, or 2.01 with 3.01 or 3.03) | 304 | EXCHANGE_TRANSFER |
@@ -928,7 +938,10 @@ is its row count; it is no contract file.
 fails-to-deliver rows. The ticker ranges are built the same way but no longer
 written as `ticker_history.csv`: the run keeps them in memory as `ticker_history`
 (the verdicts and the contract read them), and `contract/security_history.csv`
-publishes them, split where the issuer in force changes, without the merger
+publishes them, split where the issuer in force changes (by the caller's
+sightings, by the lines the library derived after a CUSIP change, and at the
+end of an open history by the company SEC lists the ticker under: FB-015),
+without the merger
 acquirers the run adds (and without the `exchange` and `source` columns). In
 memory, `ticker_history.exchange`
 is filled for the range that ends in a delisting (from the Form 25) and for

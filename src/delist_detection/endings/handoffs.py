@@ -22,7 +22,7 @@ from __future__ import annotations
 import re
 from collections import defaultdict
 from collections.abc import Callable, Collection, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, timedelta
 
 from ..outputs.reconstruction import DelistRecord
@@ -36,7 +36,7 @@ from ..sources.ftd import FtdIndex, FtdRow
 from ..identity.carried_price import CARRIED_PRICE, price_carried
 from ..identity.history import TAKEOVER_DAYS, Sighting
 from ..vocabulary.identifiers import bare_ticker, strip_class_words
-from .last_trade import NO_DAY, at_handoff
+from .last_trade import NO_DAY, at_handoff, before_successor, handoff_day
 from ..outputs.review_triage import ReviewItem
 from .rewrites import HANDOFF_CONTINUATION, Payouts, Rule, continuation
 from ..identity.security_master import Security
@@ -273,6 +273,9 @@ class HandoffOutcome:
     review: list[ReviewItem]
     resolved_pairs: set[tuple[str, str, str]]
     counts: dict[str, int]
+    # the kept rows whose last trade day the pass moved while they keep their kind and value (`_before_taker`): the
+    # run read their close and their value on the day they had, so it reads both again
+    redated: list[Delisting] = field(default_factory=list)
 
 
 def _day_of(d: Delisting) -> date:
@@ -288,6 +291,19 @@ def _near(delistings: Sequence[Delisting], pair: HandoffPair, sec_id: str, days:
     near = [d for d in delistings if d.sec_id == sec_id and lo <= _day_of(d) <= hi]
     a = date.fromisoformat(pair.a_last)
     return min(near, key=lambda d: (abs((_day_of(d) - a).days), d.delist_date), default=None)
+
+
+def _before_taker(d: Delisting, pair: HandoffPair, redated: list[Delisting]) -> None:
+    """FB-022 for a row that keeps its kind (a takeover's target, a row that stands against the handoff): a day no
+    exchange print gave never reaches B's first day under the ticker (`last_trade.before_successor`). Not when A
+    traded on under another ticker after it gave this one up (`a_last_any` later than `a_last`): B's first day then
+    says nothing about the day A stopped. A row whose day moves is listed in `redated`."""
+    if pair.a_last_any and pair.a_last_any > pair.a_last:
+        return
+    capped = before_successor(d.last_trade, pair.b_first)
+    if capped is not d.last_trade:
+        d.last_trade = capped
+        redated.append(d)
 
 
 def _unmatched_form25(review: Sequence[ReviewItem], pair: HandoffPair) -> ReviewItem | None:
@@ -306,9 +322,12 @@ def _unmatched_form25(review: Sequence[ReviewItem], pair: HandoffPair) -> Review
 
 
 def _continuation_reason(decision: HandoffDecision) -> str:
+    """The sentence of a handoff continuation. A's day is the handoff's (`last_trade.handoff_day`), not the date of
+    its last fails row, which is B's first day when the rows meet (FB-022)."""
     p = decision.pair
-    return continuation_reason(decision.evidence, f"{p.a} last traded as {p.ticker} on {p.a_last} and {p.b} took the "
-                                                  f"ticker from {p.b_first}; holders' shares became {p.b}'s")
+    return continuation_reason(decision.evidence,
+                               f"{p.a} last traded as {p.ticker} on {handoff_day(p.a_last, p.b_first).isoformat()} "
+                               f"and {p.b} took the ticker from {p.b_first}; holders' shares became {p.b}'s")
 
 
 def _continue(d: Delisting, decision: HandoffDecision, payouts: Payouts | None) -> None:
@@ -376,8 +395,14 @@ def apply_handoffs(decisions: Sequence[HandoffDecision], delistings: Sequence[De
 
     A takeover sets `ticker_successor_sec_id` to B on A's delisting nearest the
     handoff (within `TAKEOVER_DAYS`), else writes a
-    `handoff_takeover_no_delisting` item."""
+    `handoff_takeover_no_delisting` item.
+
+    FB-022: a row that stands against the handoff (a conflict) and a takeover's target keep their kind, and their
+    last trade day too unless no exchange print gave it and it reaches B's first day under the ticker
+    (`last_trade.before_successor`: old Charter 2016, a merger by rule 6 whose worked-out closing day is New
+    Charter's first day)."""
     added: list[Delisting] = []
+    redated: list[Delisting] = []
     own: list[ReviewItem] = []
     drop: set[int] = set()
     resolved: set[tuple[str, str, str]] = set()
@@ -391,6 +416,7 @@ def apply_handoffs(decisions: Sequence[HandoffDecision], delistings: Sequence[De
             d = _near(rows, p, p.a, TAKEOVER_DAYS)
             if d is not None:
                 d.record.ticker_successor_sec_id = p.b
+                _before_taker(d, p, redated)
             else:
                 sec = securities.get(p.a)
                 own.append(ReviewItem(p.a, p.ticker, sec.issuer_cik if sec else None, "handoff_takeover_no_delisting",
@@ -433,6 +459,7 @@ def apply_handoffs(decisions: Sequence[HandoffDecision], delistings: Sequence[De
                 own.append(ReviewItem(p.a, d.ticker, d.cik, "handoff_conflict",
                                       f"{p.b} continues {p.a} under {p.ticker} ({decision.evidence}), but "
                                       f"{conflict}; the row stands", delist_date=d.delist_date))
+                _before_taker(d, p, redated)                 # the kind stands, not the day
                 continue
             if bucket is not CrspBucket.EXCHANGE_TRANSFER:
                 if bucket is CrspBucket.MERGER:
@@ -458,7 +485,7 @@ def apply_handoffs(decisions: Sequence[HandoffDecision], delistings: Sequence[De
                   and r.filing is not None and r.filing.accession == accession):
                 drop.add(i)
     kept = [r for i, r in enumerate(review) if i not in drop]
-    return HandoffOutcome(added, kept + own, resolved, counts)
+    return HandoffOutcome(added, kept + own, resolved, counts, redated)
 
 
 def drop_resolved_shared(items: Sequence[ReviewItem], resolved: Collection[tuple[str, str, str]]) -> list[ReviewItem]:

@@ -24,7 +24,8 @@ def test_one_row_per_ended_security_its_last_and_none_for_a_security_that_contin
     rows = {r["sec_id"]: r for r in delisting_rows(t, decide(t, {}))}
     assert set(rows) == {"A", "D"}
     assert set(last_endings(t.delistings)) == {"A", "D"}
-    assert rows["D"]["dlret"] == "0.012000" and rows["D"]["last_trade_date"] == ""     # not an exchange print
+    # not an exchange print: published as the day the library holds (FB-020), and the verdict doubts it
+    assert rows["D"]["dlret"] == "0.012000" and rows["D"]["last_trade_date"] == "2018-06-29"
     assert rows["D"]["verdict"] == "uncertain" and rows["D"]["terminal_value"] == "20.000000"
 
 

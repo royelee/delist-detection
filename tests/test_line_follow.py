@@ -68,6 +68,53 @@ def test_a_new_cusip_too_long_after_the_old_line_is_no_step():
     assert _steps(OLD + _rows("RS", "11111A200", "REVERSE SPLIT CO", "2013-05-01", 5)) == []
 
 
+# --- FB-015, Ocwen 2020: a line that goes on after a gap in the fails rows (`late`) ---
+
+LATE_NEW = _rows("RS", "11111A200", "REVERSE SPLIT CO", "2015-07-14", 6)       # three years after OLD's last row
+
+
+def test_a_late_switch_is_a_step_only_when_asked_for():
+    """Ocwen's reverse split of 2020-08: the old CUSIP's last row is 2020-08-12 and the new one's first 2023-07-14,
+    as the stock had no fails in between. The window sees no step; asked for late steps, the first later CUSIP
+    under the line's own ticker is one, marked `late`."""
+    assert _steps(OLD + LATE_NEW) == []
+    [st] = _steps(OLD + LATE_NEW, late=True)
+    assert (st.kind, st.old_cusip, st.new_cusip, st.symbol, st.old_last, st.first, st.late) == (
+        lf.SWITCH, "11111A101", "11111A200", "RS", "2012-09-25", "2015-07-14", True)
+    # a step in the window is never late, asked or not
+    near = _rows("RS", "11111A200", "REVERSE SPLIT CO NEW", "2012-09-26", 5)
+    assert [st.late for st in _steps(OLD + near, late=True)] == [False]
+
+
+def test_a_late_switch_is_the_first_later_cusip_and_needs_rows_of_its_own():
+    third = _rows("RS", "11111A309", "REVERSE SPLIT CO", "2018-03-01", 6)
+    [st] = _steps(OLD + LATE_NEW + third, late=True)
+    assert st.new_cusip == "11111A200"
+    assert _steps(OLD + LATE_NEW[:2], late=True) == []                         # fewer than MIN_NEW_ROWS rows
+    # a CUSIP that was trading under another symbol before the line stopped is not the line's next
+    elsewhere = _rows("XYZ", "11111A200", "OTHER CO", "2012-01-03", 5)
+    assert _steps(OLD + elsewhere + LATE_NEW, late=True) == []
+    # another security of the run holds it
+    assert _steps(OLD + LATE_NEW, late=True, holders={"11111A200": {"BBGOTHER"}}) == []
+
+
+def test_a_late_switch_is_no_step_while_the_old_cusip_trades_on():
+    """A spin-off took the ticker while the old line went on under another symbol (GOOG, AAN): not the line's."""
+    on = _rows("RSOLD", "11111A101", "REVERSE SPLIT CO", "2013-01-07", 30)
+    assert [st.kind for st in _steps(OLD + on + LATE_NEW, late=True)] == []
+
+
+def test_a_late_new_symbol_needs_a_symbol_the_issuer_names():
+    """Ocwen 2024: the same CUSIP's last row under OCN is 2024-05-29 and its first under ONIT 2024-07-24, outside
+    the window. ONIT is the ticker EDGAR lists for the issuer, so the late step is taken; a symbol nobody names is
+    not."""
+    renamed = _rows("RSNW", "11111A101", "REVERSE SPLIT CO", "2012-11-20", 5)   # eight weeks after OLD's last row
+    assert _steps(OLD + renamed, extra_symbols={"RSNW"}) == []
+    assert _steps(OLD + renamed, late=True) == []
+    [st] = _steps(OLD + renamed, extra_symbols={"RSNW"}, late=True)
+    assert (st.kind, st.new_cusip, st.symbol, st.first, st.late) == (lf.NEW_SYMBOL, "11111A101", "RSNW", "2012-11-20", True)
+
+
 def test_an_old_cusip_that_trades_on_under_an_otc_symbol_takes_no_later_switch_or_symbol():
     """VRM 2025: after the bankruptcy the old CUSIP trades as VRMMQ, and the reorganized company's new CUSIP takes
     the ticker; neither is a step of the old line."""
@@ -179,6 +226,36 @@ def test_an_8k_text_stating_a_reverse_split_states_a_switch():
 
 def test_no_filing_stating_the_switch_refuses_it():
     assert _corr(filings=[LATER_10Q]) == ("", "no_filing")
+
+
+LATE_STEP = lf.LineStep("BBGRS", lf.SWITCH, "11111A101", "11111A200", "RS", "2012-09-25", "2015-07-14",
+                        ("REVERSE SPLIT CO",), late=True)
+LATE_10Q = _f("10-Q", "2015-11-05", report="2015-09-30")
+
+
+def test_a_late_switch_needs_no_filing_near_its_first_row():
+    """FB-015: the filing that states a late switch may be years before the new CUSIP's first fails row. The rest of
+    R1 still holds (the registrant carries on, no other registrant), and R2 (the line's own composite, asked by the
+    stage) stands in for the filing."""
+    assert _corr(LATE_STEP, filings=[LATE_10Q]) == ("after a gap in the fails rows", "")
+    assert _corr(LATE_STEP, filings=[]) == ("", "merged_out")
+    assert _corr(LATE_STEP, filings=[LATE_10Q], other=999) == ("", "other_registrant")
+    sub = {"name": "Other Co", "formerNames": []}
+    assert _corr(LATE_STEP, filings=[LATE_10Q], sub=sub) == ("", "name")
+
+
+def test_a_bankruptcy_anywhere_in_the_gap_refuses_a_late_step():
+    assert _corr(LATE_STEP, filings=[_f("8-K", "2013-06-03", "1.03"), LATE_10Q]) == ("", "bankruptcy")
+    assert _corr(LATE_STEP, filings=[_f("8-K", "2011-06-03", "1.03"), LATE_10Q])[1] == ""      # long before the line stopped
+
+
+def test_a_listing_that_ended_in_the_gap_refuses_a_late_new_symbol():
+    step = lf.LineStep("BBGRS", lf.NEW_SYMBOL, "11111A101", "11111A101", "RSNW", "2012-09-25", "2012-11-20",
+                       ("REVERSE SPLIT CO",), late=True)
+    later = _f("10-Q", "2013-02-07", report="2012-12-31")
+    assert _corr(step, filings=[later]) == ("same CUSIP", "")
+    assert _corr(step, filings=[_f("15-12B", "2012-10-10"), later]) == ("", "otc_move")
+    assert _corr(step, filings=[_f("8-K", "2012-10-10", "3.01"), later]) == ("", "otc_move")
 
 
 def test_a_bankruptcy_8k_refuses_the_step():
@@ -470,6 +547,53 @@ def test_the_own_ticker_pick_is_made_before_held_cusips_are_dropped():
     assert _steps(OLD + new, extra_symbols={"RSB"}, holders={"11111A200": {"BBGOTHER"}}) == []
     [st] = _steps(OLD + new, extra_symbols={"RSB"}, holders={"11111A309": {"BBGOTHER"}})
     assert st.new_cusip == "11111A200"
+
+
+# --- FB-003, News Corp 2013: the renamed issuer's own next line when the own-ticker switch is a spun-off company's ---
+
+FOX_NAMES = lambda day: ["TWENTY-FIRST CENTURY FOX, INC."]          # the issuer's EDGAR name from the day on
+SPUN = _rows("RS", "11111A200", "NEWS CORP NEW CL A COM STK (DE", "2012-09-26", 5)     # the spin-off keeps the ticker
+FOX = _rows("RSX", "11111A309", "TWENTY-FIRST CENTY FOX INC CL", "2012-09-26", 5)      # the renamed issuer's stock
+SPUN_HELD = {"11111A200": {"BBGSPUN"}}
+
+
+def test_a_renamed_issuers_own_line_is_the_step_when_the_spun_off_company_holds_the_ticker():
+    """NWSA 2013: the new News Corp's CUSIP is the only one under the line's own ticker, and another security holds
+    it; Twenty-First Century Fox's class A began the same day under FOXA, and its description names the issuer's
+    name in force."""
+    [st] = _steps(OLD + SPUN + FOX, extra_symbols={"RSX"}, holders=SPUN_HELD, issuer_names=FOX_NAMES)
+    assert (st.kind, st.old_cusip, st.new_cusip, st.symbol) == (lf.SWITCH, "11111A101", "11111A309", "RSX")
+
+
+def test_the_renamed_issuers_line_is_looked_for_only_when_the_issuers_names_are_given():
+    """LMCA 2016 and every caller before FB-003: a dropped own-ticker switch is no step."""
+    assert _steps(OLD + SPUN + FOX, extra_symbols={"RSX"}, holders=SPUN_HELD) == []
+
+
+def test_a_dropped_switch_that_names_the_issuer_is_the_issuers_own_and_leaves_no_other_step():
+    """A leftover class of the same company (the rows name the issuer): the new CUSIP is the other security's stock
+    and the line's own, not a spun-off company's, so no other CUSIP stands in for it."""
+    own = _rows("RS", "11111A200", "TWENTY-FIRST CENTY FOX INC CL", "2012-09-26", 5)
+    assert _steps(OLD + own + FOX, extra_symbols={"RSX"}, holders=SPUN_HELD, issuer_names=FOX_NAMES) == []
+
+
+def test_an_other_new_cusip_that_does_not_name_the_issuer_is_not_its_next_line():
+    other = _rows("RSX", "11111A309", "SOMETHING ELSE ENTIRELY INC", "2012-09-26", 5)
+    assert _steps(OLD + SPUN + other, extra_symbols={"RSX"}, holders=SPUN_HELD, issuer_names=FOX_NAMES) == []
+
+
+def test_an_other_new_cusip_another_security_holds_is_not_the_issuers_next_line():
+    held = {**SPUN_HELD, "11111A309": {"BBGFOXCORP"}}
+    assert _steps(OLD + SPUN + FOX, extra_symbols={"RSX"}, holders=held, issuer_names=FOX_NAMES) == []
+
+
+def test_the_issuers_class_that_began_the_day_the_spun_off_one_did_is_the_one_taken():
+    """Class A and class B of the renamed issuer both qualify (FOXA and FOX, the truncated descriptions state no
+    class); the shortest symbol would take B. The spin-off's class A began on 2012-09-26, as FOXA did, and its class B
+    on the 28th."""
+    fox_b = _rows("RS-B", "11111B300", "TWENTY-FIRST CENTY FOX INC CL", "2012-09-28", 5)
+    [st] = _steps(OLD + SPUN + FOX + fox_b, extra_symbols={"RSX", "RS-B"}, holders=SPUN_HELD, issuer_names=FOX_NAMES)
+    assert (st.new_cusip, st.symbol) == ("11111A309", "RSX")
 
 
 @pytest.mark.parametrize("kind", ["Preferred Stock", "Warrant", "Right", "Unit"])

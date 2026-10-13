@@ -31,7 +31,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Protocol
 
 from ..vocabulary.crsp_codes import CONTINUATION_CODE, CrspBucket, bucket_for_code
-from ..vocabulary.exit_kind import GATE_FLAGS, flag_name
+from ..vocabulary.exit_kind import CLOSING_DIVIDEND_UNSTATED, CONTINGENT_RIGHT_UNVALUED, GATE_FLAGS, flag_name
 
 if TYPE_CHECKING:
     from .delistings import Delisting
@@ -43,7 +43,8 @@ SUCCESSOR_UNKNOWN = "successor_unknown"
 NO_EVIDENCE_DEFAULT = "no_evidence_default"
 # The flags a merger's value raises (stage 8: the payout and terms gates, the acquirer's close, assumed par); a
 # continuation has no value, so it carries none of them. Matched by flag name (`payout_gate_failed:87.69`).
-PAYOUT_FLAGS = GATE_FLAGS | {"llm_election_package", "election_no_default", "merger_at_par", "acquirer_close_lagged"}
+PAYOUT_FLAGS = GATE_FLAGS | {"llm_election_package", "election_no_default", "merger_at_par", "acquirer_close_lagged",
+                             CONTINGENT_RIGHT_UNVALUED, CLOSING_DIVIDEND_UNSTATED}
 # The flags a continuation rule leaves on the row it made (published in review_flags).
 R1_CONTINUATION, LINE_CONTINUATION = "r1_continuation", "line_continuation"
 HANDOFF_CONTINUATION = "handoff_continuation"

@@ -281,16 +281,16 @@ def test_confirmed_is_a_day_nothing_flags_unconfirmed():
     assert not LastTrade(date(2020, 1, 2), LAST_SIGHTING, ()).worked_out
 
 
-def test_publishable_is_confirmed_an_exchange_print_and_no_later_than_the_form25_effective_date():
+def test_a_print_confirmed_day_is_confirmed_an_exchange_print_and_no_later_than_the_form25_effective_date():
     eff = date(2018, 12, 9)
-    assert LastTrade(date(2018, 11, 28), EX99_NOTICE, ()).publishable(eff)
-    assert LastTrade(date(2018, 12, 9), MIDAS, ()).publishable(eff)
-    assert LastTrade(date(2018, 11, 28), MIDAS, ()).publishable(None)
-    assert not LastTrade(date(2018, 12, 10), MIDAS, ()).publishable(eff)                 # after it takes effect
-    assert not LastTrade(date(2018, 11, 28), LAST_SIGHTING, ()).publishable(eff)         # no exchange print
-    assert not LastTrade(date(2018, 11, 28), CLOSING_DAY, (UNCONFIRMED,)).publishable(eff)
+    assert LastTrade(date(2018, 11, 28), EX99_NOTICE, ()).print_confirmed(eff)
+    assert LastTrade(date(2018, 12, 9), MIDAS, ()).print_confirmed(eff)
+    assert LastTrade(date(2018, 11, 28), MIDAS, ()).print_confirmed(None)
+    assert not LastTrade(date(2018, 12, 10), MIDAS, ()).print_confirmed(eff)                 # after it takes effect
+    assert not LastTrade(date(2018, 11, 28), LAST_SIGHTING, ()).print_confirmed(eff)         # no exchange print
+    assert not LastTrade(date(2018, 11, 28), CLOSING_DAY, (UNCONFIRMED,)).print_confirmed(eff)
     # CNB 2009, IMB 2008: an involuntary notice's decision day, "suspended immediately": not confirmed
-    assert not LastTrade(date(2009, 8, 17), EX99_NOTICE, (UNCONFIRMED,)).publishable(date(2009, 9, 18))
+    assert not LastTrade(date(2009, 8, 17), EX99_NOTICE, (UNCONFIRMED,)).print_confirmed(date(2009, 9, 18))
     assert SOURCES[-1] == UNSOURCED and EXCHANGE_PRINTS < set(SOURCES)
 
 
@@ -299,16 +299,21 @@ def _row(ltd="2018-11-28", source=EX99_NOTICE, flags="", form="25-NSE", filed="2
             "delist_filing_form": form, "delist_filing_date": filed}
 
 
-def test_a_rows_published_day_reads_the_one_definition():
-    """contract/delistings.csv's last_trade_date over a delistings.csv row: the row read back (`of_row`) is
-    publishable against its Form 25's effective date (filed + 10 days)."""
+def test_a_rows_published_day_is_the_day_the_library_holds():
+    """contract/delistings.csv's last_trade_date over a delistings.csv row (FB-019, FB-020): the day the row holds,
+    whatever its source, so it is the day the security's history ends on; blank only when no source dates the
+    ending. Whether an exchange print confirms the day is the verdict's to say (`LastTrade.print_confirmed`)."""
     assert published(_row()) == "2018-11-28"
-    assert published(_row(ltd="2018-12-10")) == ""                                   # past 2018-12-09
-    assert published(_row(ltd="2018-12-10", form="8-K")) == "2018-12-10"             # no Form 25: no cap
-    assert published(_row(source=LAST_SIGHTING)) == ""
-    assert published(_row(flags=f"ftd_close_lagged;{UNCONFIRMED}")) == ""
+    assert published(_row(ltd="2018-12-10")) == "2018-12-10"                         # past the Form 25's 2018-12-09
+    assert published(_row(ltd="2018-12-10", form="8-K")) == "2018-12-10"
+    assert published(_row(source=LAST_SIGHTING)) == "2018-11-28"                     # no exchange print
+    assert published(_row(source=CLOSING_DAY, flags=UNCONFIRMED)) == "2018-11-28"    # MLNM 2008, MYL 2020
+    assert published(_row(flags=f"ftd_close_lagged;{UNCONFIRMED}")) == "2018-11-28"
     assert published(_row(flags=f"{CONFLICT}")) == "2018-11-28"
     assert published(_row(ltd="", source="")) == ""
+    # the test of a confirmed exchange print is unchanged, and it is not what publishes the day
+    assert not of_row(_row(source=LAST_SIGHTING)).print_confirmed(effective_of(_row()))
+    assert not of_row(_row(ltd="2018-12-10")).print_confirmed(effective_of(_row()))
     assert of_row(_row(flags=f"x;{CONFLICT};payout_gate_failed:4.5")).flags == (CONFLICT,)
     assert effective_of(_row()) == date(2018, 12, 9) and effective_of(_row(form="", filed="")) is None
 

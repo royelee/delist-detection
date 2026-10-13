@@ -96,7 +96,9 @@ plan's `received_close` answer times its ratio is that ending's value and an ans
 through its own request, `PriceAnswers.ending_values`), then the row builders (stage 10a builds one
 `dlret.ValueInputs` per delisting and `reconstruction.enrich`es it; stage 8's records feed 10a, 10c and 10g:
 `MergerValues.table_terms`, `contract_inputs` and `requests`), `_issuers_in_force` (stage 10c3: the
-contract's issuer timeline, read before triage so a failed or stale read is a `resolution_degraded` row, as 4c's) and
+contract's issuer timeline, read before triage so a failed or stale read is a `resolution_degraded` row, as 4c's; FB-015:
+it also takes the derived eras of each sighted security and, for a history open on the run date, the company SEC
+lists the ticker under) and
 `_triage`; the contract (stage 10g) takes sub-plan 5h's `Identity.renames` too: each placeholder whose eras
 now hold one FIGI line is a `contract/id_changes.csv` rename, across a class label), each with explicit
 inputs and outputs and the run-wide `_RunContext` (clients, run date, log,
@@ -354,7 +356,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   such classes (`_class_matches`: Liberty SiriusXM's Series C line beside the Series B and C the text names), unless
   their own fails descriptions name another letter (`letter_hint`) or there are more of them than classes;
   `tie_candidates` (the siblings a Form 25 its text cannot place may be about: the tied ones, else, for a text with
-  no class letter, every security of its kind) is the finder's to break by trading.
+  no class letter, every security of its kind) is the finder's to break by trading. `every_class` (FB-003, Twenty-First
+  Century Fox 2019's "Class A Common Stock & Class B Common Stock"): a text that names two or more class letters
+  while the issuer's lines of that kind are as many and carry no letter names each of them, whichever is which.
   `about_class` (a Form 25 is about the security's own class: not of a preferred, warrant, right, unit, fund or
   debt class, not another tracking group's (`other_class`), and not naming only other class letters) and
   `names_only_other_group` (an 8-K section that names tracking groups' common stock and none is the
@@ -427,6 +431,18 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   a delistings.csv row, a merger's pre-gate reads (`MergerInputs`) and stage 9e's `DistressTerms` (both defined here);
   `contract_value(row)`: the contract's `dlret`/`dlret_fill`/`terminal_value` (none for a continuation). A
   liquidation's value and rule read one order (`_distress_rule`: a recovery, else a plan, else the first OTC print).
+  Two endings have no value and no fill, each `uncertain` by the verdict's `value_pending`: a wind-down whose
+  distributions are not read (`pending_recovery`, FB-002) and a merger whose terms nothing states
+  (`pending_terms`, FB-016: `ValueInputs.terms_read` False, from `MergerInputs.read` through
+  `MergerValues.terms_read`; terms the gate refused keep assumed par, which the verdict doubts). A third ending has
+  a value the library knows to be incomplete: a merger whose LLM terms note a contingent value right, a warrant or
+  another contingent payment beside the package (`MergerTerms.unvalued_right`, matched on the note's words) is
+  flagged `contingent_right_unvalued` by stage 8 (`merger_value._flag_unvalued_rights`, which logs every note and
+  how it read it) and is `uncertain` with `value_incomplete:contingent_right` (FB-024); its terms and `dlret`
+  stand as the value of the valued part. The same holds for a merger the last gate pass values more than 1% under
+  its last close whose filings name a closing dividend with no amount per share and for which no search found one
+  (`merger_value._flag_unstated_dividends`, flag `closing_dividend_unstated`, reason
+  `value_incomplete:closing_dividend`; FB-023's follow-up, Two Harbors 2026).
   It loads only the row vocabulary and the leaf enums (`tests/test_import_closure.py`).
 - `outputs/reconstruction.py` — `DelistRecord` (the classifier's hand-off, defined here, below the stages, so the
   table, the merger readers and the handling read it without loading the classifier: architecture step 16),
@@ -571,8 +587,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   reads each issuer's submissions JSON and filing list once (every issuer's `profile`, the JSON without its filings
   block, and first filing kept; at most `MEMO_SIZE` filing lists, least recently asked dropped) and answers `names`,
   `names_near`/`names_between`/`names_until`, `first_filed`, `existed_by`, `recent_form_dates` (read from the
-  client each time), `profile`, `filings`, `text`, and `exact_holders` (SEC's name index, `name_index`, loaded on
-  first use). `about=` (an event day) asks for a copy fetched by `edgar.submissions_fresh_after(about, today)`;
+  client each time), `profile`, `filings`, `text`, `exact_holders` (SEC's name index, `name_index`, loaded on
+  first use) and `listed_under` (the CIK SEC's ticker map lists a ticker under today; the map is read once a run,
+  and a failed read is logged under `NO_ISSUER`). `about=` (an event day) asks for a copy fetched by `edgar.submissions_fresh_after(about, today)`;
   every refresh of the run goes through it (the resolver's reads and the classifier's up-front read), so a held
   profile is the client's cached copy's. The failure policy, once: a
   `requests.RequestException` is unknown (None, [], (), "", False) and never remembered, `fatal.FATAL` stops the
@@ -664,8 +681,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `era_capped_seen` and `era_last_seen`, with its own pin, name and first sighting; `choose_first_pass` takes one answer), each era's FIGI resolution, the securities, each
   security's CUSIPs over its whole life (`cusips`, their rows followed to the run date), the identity review items, and the
   facts later stages read: `tier`/`resolution_source` (the lookup tier that found an era's or a security's issuer;
-  "security_master" for none), `rows_decided` (stage 2b's `ticker_rows` eras: stages 4c and 10g keep their CIK in
-  force), `securities_of(resolutions)` (stage 4b's rebuild after a fold, `build_securities`) and
+  "security_master" for none), `rows_decided` (stage 2b's `ticker_rows` and `later_ticker` eras: stages 4c and 10g
+  keep their CIK in force), `securities_of(resolutions)` (stage 4b's rebuild after a fold, `build_securities`) and
   `renames(resolutions)` (contract/id_changes.csv: a placeholder one FIGI now holds, across a class label). Its
   adapters: the issuer lookup (`IssuerLookup`: `TickerResolver`, or a double with the same five methods; no
   capability is probed), the run's issuer record, OpenFIGI and the fails client. The CUSIP links between eras
@@ -703,12 +720,20 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `ERA_MIN_ROWS` fails rows of its own) or, for an era with at least that many, whose name the era's own fails rows
   carry and the answer's do not (guard G's `_fits_rows`, `ticker_rows`: ERA 2013 is Era Group's; the rows alone
   decide, so the result never depends on which holder the first pass named);
-  reported as `issuer_inferred`. A `ticker_rows` era keeps its CIK in force in stage 4c and the contract's issuer
-  timeline (`Identity.rows_decided`).
+  reported as `issuer_inferred`. Before either (FB-013, `_later_ticker`, no name index needed): for an era whose
+  ticker the fails data does not show near its dates (`guarded_eras`), the company SEC's ticker map lists the ticker
+  under (`IssuerRecord.listed_under`) is the issuer when it is not the answer, had filed by the era's first sighting,
+  the ticker's first rows after the era are its rows (guard G) and it carried a name agreeing with the observed one
+  by then; not when the ticker's last rows before the era are the answer's own, a stale row (`later_ticker`: the
+  GHC row of 2012-06-29, GRAHAM HOLDINGS COMPANY, is Washington Post Co's, CIK 104889, which took the ticker and
+  the name on 2013-11-29; the name search had answered Graham Corp, whose name compares as the same one word). A
+  `ticker_rows` or `later_ticker` era keeps its CIK in force in stage 4c and the contract's issuer timeline
+  (`Identity.rows_decided`): its observed name is not the issuer's on its dates.
 - `identity/security_master.py` — `FigiResolver.resolve_many()` (a `sec_id` pin wins;
   else CUSIP jobs, then the ticker, then a name filter — see the spec's
   Implementation notes), `build_securities()` (merges eras sharing a
-  `sec_id`; `Security.observed` is True when any of its eras is not derived, and `observation_conflict_review`
+  `sec_id`; `Security.observed` is True when any of its eras is not derived, `Security.figi_ticker` is OpenFIGI's
+  ticker for the line when its eras' candidates give exactly one, and `observation_conflict_review`
   reads the caller's observations only); `identity.identify` is the one stage that calls them. `Issuer` (a CIK and its EDGAR names;
   `issuers_by_era` builds the era key -> `Issuer` map that `identity.candidate_cusips`,
   `resolve_many` and `build_securities` take, the one source of an era's CIK,
@@ -730,9 +755,27 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   confirmed security of the run (same CIK and class, begun after the line and no later than the confirmed era: Trane
   beside the new Ingersoll Rand). A redomicile with no CUSIP link in the fails rows stays one line. The eras of one
   such line go where its last era did (a placeholder of its issuer, or the line it joined: old IR joins Trane), and a
-  switch to an era confirmed on the composite a detached era left does not take it back;
-  `superseded_placeholders` marks a placeholder a later FIGI line of its
-  issuer and class holds the ticker for (not listed today). Its era-level
+  switch to an era confirmed on the composite a detached era left does not take it back; and (FB-014, SandRidge
+  2016) a weak era whose line a bankruptcy left behind while its ticker went on as other shares, though no era of
+  the run is confirmed on the composite (`weak_lines_left_behind`, over `identity._LeftBehind`: after the last day the
+  era's own CUSIPs traded under the ticker the ticker's fails rows are another CUSIP's, the own CUSIPs have no
+  trading row later than `LEFT_BEHIND_SETTLE_DAYS` after that CUSIP's first, and `_went_bankrupt` between them; the
+  old stock, only observed in 2014, had taken the id of the stock issued under the plan, and becomes
+  `CIK1349436-COMMON`; a new CUSIP with no bankruptcy, Equinix 2015 or Thomson Reuters 2018, changes nothing); and
+  (FB-003, Fox 2019) a CUSIP switch is no carrying link when another registrant replaced the class
+  (`identity._Replaced`: the old registrant's Form 25 and an 8-K with item 2.01 or 5.01 within `REPLACED_DAYS` of the
+  new CUSIP's first fails row, the new registrant's Form 10-12B/10-12G (a spin-off's registration; an S-4 with an
+  8-A is an exchange of shares, Clearwire 2008) from `REGISTRATION_LEAD_DAYS`
+  before it, and no 8-K12B/8-K12G3 of the new registrant: Twenty-First Century Fox's FOXA to Fox Corporation's;
+  Merck 2009, Clearwire 2008, Express Scripts 2012 and Disney 2019 are one-for-one and stay one line), so the old weak era is another
+  line (`weak_eras_on_another_line`'s `replaced`), and (`weak_eras_before_registrant`, over
+  `identity._RegistrantAfter`) a weak era with CUSIPs of its own, no CUSIP carrying it on to an era confirmed on the
+  composite, whose ticker SEC lists today under another company that had filed nothing when the era began and is no
+  8-K12B/8-K12G3 successor registrant (`IssuerRecord.listed_under`, `first_filed`) loses its pick, even when no later
+  era of the run is confirmed on the composite (`detached_review`: `BEFORE_REGISTRANT`); `superseded_placeholders` marks a placeholder a later FIGI line of its
+  issuer and class holds the ticker for (not listed today), and `identity.left_behind_placeholders` one a
+  bankruptcy left behind that way (EDGAR's listing under the ticker is the later shares': stage 5 takes it as not
+  listed, so the exchange's Form 25 is its ending). Its era-level
   review rows: `ticker_unconfirmed_review` (`ticker_unconfirmed`) and
   `observation_conflict_review` (`observation_conflict:<date>`). `Security.line_tickers`/`own_tickers()` (the era
   tickers and the ones stage 4b found; every own-ticker check reads it); `cusip_handoffs` times a switch from
@@ -761,7 +804,12 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   observation is no sighting and no row of `observation_map.csv`)
   (`ticker_sightings`/`cusip_sightings`, and `span_sightings` for a successor the run added, stage 9d: its span's
   days, source `SPAN`, and its CUSIPs' fails rows; a fails row is a ticker
-  sighting only when its symbol has a letter, because SEC's Aug–Dec 2007 files mask some symbols as "**********"),
+  sighting only when its symbol has a letter, because SEC's Aug–Dec 2007 files mask some symbols as "**********";
+  a ticker observed with and without a separator is written one way per security, the separator's, except from the
+  day the line itself lost it, `_bare_since`, FB-013: OpenFIGI's ticker for the line, `Security.figi_ticker`, is the
+  bare spelling, the security's rows under the ticker are two or more CUSIPs' in turn, and from one of them on the
+  caller saw the bare spelling alone; Hubbell's class B is HUB-B to 2015-12-27 and HUBB from its new CUSIP's first
+  row, while BF-B, FCE-A and a one-CUSIP VIA-B keep the one spelling),
   `ranges_from_sightings()` (dated `Sighting`s into `ticker_history`/
   `cusip_history` ranges; `value_on` reads one), `backfill_cusips()` (the
   CUSIPs of fails rows under a dead security's tickers in the 120 days before its
@@ -783,8 +831,11 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   rather than dropping it — `after_delisting`, `conflict`, `backfilled_ticker`,
   `mapped`) — the caller's join surface:
   membership from this table, ticker look-ups through contract/security_history.csv (the
-  `ticker_history` ranges, which are not written) by `history_ticker`. A first-day `…ZZZZ` row is no ticker sighting;
-  an observation is a sighting of its era's ticker. Sub-plan 5h: `cusip_sightings` drops an old CUSIP's `…ZZZZ`
+  `ticker_history` ranges, which are not written) by `history_ticker`. A row from before the fails files give a new
+  CUSIP its symbol (`…ZZZZ`, or the CUSIP's own first six characters: `_no_symbol_yet`) is no ticker of its own; it
+  dates the ticker's first day when the CUSIP's first row under the ticker follows on the next trading day
+  (`_first_days`, FB-022: a fails row carries the close of the trading day before its date, so the security traded
+  on the unassigned row's day; Liberty Media 2016, Monster 2015). An observation is a sighting of its era's ticker. Sub-plan 5h: `cusip_sightings` drops an old CUSIP's `…ZZZZ`
   settle rows dated once another CUSIP of the security, begun after it, has begun (MSG 2015: the new CUSIP's range
   starts on its first row). What the sightings say of the security's trading (the ticker on a day, the last
   own-ticker sighting) is the trading record's (`endings/trading_record.py`).
@@ -851,12 +902,24 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   after its last row (a flat settling tail can run weeks: QRTEA's QVCGA began the day after QRTEA's last row, 14 trading
   days after the settled one): a new
   CUSIP under the line's ticker, its `…ZZZZ`/`…D` spellings, a ticker of the issuer EDGAR lists or its 8-K text
-  names (`text_symbols`, which also reads "symbol ... changed from X to Y" as Y, curly quotes included: sub-plan 5c, RRI to GEN; `text_cusips`), or the same CUSIP under a new non-OTC ticker; never a CUSIP another
+  names (`text_symbols`, which also reads "symbol ... changed from X to Y" as Y, curly quotes included: sub-plan 5c, RRI to GEN; `text_cusips`), or the same CUSIP under a new non-OTC ticker; with `late` (FB-015, asked by the stage only of a
+  line whose FIGI its own CUSIP or a pin confirms and that the round found no step for), a step that begins after the
+  window, since the fails files hold a row only on a day with a fail: the first later CUSIP under the line's own
+  ticker (Ocwen's post-split CUSIP, first row three years after the old one's last), which the stage takes only when
+  OpenFIGI names the line's own composite for it, or the same CUSIP under a ticker EDGAR lists for the issuer or
+  its 8-K names (ONIT); `corroborate` opens a late step's bankruptcy and listing-ended windows at the old rows'
+  last day and asks it for no filing near its first row, and a late step that is not confirmed is dropped with a
+  log line and no review item; never a CUSIP another
   security holds, nor a switch while the old CUSIP trades on at changing prices more than `SWITCH_DAYS` trading
   days after the new CUSIP's first row, applied only at the data edge (the old CUSIP's last row within
   `SWITCH_TAIL_DAYS` of `FtdIndex.data_end()`, the fails data's last day, passed as `data_end`: a live line has no stop to see; CHTR's new
   preferred; elsewhere the window is the whole of it, HYH 2018); the own-ticker pick is made before held CUSIPs are
-  dropped, and a pick another security holds is no step (LMCA 2016)); `corroborate` (R1: refused for an 8-K 1.03 in
+  dropped, and a pick another security holds is no step (LMCA 2016), unless the issuer was renamed (FB-003, News Corp
+  2013): the held pick's rows do not name the issuer (the spin-off kept NWSA) and another free switch's rows name the
+  issuer's EDGAR name in force from its first row (`issuer_names`; Twenty-First Century Fox's FOXA, found through
+  its renamed-CUSIP scan or its 8-K text), which is then the issuer's own next line (`_issuers_next_line`; of
+  several, the one that began the day the held pick did, FOXA beside the new News Corp's NWSA, class B a day
+  later)); `corroborate` (R1: refused for an 8-K 1.03 in
   [first − 180, first + 30] d, an OTC move (a new symbol with an 8-K 3.01, a Form 25 or a Form 15 within
   `FILING_DAYS`; a Form 25 counts only when `form25.about_class` says it is about the line's own class, an 8-K 3.01
   unless its section `form25.names_only_other_group`: Liberty Interactive's March 2018 Form 25 and 3.01 are the
@@ -920,7 +983,10 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
 - `identity/ticker_evidence.py` — decision 1: what ties a placeholder's ticker to its
   CIK. A resolver tier that names the ticker (`TICKER_TIERS`), else one
   EDGAR full-text search of the CIK's own filings (`full_text_search(...,
-  ciks=)`), cached like every search.
+  ciks=)`), cached like every search. A ticker shorter than three letters is
+  never searched bare; it is searched with an exchange in front, as a
+  company's releases write it (`"NYSE: GM"`, `EXCHANGE_PREFIXES`; FB-003's
+  follow-up: old General Motors, whose CIK the resolver found by name).
 - `identity/issuer_in_force.py` — the issuer CIK on each sighting's date: the era's CIK when its EDGAR name that day agrees
   with the observed name, else the one other CIK SEC's name index lists under that name whose name agreed then
   (MRK 2008: old Merck & Co, CIK 64978). `issuer_changes` dates each change: it sorts sightings by day then CIK
@@ -928,6 +994,19 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `with_registrants` adds a security's successor registrants (`endings/registrants.py`: the new registrant a
   holding-company reorganization put in the old one's place) as the issuer in force from the day they registered,
   dated after the timeline's last change; stage 10c3 applies it, and only for a security whose line goes on.
+  FB-015, for a seed list, where a security has one sighting and nothing after it names a later registrant: the
+  other CIK must have filed a registrant's own report (`REGISTRANT_FORMS`: 10-K, 10-Q, 8-K, 20-F, 40-F, 6-K,
+  N-CSR) no more than `FILING_DAYS` (400) before the sighting (`_filing_around`: LUMN's CIK 1008114 is another
+  "LUMEN TECHNOLOGIES INC" whose reports stop in 1999, and MAN's CIK 62072 holds only its holders' Schedule 13Gs);
+  a sighting with no name (stage 10c3
+  passes each derived era of a sighted security as one, on its first day) changes the issuer on its own day (MDT,
+  ICE, PRGO, MYL: the line after the refused CUSIP step is the new registrant's); and `listed_issuer` ends the
+  timeline of a history open on the run date with the company SEC lists the ticker under
+  (`IssuerRecord.listed_under`), when its EDGAR name agrees with the security's and its name's first day or the
+  old issuer's Form 25 or 15 dates the change (MRK: old Merck kept filing, so no era names CIK 310158). The filing
+  days come through the injected `filed` read (`IssuerRecord.recent_days`, None for a list that is not known and [] for a company with no filing, which was not filing; `filed_in` reads a submissions
+  JSON's own block for the tests): the run's profile keeps no filings block, so before FB-015 the Form 25 bound
+  below never applied in a run.
   A change to a CIK whose agreeing name began before the old CIK's listing ended (a holding company's, from its
   formation: ICE 2013, formed 2013-03-20) is dated no earlier than the old CIK's first Form 25 or Form 15 in the gap
   between the two sightings (`_deregistered`, its submissions JSON's recent filings).
@@ -1017,7 +1096,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   from SEC data only: the last day the security's own CUSIPs' fails rows show it trading, `TradingRecord.trades_until`
   and not before the first row of the CUSIP it held last (rows at one price throughout show no stop), source
   `fails_rows`; else `midas_last`, source `midas`; else the last sighting, source `last_sighting`; always
-  `UNCONFIRMED`, so never published) and `from_notice` (stage 9c: a
+  `UNCONFIRMED`, so the verdict doubts it) and `from_notice` (stage 9c: a
   handoff row dated by its last sighting takes its own Form 25 notice's confirmed day, before the successor's first
   sighting and no later than the effective date). MIDAS and the Nasdaq halt feed are its two adapters
   (`last_trade_day`; `deletion_halt`, `failed_days`), each a real client or a fixture-backed double; a halt-feed
@@ -1034,17 +1113,26 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   closing day never comes before the last day its own fails rows show it trading (`TradingRecord.trades_until`,
   `trading_record.last_row_trade_day`: the trading day before `ftd.settled_last`'s row of the CUSIP it held last; AVGO 2018, Z
   2015) unless the text dated the closing before the open (Imclone 2008's 8:28 A.M.). `at_handoff` (stage 9b): a row
-  the handoff writes, or a kept row with no day, takes A's last sighting before B's first (`handoff_day`, source
-  `last_sighting`); a worked-out closing day never reaches B's first sighting. `anchor_day` (the day an ending is
+  the handoff writes, or a kept row with no day, takes A's last sighting, and never a day later than the trading day
+  before B's first (`handoff_day`, source `last_sighting`). `before_successor` (FB-022): a day no exchange print gave
+  (a worked-out closing day, a last sighting, an unsourced fallback) never reaches B's first day under the ticker;
+  from that day on it becomes the trading day before it. It applies to a continuation's kept row, to a takeover's
+  row and to a row that stands against the handoff (old Charter 2016), and A's own last fails row is no cap (old
+  Caesars 2020). A takeover's target or a standing row is not capped when A traded on under another ticker after
+  it gave this one up (`handoffs._before_taker`, `a_last_any`). A row capped this way keeps its value, which stages
+  7 and 8 read on the day it had before, so the run reads its close and its value again on its final day
+  (`HandoffOutcome.redated`, `pipeline._read_again`): its price requests are published for that day, and a second
+  pass finds the caller's answers under it. `anchor_day` (the day an ending is
   read around: its last trade, else its Form 25's filing date, else the anchor 8-K's, else its delisting date;
   `Delisting.anchor`: the successor searches and links, the R1 reading, the handoff pairs, stage 5b) and
   `first_day_after` (an added successor's first day after a last trade: the next trading day, at all three sites
   that add one). Its answer type and the derived facts are defined once in `exit_kind` (the row vocabulary,
   architecture step 8a), which this module imports and the measurement side reads without its clients:
   `LastTrade.confirmed` (dated and not flagged `last_trade_date_unconfirmed`: what the clip, the successor starts
-  and 9c test), `LastTrade.publishable(effective)` (confirmed, from an exchange print, `EXCHANGE_PRINTS`, and no
-  later than the Form 25 effective date, `exit_kind.effective_date`; over a delistings.csv row, `of_row`,
-  `effective_of` and `published`, which the contract, the verdict's reasons and the scorecard read), `end_day` (the
+  and 9c test), `LastTrade.print_confirmed(effective)` (confirmed, from an exchange print, `EXCHANGE_PRINTS`, and no
+  later than the Form 25 effective date, `exit_kind.effective_date`: the verdict's test of the day, each failing
+  part a reason; over a delistings.csv row, `of_row`, `effective_of` and `published`, the contract's
+  `last_trade_date`, which is the day the row holds whatever its source, FB-019 and FB-020), `end_day` (the
   day it ended its security's listing: its last trade, else its delisting date, the Form 25's effective date; the
   clip and stage 9e; over a row `end_day_of`), the sources (`SOURCES`: `midas`, `nasdaq_halt`, `ex99_notice`,
   `8k_301`, `closing_day`, `last_sighting`, and `UNSOURCED` "") and the flags it writes (`UNCONFIRMED`, `CONFLICT`,
@@ -1077,7 +1165,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   completion the 8-Ks state in the window (a defined Closing Date, "On D, ... completed its acquisition", "Merger Sub
   merged with and into", "the closing of the transactions on D", "the evening of D", an effective time with a clock
   time; the trading day before when every clock time that day is before 9:30 a.m.): source `closing_day`
-  (`CLOSING_DAY`), never published.
+  (`CLOSING_DAY`), published unconfirmed.
 - `endings/rewrites.py` — architecture step 3: the one owner of a delisting's kind and successor after its record is built.
   Every rewrite names its rule (`Rule`, a closed set: `ISSUER_MOVE` the finder's R7, `CONTINUED` the finder's continued
   transfer, `TRADES_ON` the clip check at stage 9b's start, `R1` stage 8b, `LINE_FOLLOW` and `SUCCESSOR_LINK` stage 9,
@@ -1101,7 +1189,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   matches and groups them into one delisting per removal (chained within
   `SAME_EVENT_DAYS` of the group's earliest filing, across exchanges), dates
   and classifies each, and falls back to the classifier's no-Form-25 paths
-  when none exists. Its interface is `SecurityContext` (architecture step 14, all data): the security's trading
+  when none exists. A security the master types a unit whose issuer's Form 25s all remove stock, and whose issuer
+  has no common stock beside it, is searched and classified as common stock (`_issuers_stock`: STAY 2021's
+  "Paired Shares", FB-018; the security master's own kind is left alone). Its interface is `SecurityContext` (architecture step 14, all data): the security's trading
   record (`trading_record.TradingRecord`), the records of its issuer's securities (`siblings`, itself among them),
   whether it is listed today, its other CIK in force and its issuer's lookup tier; the finder works out the ticker on
   a day, the last sighting, trading after a day, rows near a Form 25, the CUSIP switches, the tenure and the rows'
@@ -1123,7 +1213,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   classifier's listing deficiency, default transfer, `unknown` or a merger only the continued-filings rule relabelled
   (`exit_kind.merger_relabel`: Retail Value Inc. 2022's Item 2.01 and a registrant that kept filing) becomes CRSP
   520, compliance failure, drop reason `moved_otc`, medium; a cover not in the cache, unread or naming an exchange,
-  with no OTC listing, changes nothing; Freddie Mac and Fannie Mae, June 2010, both on EDGAR's OTC listing too), `_tie_owner` (FB-004: a Form 25 the text leaves between
+  with no OTC listing, changes nothing; Freddie Mac and Fannie Mae, June 2010, both on EDGAR's OTC listing too), `_tie_owner` (FB-003: a Form 25 that names as many classes as the issuer has letterless lines, `form25.every_class`,
+  belongs to each of them when none trades on after it and each traded or was sighted within `TIE_STOP_NEAR_DAYS`
+  before it; FB-004: a Form 25 the text leaves between
   siblings, `form25.tie_candidates`, belongs to the one that stops at it: the candidates whose own CUSIPs trade on
   past it (`_goes_on`: `trades_after`, after a removal under (b) only a row under an own ticker) are not removed, and
   when at least one trades on and exactly one of the rest was sighted within `TIE_STOP_NEAR_DAYS` (90) before the
@@ -1226,7 +1318,10 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   and gives the ratio, cash in the exchange (par values, cash in lieu of fractions and special dividends set aside:
   a special dividend is never consideration; rollover shares and cash conversions are read), the target clause and
   its names (defined terms expanded), the target's class letter (`identifiers.prose_class_letters`), and whether
-  readings disagree (`ambiguous`);
+  readings disagree (`ambiguous`). A conversion clause whose own subject is preferred stock is no statement about
+  the common (`Statement.preferred`: GGP 2018's "each ... share of 6.375% series A cumulative perpetual preferred
+  stock ... was converted into one share of" BPR's preferred, FB-017), and one share of preferred stock for a
+  share is not one for one (`OwnExchange.target_preferred`);
   `acquires` (another party's shares became the registrant's, or it issued shares under the merger agreement) and
   `distributes` ("for every four shares", kept) are the registrant's other roles. What a statement means for its
   holders is its own: `OwnExchange.one_for_one` (R1's shape, `one_share_no_cash`, which 8b reads over the terms and
@@ -1272,12 +1367,18 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   ending: the regex read and the LLM terms (`read`/`raw`, `llm`), the gate's verdict (`payout`, `source`,
   `confidence`, the priced stock leg `terms`, `flags`, `priced_by`), the acquirer security, its `price_ticker`, a
   basket's `leg_sec_ids`, and the received close its stock leg asks (`request`), plus the acquirers the run adds and
-  the review items. Its steps: the reads (the LLM told the target's name; both filled ahead on the worker threads,
+  the review items. `MergerValue.dividend` is the closing dividend the last gate pass counted (FB-021): `table_terms`
+  adds it to the cash delistings.csv carries, `contract_inputs` hands it to the payout rule, and `read_terms` and
+  `reconciled` never read it. Its steps: the reads (the LLM told the target's name; both filled ahead on the worker threads,
   the sequential pass then reading what they cached), sub-plan 5e's stage 8a acquirer line of every stock leg before
   the gate, passed or not (`acquirer_line`; a merger before the run's fails window reads its lines' rows into a
   private index, `FtdIndex.apart` and `LineIndex.fresh`), stage 8a' (`acquirer_ticker`: a leg with no ticker and no line), the gate
   (`payout_gate`: the terms' ticker price, then the line's, the line's first for a `line_first` leg whose ticker's
-  rows are another line of the issuer's, TWC, VIA, STRZA), the acquirer (`acquirers`: the fails-row acquirer for
+  rows are another line of the issuer's, TWC, VIA, STRZA; the ticker price is the first fails row under the ticker
+  after the last trade day that is not of the target's own CUSIPs, because an acquirer that took the target's
+  ticker trades under a new CUSIP and the old CUSIP's last row is the target's own close, old Charter 2016, and the
+  target's own row only when no other CUSIP holds the ticker in those days, a security that goes on as itself,
+  Disney 2019), the acquirer (`acquirers`: the fails-row acquirer for
   ticker-settled terms, the only source of `AddedAcquirer`s, else the line or holder; a `line_first` leg publishes
   the line, another issuer's ticker security, IPHI, still wins) and its symbol on the price date. The regex read's
   sanity bound and the first gate pass read only the run's own last closes (stage 7's `own`: a `--last-trade-closes`
@@ -1323,7 +1424,11 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   none, the cache label's first choice, then `$CHAT_MODEL`) and `terms/filing_selection.py`
   (filing-tier picker shared with `terms/payout_extractor.py`); responses cached under
   `cache/llm/`. Every extractor adapter takes one call shape, `extract(record, security_name=)` (stage 8 names
-  the target security). Disabled by default — enabled by `--extract-merger-terms-llm`;
+  the target security), and `extract_offer_terms(record, security_name=)` for a merger neither reader found terms
+  for (FB-016): the offer's own documents among the target's filings on or before the delisting, the SC TO-T and
+  its amendments, then the Rule 425 filings, then the SC 14D9, newest first and `max_filings` of a kind at most
+  (CureVac 2026, whose 6-Ks state no ratio and whose third newest SC TO-T/A sets it; exhibits are never opened:
+  TAHO 2019). Disabled by default — enabled by `--extract-merger-terms-llm`;
   `acquirer_price` and `last_trade_close` come from `sources/ftd.py`, not a filing. `MergerTerms` answers for its own
   package, so the gate, the payout rule, the requests and stage 8 ask it instead of reading its fields: `ticker`
   (normalized; a spelled-out null, `NULL_TICKERS`, is cleaned when the answer is built, `clean_ticker`),
@@ -1344,8 +1449,25 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   degraded miss (`SEC_STATS.degraded("llm_call")`: the delisting is `resolution_degraded`), never cached; with
   the calls are filled ahead on `--llm-workers` threads (default 8), one lock per answer file so no call is paid for twice. Calibrate with
   `scripts/eval_merger_extractor.py --truth` (the 10 deals and the truth set's terms cases).
+  `closing_dividend(record, security_name=)` (FB-021) is the third call every adapter takes: the cash the target
+  paid its holders because the deal closed (`ClosingDividend`: every such dividend the filing names, summed,
+  without one the stated consideration already includes). The package never holds it (the prompt's rule, operator
+  ruling 2026-10-04). It is read from the closing 8-K, then an 8-K that reports the closing without 2.01,
+  `max_filings` at most; only a filing whose text names a dividend with a dollar amount is sent, with the text
+  around each "dividend" and its own question (`DIVIDEND_PROMPT`, `DIVIDEND_SCHEMA`), cached as
+  `{accession}_{model}_div1_{ticker}`. Stage 8 asks it for a merger with terms and the payout gate decides whether
+  it counts. The proxy and the exhibits are never opened for it.
+  `earlier_dividend(record, security_name=)` (FB-023) is the fourth call: the same question put to the target's
+  8-Ks filed in the 60 days before the delisting, newest first, the closing search's own filings left out, the
+  first that states a closing dividend answering and `max_filings` questions at most (Plains Exploration 2013:
+  $3.00 declared a week before the closing 8-K, which does not restate it). Stage 8 asks it only for a merger the
+  gate valued more than 1% under its last close with no dividend read (`merger_value._EarlierDividends`).
 - `terms/payout_gate.py` — every merger payout checked against the last trade before it reaches the table
   (`reconcile`, `gate_payouts` -> `GatedPayouts`); the payout rule's entry has the gate's reading of an LLM answer.
+  A closing dividend as read (`dividends`, FB-021) counts beside a value when the total is nearer the last close
+  than the value alone (`_counted`), and the gate checks the total it chose (`_checked`). The answer names a
+  counted dividend apart (`Reconciled.dividend`, `GatedPayouts.dividends`) and never adds it to `payouts` or
+  `merged_terms`: those are the package, which the run's decisions read.
 - `terms/filing_selection.py` — the merger extractors' filing picker, pure: the closing 8-K, the announcement 8-K and the
   merger proxies within a window (`closing_8k`, `announcement_8k`, `form_filings`, `in_window`), shared by
   `payout_extractor` and `llm_merger_extractor`.
@@ -1416,7 +1538,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `TruthSet.new(truth, rows, legs)` is a set whose rows and legs are given (sub-plan 5-0's build, tests);
   `read_ledger` is the ledger's validated read (scripts/scorecard.py); `LEDGER_COLUMNS` is the ledger's file format
   (its path is the loop folder's, `loop_round.Loop.ledger`). The truth files' only reader and writer:
-  the scorecard, the loop scripts, the apply_5f/5h/5i_truth_rulings.py scripts (their rulings as data), the fixture
+  the scorecard, the loop scripts, the apply_5f/5h/5i_truth_rulings.py and apply_fb003/fb020/fb021_truth_rule.py scripts (their rulings as data), the fixture
   builders and tests/test_diagnosis_truth_cases.py go through it.
 - `measurement/regression.py` — the contract diff between two run snapshots (the base commit's, `RunSnapshot.at`, and the
   folder's), outside the truth set and its successor chains (`excluded`); `build_report(base, new, cases)` is the one

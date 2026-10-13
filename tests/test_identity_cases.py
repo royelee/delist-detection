@@ -52,6 +52,10 @@ MOVES = {
     # its dead line's stale tail, not a placeholder that no Form 25 can end
     "BSC@2008-11-18": ("BBG000BDRQ10", "backfill"),
     "CCU@2008-11-18": ("BBG000BF8BH2", "backfill"),
+    # FB-014: SandRidge's pre-bankruptcy stock (CUSIP 80007P307, no FIGI of its own) took BBG000RKR4R8 by the ticker
+    # SD, which is the stock issued under the 2016 plan (CUSIP 80007P869, SD from 2016-10-07); the old CUSIP left SD
+    # for SDOC and SDOCQ and stopped. Only the old stock is observed, so no confirmed era sets the two apart
+    "SD@2014-12-31": ("CIK1349436-COMMON", "placeholder"),
 }
 
 # era key -> (sec_id, FIGI source), unchanged by 5h
@@ -145,6 +149,92 @@ def test_an_answer_the_eras_own_rows_fit_is_kept_whichever_holder_the_first_pass
     found, _ = cases.name_checks({"ERA@2013-06-28": 1525221})
     assert "ERA@2013-06-28" not in found
     assert found["ABBI@2008-01-16"][0] == 1409012       # ABBI has no rows of its own: the name period decides
+
+
+GHC_SEED = {("GHC", "2012-06-29"), ("WPO", "2008-01-16")}
+GHC_KEY = "GHC@2012-06-29"
+
+
+def _ghc_seed(cases, first_pass=716314, tier="name_search"):
+    """Graham Holdings as a seed-list input has it: the one GHC row of 2012-06-29, a ticker and a name the company
+    took in November 2013, answered by the lookup as the run's was (Graham Corp, CIK 716314, by the name search)."""
+    return cases.identify({"GHC", "WPO"}, {GHC_KEY: (first_pass, tier), "WPO@2008-01-16": (104889, "committed")},
+                          seeds=GHC_SEED)
+
+
+def test_a_backfilled_rows_issuer_is_the_company_its_ticker_is_listed_under(cases):
+    """FB-013, GHC 2012: the snapshot of 2012-06-29 lists Washington Post Co under the ticker and name it took on
+    2013-11-29. No fails row is under GHC near the row; the rows under GHC from 2013-11-29 are the company's SEC's
+    ticker map lists GHC under (CIK 104889), which carried the observed name by then. The name search's Graham Corp
+    (716314; GRAHAM CORP and GRAHAM HOLDINGS COMPANY CO compare as one word) gives way, flagged issuer_inferred."""
+    identity = _ghc_seed(cases)
+    assert (identity.issuers[GHC_KEY].cik, identity.tier(GHC_KEY)) == (104889, "later_ticker")
+    assert [(i.flag, i.cik) for i in identity.review if i.flag == "issuer_inferred" and "GHC" in i.reason] == [
+        ("issuer_inferred", 104889)]
+    assert GHC_KEY in identity.rows_decided      # stages 4c and 10g keep its CIK in force: the name is a later one
+
+
+def test_only_a_name_search_answer_gives_way_to_the_tickers_later_holder(cases):
+    """The rule is stage 2b's: an answer another tier gave (here the committed run's) is not asked again."""
+    identity = _ghc_seed(cases, tier="committed")
+    assert (identity.issuers[GHC_KEY].cik, identity.tier(GHC_KEY)) == (716314, "committed")
+
+
+def test_an_era_its_tickers_rows_confirm_keeps_its_name_search_answer(cases):
+    """With every GHC sighting (2012 to 2020) the era's span holds its ticker's rows, so it is no backfilled row,
+    and stage 2b's other rules decide as before."""
+    identity = cases.identify({"GHC", "WPO"}, {GHC_KEY: (716314, "name_search"),
+                                               "WPO@2008-01-16": (104889, "committed")})
+    assert identity.tier(GHC_KEY) != "later_ticker"
+
+
+def test_a_ticker_listed_under_a_company_that_never_carried_the_name_changes_nothing(cases, monkeypatch):
+    """The ticker map alone is no evidence: GHC listed under Hubbell (which never carried a Graham name, and whose
+    names the rows under GHC do not carry) leaves the name search's answer."""
+    edgar = cases.backend.edgar
+    monkeypatch.setattr(edgar, "company_tickers", lambda: {"GHC": {"cik_str": 48898, "ticker": "GHC"}})
+    assert _ghc_seed(cases).issuers[GHC_KEY].cik == 716314
+
+
+def test_a_line_a_bankruptcy_left_behind_is_not_the_one_listed_under_its_ticker_today(cases, stage3):
+    """FB-014, SandRidge: the old stock's placeholder is not the SD that EDGAR lists for the issuer today, so the
+    delisting search takes it as not listed (`left_behind_placeholders`) and NYSE's Form 25 of 2016 ends it. The
+    review row says why the ticker pick was withdrawn. No other placeholder of the fixture is one."""
+    from delist_detection.identity.identity import left_behind_placeholders
+    from delist_detection.identity.issuer_record import IssuerRecord
+    record = IssuerRecord(cases.backend.edgar, today=ic.AS_OF, name_index=cases.backend.index)
+    assert left_behind_placeholders(stage3.securities, stage3.cusips, stage3.ftd, record) == (
+        {"CIK1349436-COMMON"}, set())
+    [row] = [i for i in stage3.review if i.flag == "identity_detached" and i.reason.startswith("SD@")]
+    assert "BBG000RKR4R8 is today's holder of SD" in row.reason and "bankruptcy" in row.reason
+    assert "BBG000RKR4R8" not in stage3.securities
+
+
+def _hubbell_ranges(cases, pins):
+    """Hubbell's ticker ranges per security, its HUB-B sightings pinned as `pins` says (the committed issuers)."""
+    from delist_detection.identity.history import ranges_from_sightings, ticker_sightings
+    identity = cases.identify({"HUB-B", "HUBB"}, {k: (48898, "committed") for k in cases.backend.eras_issuer
+                                                  if k.split("@")[0] in ("HUB-B", "HUBB")}, pins=pins)
+    return {sid: [(r.value, r.valid_from, r.valid_to)
+                  for r in ranges_from_sightings(ticker_sightings(sec, identity.ftd, identity.cusips[sid]),
+                                                 end=None, open_ended=True)]
+            for sid, sec in identity.securities.items()}
+
+
+def test_a_sec_id_pin_joins_hub_b_to_hubbs_line_as_two_tickers(cases):
+    """FB-013: the caller pins its HUB-B sightings to `BBG000BLK267`, the line OpenFIGI calls HUBB. The security
+    was HUB-B under its old CUSIP and is HUBB from its new CUSIP's first row (2015-12-28), though SEC's fails files
+    write HUBB on every row of both and the snapshots of 2012 to 2014 already wrote HUBB."""
+    assert _hubbell_ranges(cases, {"HUB-B": "BBG000BLK267"}) == {
+        "BBG000BLK267": [("HUB-B", "2008-01-16", "2015-12-27"), ("HUBB", "2015-12-28", None)]}
+
+
+def test_unpinned_hubbell_keeps_its_two_securities_and_spellings(cases):
+    """The guard: with no pin the class B sightings stay their placeholder's (STAY) and each security has the one
+    spelling it was observed under."""
+    got = _hubbell_ranges(cases, None)
+    assert {sid: {t for t, _, _ in ranges} for sid, ranges in got.items()} == {
+        "CIK48898-CLASS-B": {"HUB-B"}, "BBG000BLK267": {"HUBB"}}
 
 
 def test_a_joined_lines_cusip_ranges_ignore_the_old_cusips_settling_rows(cases):

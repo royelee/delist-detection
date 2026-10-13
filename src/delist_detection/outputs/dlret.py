@@ -72,6 +72,7 @@ class DlretMethod(str, Enum):
     SHUMWAY_NYSE_AMEX = "shumway_nyse_amex"
     SHUMWAY_NASDAQ = "shumway_nasdaq"
     PENDING_RECOVERY = "pending_recovery"   # FB-002: a wind-down whose distributions are not read yet, no fill
+    PENDING_TERMS = "pending_terms"         # FB-016: a merger whose terms nothing states, no fill
     WORTHLESS = "worthless"            # reserved; not emitted in v1
     DROPPED_EXPIRATION = "dropped_expiration"
     ASSUMED_PAR = "assumed_par"        # completed delisting, terminal assumed = last price (DLRET≈0)
@@ -100,13 +101,15 @@ METHODS: dict[DlretMethod, tuple[str, str]] = {
     DlretMethod.ABSTAIN_NO_CONSIDERATION: ("", LOW),
     DlretMethod.NEEDS_LAST_TRADE: ("", LOW),
     DlretMethod.PENDING_RECOVERY: ("", LOW),
+    DlretMethod.PENDING_TERMS: ("", LOW),
     DlretMethod.DROPPED_EXPIRATION: ("", LOW),
     DlretMethod.UNKNOWN: ("", LOW),
 }
 _GRADES = {HIGH, MEDIUM, LOW}
 # Blank in the table: an abstain (only one with no last close reaches it: with one it is assumed par) and an unknown,
 # so a reader never mistakes an uncomputable row for a realized 0%. A transfer's 0.0 and assumed par keep theirs.
-_BLANK_IN_TABLE = frozenset({DlretMethod.ABSTAIN_NO_CONSIDERATION, DlretMethod.UNKNOWN, DlretMethod.PENDING_RECOVERY})
+_BLANK_IN_TABLE = frozenset({DlretMethod.ABSTAIN_NO_CONSIDERATION, DlretMethod.UNKNOWN, DlretMethod.PENDING_RECOVERY,
+                             DlretMethod.PENDING_TERMS})
 
 
 # -- the DLRET ---------------------------------------------------------------------------------------------------
@@ -118,7 +121,8 @@ class ValueInputs:
     confidence; `recovery_ratio` the caller's --recoveries ratio; `otc_print` the answered first off-exchange print;
     `plan_value` a bankruptcy plan's ratio times its new line's answered close (ruling R6); `deregistered` an unknown
     ending the classifier found deregistered with no merger or distress evidence (valued at par); `wind_down` a
-    liquidation that is no bankruptcy (`exit_kind.is_wind_down`: valued by its distributions, never a Shumway mark).
+    liquidation that is no bankruptcy (`exit_kind.is_wind_down`: valued by its distributions, never a Shumway mark);
+    `terms_read` whether anything states a merger's terms (`MergerInputs.read`; False: no par fill, FB-016).
     None is blank."""
     bucket: CrspBucket
     exchange: Exchange = Exchange.OTHER
@@ -132,6 +136,7 @@ class ValueInputs:
     payout_confidence: str | None = None
     deregistered: bool = False
     wind_down: bool = False
+    terms_read: bool = True
 
 
 @dataclass(frozen=True)
@@ -283,6 +288,11 @@ def decide(inputs: ValueInputs) -> EndingValue:
         # FB-002: Shumway's marks were estimated on performance delistings; a wind-down is valued by what its holders
         # received, and until that is read it has no value (the firm month keeps the bucket's mark, BMP's convention)
         value, method, terminal = _NAN, DlretMethod.PENDING_RECOVERY, None
+    if (inputs.bucket is CrspBucket.MERGER and not inputs.terms_read
+            and method in (DlretMethod.ASSUMED_PAR, DlretMethod.ABSTAIN_NO_CONSIDERATION)):
+        # FB-016: par says "the deal paid the last close", which nothing read supports; terms the gate refused keep
+        # the par fill the verdict doubts (the firm month keeps the par value, as a wind-down keeps its mark)
+        value, method, terminal = _NAN, DlretMethod.PENDING_TERMS, None
     return EndingValue(method, value, terminal, _confidence(method, value, inputs.payout_confidence), base.value)
 
 
@@ -332,6 +342,15 @@ class MergerInputs:
     raw_currency: str = ""        # the regex read's currency (ruling R5)
     leg_sec_ids: Mapping[str, str] = field(default_factory=dict)   # a basket's further legs: ticker -> sec_id
     statement: StatementTerms | None = None       # stage 8b's restatement from the registrant's filings (FNFV)
+    dividend: float | None = None                 # the closing dividend counted in the row's cash (FB-021)
+
+    @property
+    def read(self) -> bool:
+        """Whether anything states the merger's terms: the caller's row, the registrant's statement, a regex read, or
+        an LLM answer that publishes a leg (`MergerTerms.published`). False is the value rule `unknown`
+        (`_merger_rule`), and the ending has no value and no fill (`DlretMethod.PENDING_TERMS`, FB-016)."""
+        return (bool(self.override) or self.statement is not None or self.raw_value is not None
+                or (self.llm is not None and self.llm.published is not None))
 
 
 @dataclass(frozen=True)
@@ -352,9 +371,11 @@ class Rule:
     """One ending's value rule (`name`, one of exit_kind.VALUE_RULES) and the terms it publishes, as read: `cash` and
     its `currency`, a stock `leg`, a `basket`'s terms (ruling R3: its legs, with `basket_ticker` its main leg's
     ticker), a liquidation's `recovery_ratio`, an OTC print's security and symbol (`print_sec_id`, `print_symbol`),
-    and where the terms came from (`terms_source`) and the payout gate's verdict (`terms_gate`)."""
+    and where the terms came from (`terms_source`) and the payout gate's verdict (`terms_gate`). `cash` is all the
+    cash one share received; `dividend` is the part of it that was a closing dividend (FB-021), None when none."""
     name: str
     cash: float | None = None
+    dividend: float | None = None
     currency: str = ""
     leg: StockLeg | None = None
     basket: MergerTerms | None = None
@@ -395,9 +416,11 @@ def _merger_rule(row: Mapping[str, str], inputs: MergerInputs) -> Rule:
     last close existed to check them), else from what the library read before the gate dropped them (the LLM terms,
     else the regex payout):
     `terms_gate` is `failed`, `skipped`, or blank (`_ungated`). An LLM answer (prompt v3) is the package one share
-    became (ruling R4); one of two or more securities is a basket (R3)."""
+    became (ruling R4); one of two or more securities is a basket (R3). The cash of terms the gate kept holds the
+    closing dividend the gate counted (FB-021), named apart in `Rule.dividend`; terms it did not keep take none."""
     llm, override = inputs.llm, inputs.override
     terms = _llm_published(row, inputs) if inputs.statement is None else None
+    dividend = None
     if override:
         cash, ratio = override.get("cash_per_share"), override.get("stock_ratio")
         ticker = override.get("acquirer_ticker") or (llm.acquirer_ticker if llm else "") or row["acquirer_ticker"]
@@ -408,11 +431,14 @@ def _merger_rule(row: Mapping[str, str], inputs: MergerInputs) -> Rule:
         source, gate, currency = STATEMENT_SOURCE, SKIPPED, "USD" if cash else ""
     elif row["payout_per_share"] or row["stock_ratio"]:
         cash, ratio = _num(row["payout_per_share"]), _num(row["stock_ratio"])
+        dividend = inputs.dividend       # counted by the gate that kept these terms, and in the row's cash
         ticker = row["acquirer_ticker"] or (llm.acquirer_ticker if llm else "")
         source = row["payout_source"] or "llm"
         gate = PASSED if row["last_trade_close"] else ""
         currency = (llm.cash_currency if llm is not None else "") if source.startswith("llm") \
             else inputs.raw_currency
+        if dividend and not currency:
+            currency = "USD"             # a dividend beside a stock leg alone: the gate counts only dollars
     elif terms is not None:
         cash, ratio, ticker = terms.cash_per_share, terms.stock_ratio, terms.acquirer_ticker or ""
         source, gate, currency = "llm", _ungated(row), terms.cash_currency
@@ -425,7 +451,7 @@ def _merger_rule(row: Mapping[str, str], inputs: MergerInputs) -> Rule:
     # symbol on the price date (the request's ticker), over the terms'
     ticker = (normalize_ticker(ticker) if ticker else "") if override else (
         inputs.price_ticker or (normalize_ticker(ticker) if ticker else ""))
-    common = dict(cash=cash, currency=currency or "", terms_source=source, terms_gate=gate)
+    common = dict(cash=cash, currency=currency or "", terms_source=source, terms_gate=gate, dividend=dividend)
     if terms is not None and terms.is_basket:
         return Rule("basket", basket=terms, basket_ticker=ticker, **common)
     value = terms.stock_value if terms is not None and not ratio else None

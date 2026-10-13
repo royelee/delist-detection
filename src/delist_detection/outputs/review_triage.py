@@ -113,7 +113,7 @@ CATALOG: dict[str, FlagInfo] = {
         "fix", "The security's history closes (not listed today, not sighted at the fails data's last day) and no "
                "rule gave it an ending, so the library wrote one of kind unknown (the spec's end-of-era branch 6: "
                "nothing found, no kind asserted), dated by the last day its own CUSIPs' fails rows show it trading, "
-               "else MIDAS's last day of volume, else its last sighting. The date is a guess and is never published; "
+               "else MIDAS's last day of volume, else its last sighting. The date is a guess, published unconfirmed; "
                "the verdict is uncertain, and the row has no DLRET.",
         "Find what ended it (a Form 25 under another CIK or class, a merger, a bankruptcy, a drop to the OTC "
         "market) in the issuer's filings and the fails rows; if the identity is wrong, pin the right cik/sec_id on "
@@ -122,9 +122,22 @@ CATALOG: dict[str, FlagInfo] = {
 
     # --- check: a rule could not settle the answer ---
     # merger terms and payouts
+    "contingent_right_unvalued": FlagInfo(
+        "check", "The merger's terms note a contingent value right, a warrant or another contingent payment beside "
+                 "the cash or stock (FB-024). The library does not value it, so the published terms and DLRET are "
+                 "the valued part alone and the ending is uncertain (`value_incomplete:contingent_right`).",
+        "Value the right (its market price on the last trade day, what it later paid, or zero) and supply the "
+        f"whole consideration in --merger-terms; {_accept_if('the valued part alone is the value you want')}."),
+    "closing_dividend_unstated": FlagInfo(
+        "check", "The merger is valued more than 1% under its last close, and a filing names a closing dividend "
+                 "(a special, stub-period or pre-closing dividend tied to the deal) without an amount per share "
+                 "(FB-023's follow-up). The published terms and DLRET leave it out and the ending is uncertain "
+                 "(`value_incomplete:closing_dividend`).",
+        "Find the dividend's amount (the press release or the proxy) and supply the whole consideration in "
+        f"--merger-terms; {_accept_if('the holders of the last close did not receive it')}."),
     "merger_at_par": FlagInfo(
-        "check", "A merger whose consideration was never found or never passed the gate, so its DLRET was set "
-                 "to 0 (terminal value = last close).",
+        "check", "A merger whose consideration was read and never passed the gate, so its DLRET was set to 0 "
+                 "(terminal value = last close). A merger whose terms nothing states has no DLRET at all (FB-016).",
         "Read the merger 8-K or proxy for the per-share consideration and supply it in --merger-terms; "
         f"{_accept_if('0% is right')}."),
     "terms_gate_failed": FlagInfo(

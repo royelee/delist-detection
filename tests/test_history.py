@@ -11,7 +11,7 @@ from delist_detection.vocabulary.crsp_codes import CrspBucket
 from delist_detection.sources.ftd import FtdIndex, FtdRow
 from delist_detection.identity.history import (Ending, Histories, SecurityEnd, Sighting, cusip_sightings,
                                       filtered_ticker_sightings, is_backfilled, observation_map_rows,
-                                      ticker_range_review, ticker_sightings)
+                                      ranges_from_sightings, ticker_range_review, ticker_sightings)
 from delist_detection.endings.last_trade import NO_DAY, UNCONFIRMED, LastTrade
 from delist_detection.identity.observations import Observation, TickerEra
 from delist_detection.identity.security_master import Security
@@ -270,16 +270,131 @@ def test_own_tickers_are_the_eras_and_the_lines():
     assert _hsc().own_tickers() == {"HSC"} and _hsc({"NVRI"}).own_tickers() == {"HSC", "NVRI"}
 
 
-def test_a_first_day_zzzz_row_is_no_ticker_sighting_but_still_a_cusip_sighting():
+def test_a_first_day_zzzz_row_is_no_ticker_of_its_own_but_dates_the_tickers_first_day():
     """A new CUSIP's first fails row carries the ticker with ZZZZ appended (FMDZZZZ): no ticker range opens under
-    it, while the CUSIP's own range starts that day."""
+    it, while the CUSIP's own range starts that day. FB-022: when the CUSIP's next row is under the ticker on the
+    next trading day, that row carries the close of the ZZZZ row's day, so the ticker was traded that day."""
     era = TickerEra("FMD", "2008-01-16", "2008-01-16", [Observation("FMD", "2008-01-16", "FIRST MARBLEHEAD")])
     sec = Security("BBG000BN6349", 1262279, "COMMON", "FIRST MARBLEHEAD", "Common Stock", True, "cusip", eras=[era])
     ftd = FtdIndex([FtdRow("2013-12-03", "320771207", "FMDZZZZ", "FIRST MARBLEHEAD CORP", 0.01),
                     FtdRow("2013-12-04", "320771207", "FMD", "FIRST MARBLEHEAD CORP", 5.41),
                     FtdRow("2013-12-05", "320771207", "FMD", "FIRST MARBLEHEAD CORP", 5.50)])
-    assert {s.value for s in ticker_sightings(sec, ftd, ["320771207"]) if s.source == "ftd"} == {"FMD"}
+    got = [s for s in ticker_sightings(sec, ftd, ["320771207"]) if s.source == "ftd"]
+    assert {s.value for s in got} == {"FMD"} and got[0] == Sighting("2013-12-03", "FMD", "ftd")
     assert cusip_sightings(sec, ftd, ["320771207"])[0] == Sighting("2013-12-03", "320771207", "ftd")
+
+
+def _first_days(*rows):
+    era = TickerEra("LMCA", "2016-06-30", "2016-06-30", [Observation("LMCA", "2016-06-30", "LIBERTY MEDIA")])
+    sec = Security("BBG00BFHDCV6", 1560385, "COMMON", "LIBERTY MEDIA", "Common Stock", True, "cusip", eras=[era])
+    ftd = FtdIndex([FtdRow(day, cusip, symbol, "LIBERTY MEDIA CORP", price) for day, cusip, symbol, price in rows])
+    return [s.day for s in ticker_sightings(sec, ftd, sorted({r[1] for r in rows})) if s.source == "ftd"]
+
+
+def test_a_new_cusips_first_trading_day_is_its_zzzz_row_only_when_the_ticker_follows_the_next_trading_day():
+    """FB-022 (Liberty Media 2016): the tracking stock's CUSIP has LMCAZZZZ on Monday 04-18 and LMCA from 04-19, at
+    the close of 04-18: it traded on 04-18. A ZZZZ row the ticker does not follow the next trading day says
+    nothing (several unassigned days, a gap, an old CUSIP's settling rows after its ticker: MSG 2015)."""
+    new = "531229870"
+    assert _first_days(("2016-04-18", new, "LMCAZZZZ", 9.77), ("2016-04-19", new, "LMCA", 19.03)) == [
+        "2016-04-18", "2016-04-19"]
+    assert _first_days(("2016-04-15", new, "LMCAZZZZ", 9.77), ("2016-04-18", new, "LMCA", 19.03)) == [
+        "2016-04-15", "2016-04-18"]                      # Friday, then Monday
+    assert _first_days(("2016-04-14", new, "LMCAZZZZ", 0.01), ("2016-04-18", new, "LMCAZZZZ", 9.77),
+                       ("2016-04-19", new, "LMCA", 19.03)) == ["2016-04-18", "2016-04-19"]
+    assert _first_days(("2016-04-13", new, "LMCAZZZZ", 9.77), ("2016-04-19", new, "LMCA", 19.03)) == ["2016-04-19"]
+    assert _first_days(("2016-04-15", new, "LMCA", 38.77), ("2016-04-18", new, "LMCAZZZZ", 39.06),
+                       ("2016-04-19", new, "LMCA", 39.06)) == ["2016-04-15", "2016-04-19"]
+
+
+def test_a_new_cusips_first_row_under_its_own_cusip_prefix_dates_the_first_day_like_a_zzzz_row():
+    """FB-022 (Monster 2015): the new holding company's CUSIP 61174X109 has a first row under `61174X` on Monday
+    06-15 and MNST from 06-16, and the old CUSIP's last row, on 06-15, carries the close of Friday 06-12. The
+    prefix row is the same "no symbol yet" row as a ZZZZ one, and it is no ticker of its own. With a ZZZZ row
+    between the two (Wendy's 2008) the ZZZZ row, the one the ticker follows, dates the day."""
+    new = "61174X109"
+    got = ticker_sightings(
+        Security("BBG008NVB1C0", 1418135, "COMMON", "MONSTER BEVERAGE", "Common Stock", True, "cusip",
+                 eras=[TickerEra("MNST", "2015-06-30", "2015-06-30", [Observation("MNST", "2015-06-30", "MONSTER")])]),
+        FtdIndex([FtdRow("2015-06-15", new, "61174X", "MONSTER BEVERAGE CORP NEW", 0.01),
+                  FtdRow("2015-06-16", new, "MNST", "MONSTER BEVERAGE CORP NEW", 126.91)]), [new])
+    assert [(s.day, s.value) for s in got if s.source == "ftd"] == [("2015-06-15", "MNST"), ("2015-06-16", "MNST")]
+    assert _first_days(("2015-06-12", new, "61174X", 0.01), ("2015-06-16", new, "LMCA", 126.91)) == ["2015-06-16"]
+    wen = "950587105"
+    assert _first_days(("2008-09-29", wen, "950587", 0.01), ("2008-09-30", wen, "LMCAZZZZ", 0.01),
+                       ("2008-10-01", wen, "LMCA", 5.3)) == ["2008-09-30", "2008-10-01"]
+    for masked in ("**********", "F104PAIROFF"):           # code review: the row that follows must be a ticker
+        got = ticker_sightings(
+            Security("BBG008NVB1C0", 1418135, "COMMON", "MONSTER BEVERAGE", "Common Stock", True, "cusip",
+                     eras=[TickerEra("MNST", "2015-06-30", "2015-06-30", [Observation("MNST", "2015-06-30", "M")])]),
+            FtdIndex([FtdRow("2015-06-15", new, "61174X", "MONSTER BEVERAGE CORP NEW", 0.01),
+                      FtdRow("2015-06-16", new, masked, "MONSTER BEVERAGE CORP NEW", 126.91)]), [new])
+        assert [s.day for s in got if s.source == "ftd" and s.day == "2015-06-15"] == []
+    other = "531229870"                                    # digits that are not this CUSIP's own prefix date nothing
+    era = TickerEra("LMCA", "2016-06-30", "2016-06-30", [Observation("LMCA", "2016-06-30", "LIBERTY MEDIA")])
+    got = ticker_sightings(
+        Security("BBG00BFHDCV6", 1560385, "COMMON", "LIBERTY MEDIA", "Common Stock", True, "cusip", eras=[era]),
+        FtdIndex([FtdRow("2016-04-18", other, "61174X", "LIBERTY MEDIA CORP", 0.01),
+                  FtdRow("2016-04-19", other, "LMCA", "LIBERTY MEDIA CORP", 19.03)]), [other])
+    assert [(s.day, s.value) for s in got if s.value == "LMCA" and s.source == "ftd"] == [("2016-04-19", "LMCA")]
+
+
+# --- a class ticker that lost its separator at a CUSIP change (FB-013, HUB-B then HUBB) ---
+
+OLD_B, NEW_B = "443510201", "443510607"
+
+
+def _class_b(figi_ticker, *, symbol="HUBB", later_observed=("HUBB", "2015-12-31"), cusips=(OLD_B, NEW_B)):
+    """A class B line as Hubbell's: observed as HUB-B to 2015-06-30 and as HUBB in a backfilled 2012 snapshot, its
+    old CUSIP's rows to 2015-12-24 and its new CUSIP's from 2015-12-28, every fails row under `symbol` (SEC's files
+    write HUBB throughout; the run's index hands them over as HUB-B once the class ticker was asked for). Returns
+    the ticker ranges."""
+    eras = [TickerEra("HUB-B", "2008-01-16", "2015-06-30", [Observation("HUB-B", "2008-01-16", "HUBBELL INC"),
+                                                         Observation("HUB-B", "2015-06-30", "HUBBELL INC. CL B")]),
+            TickerEra("HUBB", "2012-06-29", "2012-06-29", [Observation("HUBB", "2012-06-29", "HUBBELL INC")])]
+    if later_observed:
+        ticker, day = later_observed
+        eras.append(TickerEra(ticker, day, day, [Observation(ticker, day, "HUBBELL INC")]))
+    sec = Security("BBG000BLK267", 48898, "CLASS B", "HUBBELL INC", "Common Stock", True, "pin", eras=eras,
+                   figi_ticker=figi_ticker)
+    rows = [FtdRow(d, OLD_B, symbol, "HUBBELL INC CL-B", 100.0 + i)
+            for i, d in enumerate(("2008-01-29", "2012-06-28", "2015-06-29", "2015-12-23", "2015-12-24"))]
+    rows += [FtdRow(d, cusips[1], symbol, "HUBBELL INC CL-B", 100.0 + i)
+             for i, d in enumerate(("2015-12-28", "2015-12-30", "2016-01-04", "2020-06-30"))]
+    return [(r.value, r.valid_from, r.valid_to)
+            for r in ranges_from_sightings(ticker_sightings(sec, FtdIndex(rows), list(dict.fromkeys(cusips))),
+                                           end=None, open_ended=True)]
+
+
+def test_a_bare_spelling_observed_alone_under_a_later_cusip_is_the_lines_own_ticker():
+    """FB-013: Hubbell's class B traded as HUB-B until its CUSIP changed on 2015-12-28 and as HUBB since. The
+    caller saw HUB-B only under the old CUSIP and HUBB alone under the new one, and OpenFIGI's ticker for the line
+    is HUBB: the line changed ticker there. The 2012 HUBB row, backfilled under the old CUSIP, stays HUB-B."""
+    want = [("HUB-B", "2008-01-16", "2015-12-27"), ("HUBB", "2015-12-28", None)]
+    assert _class_b("HUBB") == want
+    assert _class_b("HUBB", symbol="HUB-B") == want       # the rows as the run's index relabels them
+
+
+def test_a_bare_spelling_is_only_a_spelling_when_the_lines_figi_ticker_has_the_separator():
+    """Forest City's snapshots wrote FCE-A to 2015 and FCEA from 2016, across its 2016 CUSIP change, while the
+    stock stayed FCE.A: OpenFIGI's ticker with the separator (here HUB-B) keeps the one spelling. So does a line
+    whose FIGI ticker is unknown (a pin, a placeholder)."""
+    want = [("HUB-B", "2008-01-16", None)]
+    assert _class_b("HUB-B") == want
+    assert _class_b("") == want
+
+
+def test_one_cusip_observed_under_both_spellings_keeps_the_separator():
+    """Viacom's class B on one CUSIP, written VIA-B and VIAB by the snapshots: no CUSIP change dates a change of
+    ticker, so the spelling with the separator stands, whatever OpenFIGI's ticker."""
+    assert _class_b("HUBB", cusips=(OLD_B, OLD_B)) == [("HUB-B", "2008-01-16", None)]
+
+
+def test_a_later_cusip_with_no_sighting_of_the_bare_spelling_alone_keeps_the_separator():
+    """Under the new CUSIP the caller saw HUB-B again (or nothing): nothing shows the ticker changed there."""
+    want = [("HUB-B", "2008-01-16", None)]
+    assert _class_b("HUBB", later_observed=("HUB-B", "2015-12-31")) == want
+    assert _class_b("HUBB", later_observed=None) == want
 
 
 # --- Histories: where a security's history ends, at its interface (the clip, a successor's ticker, listed today) ---

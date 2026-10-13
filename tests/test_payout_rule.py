@@ -66,6 +66,45 @@ def test_cash_plus_stock_formula():
     assert f["value_formula"] == "(65.50 + 0.8025 × price(QSR, 2014-12-15)) / last_close − 1"
 
 
+def test_a_closing_dividend_is_in_the_cash_and_named_apart_in_the_formula():
+    """FB-021 (Extended Stay 2021): `cash_per_share` is all the cash one share received, and the formula shows the
+    merger's cash and the dividend the payout gate counted."""
+    r = ending("A", "2021-06-26", method="cash_only", last_trade_close="20.46", payout_per_share="20.5",
+               payout_source="8K_2.01")
+    f = value_fields(r, LTD, MergerInputs(raw_value=18.75, raw_source="8K_2.01", dividend=1.75))
+    assert (f["value_rule"], f["cash_per_share"], f["terms_gate"]) == ("cash", 20.5, "passed")
+    assert f["value_formula"] == "(18.75 + 1.75 dividend) / last_close − 1"
+    # Nordstrom 2025: a $0.25 special and a $0.1462 stub-period dividend
+    r = ending("A", "2025-05-31", last_trade_close="24.66", payout_per_share="24.6462", payout_source="8K_2.01")
+    f = value_fields(r, LTD, MergerInputs(raw_value=24.25, dividend=0.3962))
+    assert f["value_formula"] == "(24.25 + 0.3962 dividend) / last_close − 1"
+    # Vectren 2019: a pro rata dividend of $0.41145
+    r = ending("A", "2019-02-11", last_trade_close="72.38", payout_per_share="72.41145", payout_source="8K_2.01")
+    f = value_fields(r, LTD, MergerInputs(raw_value=72.0, dividend=0.41145))
+    assert f["value_formula"] == "(72.00 + 0.41145 dividend) / last_close − 1"
+
+
+def test_a_closing_dividend_beside_a_stock_leg_makes_the_rule_cash_plus_stock():
+    # Livongo 2020: $4.24, 0.592 of a Teladoc share and a $7.09 dividend
+    r = ending("A", "2020-11-09", last_trade_close="139.77", payout_per_share="11.33", stock_ratio="0.592",
+               acquirer_ticker="TDOC", acquirer_price="217.89", payout_source="llm")
+    f = value_fields(r, LTD, MergerInputs(llm=_terms(cash=4.24, ratio=0.592, ticker="TDOC"), dividend=7.09))
+    assert (f["value_rule"], f["cash_per_share"], f["stock_ratio"]) == ("cash_plus_stock", 11.33, 0.592)
+    assert f["value_formula"] == "(4.24 + 7.09 dividend + 0.592 × price(TDOC, 2014-12-15)) / last_close − 1"
+    # Six Flags 2024: the dividend is all the cash
+    r = ending("A", "2024-07-12", last_trade_close="32", payout_per_share="1.53", stock_ratio="0.58",
+               acquirer_ticker="FUN", acquirer_price="52.11", payout_source="llm")
+    f = value_fields(r, LTD, MergerInputs(llm=_terms("stock", ratio=0.58, ticker="FUN"), dividend=1.53))
+    assert f["value_formula"] == "(1.53 dividend + 0.58 × price(FUN, 2014-12-15)) / last_close − 1"
+    assert (f["value_rule"], f["cash_per_share"], f["cash_currency"]) == ("cash_plus_stock", 1.53, "USD")
+
+
+def test_terms_the_gate_did_not_keep_take_no_dividend():
+    r = ending("A", "2014-12-20", last_trade_close="10", flags="llm_gate_failed")
+    f = value_fields(r, LTD, MergerInputs(llm=_terms("cash", cash=5.0, basis="fixed"), dividend=None))
+    assert (f["cash_per_share"], f["terms_gate"], f["value_formula"]) == (5.0, "failed", "5.00 / last_close − 1")
+
+
 def test_no_published_last_trade_date_leaves_the_price_date_blank():
     r = ending("A", "2014-12-20", method="stock_only", last_trade_close="10", stock_ratio="0.5",
                acquirer_ticker="QSR")

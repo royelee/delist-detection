@@ -267,9 +267,9 @@ a row's verdict is always `uncertain`, so a reader must not filter it away as
 
 The library writes such a row itself for a security whose history closes with no ending of any rule (FB-004 part d:
 not listed today, not sighted at the fails data's last day, no Form 25, drop or filing that ends it): kind blank,
-`last_trade_date` blank (the library's day is a guess and is never published; delistings.csv holds it, unconfirmed,
-dated by the last day the security's own CUSIPs' fails rows show it trading, else SEC MIDAS's last day of exchange
-volume, else its last sighting), flag `unexplained_ending`, verdict `uncertain`. A reader that filters on an ending
+`last_trade_date` the library's day (a guess, published unconfirmed: the last day the security's own CUSIPs' fails
+rows show it trading, else SEC MIDAS's last day of exchange volume, else its last sighting), flag
+`unexplained_ending`, verdict `uncertain`. A reader that filters on an ending
 therefore finds one for every closed security, and the uncertain verdict says the ending is a placeholder.
 
 `security_history.csv` holds every ticker range (the run's in-memory `ticker_history`) except those of the
@@ -302,7 +302,13 @@ price(price_ticker, price_date)`, the acquirer's close the trading day after the
 last trade), `otc_print` (the security's own first off-exchange print from
 `price_date`), `recovery` (`recovery_ratio` × last close), `worthless`,
 `transfer` (same shares, 0), `continuation` (not an exit), `expiration` or
-`unknown`; `basket` is a package of two or more securities per share (the main
+`unknown`. `cash_per_share` is all the cash one share received. A dividend the
+target paid because the deal closed is in it when the last close still carried
+it (the consideration with the dividend is nearer the last close than the
+consideration alone), and `value_formula` names the parts:
+`(18.75 + 1.75 dividend) / last_close − 1`. A continuation publishes no cash:
+cash paid to the old security's holders at the step is a dividend of the price
+series, dated on the successor's first day. `basket` is a package of two or more securities per share (the main
 row keeps the cash and the first security, and `payout_legs.csv` has one row per
 security with its ratio, class and the security, ticker and date to price it on);
 a bankruptcy plan whose notice or 8-K states a ratio is `stock` on the new line.
@@ -419,7 +425,7 @@ is the Form 25 filing date plus 10 days (Rule 12d2-2(d)(1)), or the date of
 the fallback filing that ended trading when no Form 25 exists.
 `raw_payout_*` is the extraction before the last-close gate (see *Payout
 reconciliation* below); `last_trade_date_source` is `ex99_notice`, `8k_301`,
-`midas`, `nasdaq_halt`, `closing_day` (a worked-out closing day, never published), `last_sighting` (a handoff
+`midas`, `nasdaq_halt`, `closing_day` (a worked-out closing day, unconfirmed), `last_sighting` (a handoff
 row's, or an unexplained ending's when no fails row and no MIDAS day dates it), `fails_rows` (an unexplained ending's:
 the last day the security's own CUSIPs' fails rows show it trading), or empty. `resolution_source` records the resolver
 tier that found the security's CIK (`cik_map` for an observation's `cik` pin,
@@ -491,6 +497,7 @@ causes sort first.
 | `merger` | `cash_plus_stock` | `(cash + stock_ratio × acquirer_price) / last_close − 1` | Cash+stock deal, all terms supplied |
 | `merger` | `stock_only` | `stock_ratio × acquirer_price / last_close − 1` | All-stock deal, terms supplied |
 | `merger` / `expiration` | `assumed_par` | `0` (terminal = `last_trade_close`) | Completed deal / fund closure with a known last price but no priceable consideration — terminal ≈ last price, so DLRET ≈ 0; **`low` confidence** |
+| `merger` | `pending_terms` | *(blank)* | Nothing states the terms (no caller's row, no registrant's statement, no regex or LLM read that publishes a leg; FB-016): no par fill, `value_rule` `unknown`, and the verdict is `uncertain` with `value_pending:terms` |
 | `merger` | `needs_last_trade` | *(blank)* | Consideration known but `last_trade_close` missing (no denominator) |
 | `merger` | `abstain_no_consideration` | *(blank)* | No consideration **and** no last price |
 | `exchange_transfer` | `exchange_transfer_zero` | `0` | Security continues at successor exchange |
@@ -503,12 +510,13 @@ causes sort first.
 | `expiration` | `dropped_expiration` | *(blank)* | Non-equity instrument with no last price |
 | *(any)* | `unknown` | *(blank)* | Unclassified ticker |
 
-> **No empty, no silent zero.** Any merger or fund closure with a valid
+> **No empty, no silent zero.** Any fund closure, and any merger whose terms were read, with a valid
 > `last_trade_close` but no priceable consideration is filled with `dlret = 0`
 > tagged `dlret_method = assumed_par` at **`low`** confidence — a completed deal's
 > last price already reflects its terminal value (≈0 incremental return), so 0 is
 > the maximum-likelihood estimate, not a missing value. Rows are blank only when
-> there is genuinely no denominator (no `last_trade_close`). Filter on
+> there is genuinely no denominator (no `last_trade_close`), or for a merger whose terms nothing states
+> (`pending_terms`: par would say the deal paid the last close, which nothing read supports). Filter on
 > `dlret_confidence` to keep, down-weight, or drop the estimates.
 
 ### Review surface
@@ -550,7 +558,9 @@ The full flag vocabulary (from `endings/classifier.py`, `identity/ticker_resolve
 | `terms_gate_failed:<reason>` | The LLM cash+stock/stock-only terms did not reconcile (`no_acq_ticker`, `no_acq_price`, `no_last_close`, or `fail_sanity`) |
 | `llm_gate_failed` | The LLM cash or election terms did not reconcile either |
 | `no_last_close` | No last trade close was found (SEC fails-to-deliver, or `--last-trade-closes`), so the payout could not be checked |
-| `merger_at_par` | A merger whose consideration was never found; DLRET assumed 0 from the last close |
+| `merger_at_par` | A merger whose consideration was read and never passed the gate; DLRET assumed 0 from the last close |
+| `closing_dividend_unstated` | The merger is valued more than 1% under its last close and a filing names a closing dividend (special, stub-period, pre-closing) without an amount per share. The terms and DLRET leave it out, and the ending is `uncertain` (`value_incomplete:closing_dividend`) |
+| `contingent_right_unvalued` | The merger's terms note a contingent value right, a warrant or another contingent payment beside the cash or stock. The library does not value it: the terms and DLRET are the valued part alone, and the ending is `uncertain` (`value_incomplete:contingent_right`) |
 | `submissions_stale` | A refetch of the company's EDGAR submissions failed; a cached copy was used instead |
 | `distress_at_normal_price` | A compliance-failure or liquidation row whose last trade close was still ≥ $5 |
 | `no_form25` | No Form 25 was found; the classifier's fallback path (8-K completion, Form 15, `REVOKED`, SPAC trust liquidation) found and dated the delisting |

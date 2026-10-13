@@ -7,11 +7,15 @@ redirected to ``tmp_path`` so nothing is written outside the test sandbox.
 from pathlib import Path
 
 import pytest
+import requests
 
 from delist_detection.outputs.reconstruction import DelistRecord
 from delist_detection.vocabulary.crsp_codes import CrspBucket
 from delist_detection.sources.edgar import EdgarSubmission
 from delist_detection.terms.llm_merger_extractor import (
+    DIVIDEND_PROMPT,
+    DIVIDEND_VERSION,
+    ClosingDividend,
     LLMMergerTermsExtractor,
     MergerTerms,
     PROMPT_VERSION,
@@ -37,10 +41,12 @@ class _FakeLlm:
         self._raises = raises
         self.calls = 0
         self.users = []
+        self.systems = []
 
     def extract(self, system, user, schema):
         self.calls += 1
         self.users.append(user)
+        self.systems.append(system)
         if self._raises:
             raise RuntimeError("LLM hard failure")
         if not self._responses:
@@ -291,6 +297,57 @@ def test_user_prompt_includes_framing(tmp_path):
     assert "2018-11-28" in user
 
 
+def _offer_doc(accession, form, day):
+    return EdgarSubmission(accession=accession, form=form, filing_date=day, report_date="", items="",
+                           primary_doc="d.htm")
+
+
+_NO_TERMS = {"deal_type": "other", "cash_per_share": None, "stock_ratio": None, "acquirer_name": None,
+             "acquirer_ticker": None, "confidence": "low", "quote": ""}
+_RATIO = {"deal_type": "stock", "cash_per_share": None, "stock_ratio": 0.05363, "acquirer_name": "BioNTech SE",
+          "acquirer_ticker": "BNTX", "confidence": "high", "quote": "0.05363 of a BioNTech ADS per CureVac share"}
+
+
+def test_the_offers_own_documents_are_read_newest_first_by_form(tmp_path):
+    """FB-016 (CureVac 2026): the offer's documents EDGAR lists under the target, on or before the delisting: the
+    SC TO-T and its amendments newest first (CureVac's ratio is in the third newest), then the Rule 425 filings, then
+    the SC 14D9, `max_filings` of each at most, and the first that states a leg answers. An amendment of the SC 14D9
+    and a document filed after the delisting are not read. `extract` reads none of them."""
+    filings = [_offer_doc("T0", "SC TO-T", "2018-10-21"), _offer_doc("T1", "SC TO-T/A", "2018-11-20"),
+               _offer_doc("T9", "SC TO-T/A", "2018-12-03"),              # after the delisting of 2018-11-28
+               _offer_doc("R0", "425", "2018-11-01"), _offer_doc("R1", "425", "2018-11-26"),
+               _offer_doc("D0", "SC 14D9", "2018-10-21"), _offer_doc("D1", "SC 14D9/A", "2018-11-27")]
+    texts = {f.accession: "the exchange ratio per share is stated here " + f.accession for f in filings}
+    edgar = _FakeEdgarText(filings, texts)
+    llm = _FakeLlm([_NO_TERMS, _NO_TERMS, _RATIO])
+    ext = LLMMergerTermsExtractor(edgar, llm, cache_dir=tmp_path)
+    assert ext.extract(_merger_rec()) is None and llm.calls == 0          # no first-choice filing at all
+    terms = ext.extract_offer_terms(_merger_rec())
+    assert (terms.stock_ratio, terms.acquirer_ticker, terms.source) == (0.05363, "BNTX", "425:R1")
+    assert [u.rsplit(" ", 1)[-1] for u in llm.users] == ["T1", "T0", "R1"]   # the bidder's statements, then the 425s
+    llm2 = _FakeLlm([_NO_TERMS])
+    ext2 = LLMMergerTermsExtractor(edgar, llm2, cache_dir=tmp_path / "none")
+    assert ext2.extract_offer_terms(_merger_rec()) is None
+    assert [u.rsplit(" ", 1)[-1] for u in llm2.users] == ["T1", "T0", "R1", "R0", "D0"]
+    llm3 = _FakeLlm([_NO_TERMS])
+    ext3 = LLMMergerTermsExtractor(edgar, llm3, max_filings=1, cache_dir=tmp_path / "one")
+    assert ext3.extract_offer_terms(_merger_rec()) is None
+    assert [u.rsplit(" ", 1)[-1] for u in llm3.users] == ["T1", "R1", "D0"]
+
+
+def test_offer_documents_are_a_mergers_only_and_a_network_error_is_a_miss(tmp_path):
+    class _Down(_FakeEdgarText):
+        def fetch_filing_text(self, cik, accession, primary_doc):
+            raise requests.ConnectionError("down")
+    filings = [_offer_doc("T1", "SC TO-T/A", "2018-11-20")]
+    llm = _FakeLlm([_RATIO])
+    ext = LLMMergerTermsExtractor(_Down(filings, {}), llm, cache_dir=tmp_path)
+    assert ext.extract_offer_terms(_merger_rec()) is None and llm.calls == 0
+    ok = LLMMergerTermsExtractor(_FakeEdgarText(filings, {"T1": "ratio T1"}), llm, cache_dir=tmp_path)
+    assert ok.extract_offer_terms(_merger_rec(bucket=CrspBucket.LIQUIDATION)) is None and llm.calls == 0
+    assert ok.extract_offer_terms(_merger_rec(cik=None)) is None and llm.calls == 0
+
+
 def test_max_filings_caps_llm_calls(tmp_path):
     # Three closing-8-K candidates, none usable; max_filings=2 caps LLM calls.
     f1 = _closing_8k("C1")
@@ -454,3 +511,283 @@ def test_a_warm_pass_counts_nothing_and_the_sequential_read_after_it_counts_aske
     ext.extract(_merger_rec())
     u = ext.usage()
     assert (u["asked"], u["from_cache"], u["failed"]) == (1, 0, 0)
+
+
+# --------------------------------------------------------------------------- #
+# FB-021: a dividend the target paid because the deal closed
+# --------------------------------------------------------------------------- #
+
+_DIVIDEND_TEXT = (
+    "each Paired Share was converted into the right to receive $18.75 in cash. " + "x" * 4000 + " On June 15, 2021, "
+    "the Board of Directors of the Company declared a special dividend of $1.75 per share, payable immediately "
+    "prior to the effective time."
+)
+
+
+def _dividend(amount, included=False, quote="a special dividend of $1.75 per share"):
+    return {"amount_per_share": amount, "included_in_consideration": included, "quote": quote}
+
+
+def _dividend_ext(tmp_path, answers, text=_DIVIDEND_TEXT, filings=None, **kw):
+    llm = _FakeLlm(answers, **kw)
+    edgar = _FakeEdgarText([_closing_8k()] if filings is None else filings, {"C1": text, "A1": text, "C2": text})
+    return LLMMergerTermsExtractor(edgar, llm, model="m1", cache_dir=tmp_path), llm
+
+
+def test_a_closing_dividend_is_read_from_the_closing_filing_with_a_question_of_its_own(tmp_path):
+    ext, llm = _dividend_ext(tmp_path, [{"closing_dividends": [_dividend(1.75)]}])
+    d = ext.closing_dividend(_merger_rec(), security_name="Extended Stay paired shares")
+    assert d == ClosingDividend(1.75, "8-K:C1", "a special dividend of $1.75 per share")
+    assert llm.systems == [DIVIDEND_PROMPT]
+    # the excerpt is the text around the word, not the consideration sentence 4,000 characters before it
+    assert "special dividend of $1.75" in llm.users[0] and "$18.75 in cash" not in llm.users[0]
+    assert "Extended Stay paired shares (ticker AET)" in llm.users[0]
+    assert ext.closing_dividend(_merger_rec()) == d and llm.calls == 1          # the second read is the cache's
+    assert [p.name for p in Path(tmp_path).glob("*.json")] == [f"C1_m1_{DIVIDEND_VERSION}_AET.json"]
+    assert ext.usage() == {"model": "m1", "answers": 2, "from_cache": 0, "asked": 2, "failed": 0}
+
+
+def test_a_closing_filing_that_names_no_dividend_amount_is_never_sent(tmp_path):
+    for text in (_USABLE_TEXT, "The indenture limits the payment of dividends. Each share received $18.75."):
+        ext, llm = _dividend_ext(tmp_path, [], text=text)
+        assert ext.closing_dividend(_merger_rec()) is None and llm.calls == 0
+
+
+def test_a_dividend_whose_amount_ends_its_sentence_is_a_candidate(tmp_path):
+    # Six Flags 2024: the amount comes 230 characters after the word, in the same sentence
+    text = ("Former Six Flags declared a special dividend, payable to holders of record of Former Six Flags Common "
+            "Stock as of the close of business one Business Day prior to the Closing Date, June 28, 2024 who hold "
+            "their shares through the Closing Date, with a per share amount of $1.53")
+    ext, llm = _dividend_ext(tmp_path, [{"closing_dividends": [_dividend(1.53)]}], text=text)
+    assert ext.closing_dividend(_merger_rec()).amount == 1.53 and llm.calls == 1
+
+
+def test_only_the_closing_documents_are_asked_about_a_dividend(tmp_path):
+    ext, llm = _dividend_ext(tmp_path, [], filings=[_announce_8k()])
+    assert ext.closing_dividend(_merger_rec()) is None and llm.calls == 0
+
+
+def test_several_closing_dividends_are_summed_without_those_the_consideration_includes(tmp_path):
+    # Nordstrom 2025: a special dividend and a stub-period dividend; a make-up dividend inside the stated cash
+    answer = {"closing_dividends": [_dividend(0.25, quote="special"), _dividend(0.1462, quote="stub"),
+                                    _dividend(0.07, included=True), _dividend(None)]}
+    ext, _ = _dividend_ext(tmp_path, [answer])
+    assert ext.closing_dividend(_merger_rec()) == ClosingDividend(0.3962, "8-K:C1", "special | stub")
+
+
+def test_an_answer_that_names_no_closing_dividend_is_none_and_the_next_closing_document_is_asked(tmp_path):
+    second = EdgarSubmission(accession="C2", form="8-K", filing_date="2018-11-29", report_date="2018-11-29",
+                             items="3.01,5.01", primary_doc="d.htm")
+    ext, llm = _dividend_ext(tmp_path, [{"closing_dividends": []}, {"closing_dividends": [_dividend(2.0)]}],
+                             filings=[_closing_8k(), second])
+    assert ext.closing_dividend(_merger_rec()).source == "8-K:C2" and llm.calls == 2
+    ext, llm = _dividend_ext(tmp_path / "none", [{"closing_dividends": [_dividend(0.07, included=True)]}])
+    assert ext.closing_dividend(_merger_rec()) is None
+
+
+def test_a_closing_dividend_is_a_mergers_only_and_a_failed_read_is_a_miss(tmp_path):
+    from delist_detection.outputs.degraded import DegradedWatch
+    ext, llm = _dividend_ext(tmp_path, [{"closing_dividends": [_dividend(1.75)]}])
+    assert ext.closing_dividend(_merger_rec(bucket=CrspBucket.LIQUIDATION)) is None
+    assert ext.closing_dividend(_merger_rec(cik=None)) is None and llm.calls == 0
+
+    class _Down:
+        def recent_filings(self, cik):
+            raise requests.ConnectionError("down")
+    assert LLMMergerTermsExtractor(_Down(), llm, model="m1", cache_dir=tmp_path).closing_dividend(_merger_rec()) is None
+
+    failing, llm = _dividend_ext(tmp_path / "f", [], raises=True)
+    watch = DegradedWatch()
+    assert failing.closing_dividend(_merger_rec()) is None and llm.calls == 1
+    assert watch.tripped() and not list((tmp_path / "f").glob("*.json"))         # the row says so; nothing is cached
+
+
+# --------------------------------------------------------------------------- #
+# FB-023: a closing dividend declared in an 8-K before the closing one
+# --------------------------------------------------------------------------- #
+
+_PXP_TEXT = (
+    "On May 20, 2013, PXP's Board of Directors declared a special one-time cash dividend of $3.00 per share, payable "
+    "to PXP stockholders as of May 30, 2013, the dividend record date. The payment of the dividend is conditioned "
+    "upon the completion of the Merger and will be made immediately prior to or upon such completion."
+)
+
+
+def _earlier_8k(accession, filed, items="8.01,9.01", form="8-K"):
+    return EdgarSubmission(accession=accession, form=form, filing_date=filed, report_date=filed, items=items,
+                           primary_doc="d.htm")
+
+
+def _earlier_ext(tmp_path, answers, filings, texts, **kw):
+    llm = _FakeLlm(answers, **kw)
+    return LLMMergerTermsExtractor(_FakeEdgarText(filings, texts), llm, model="m1", cache_dir=tmp_path), llm
+
+
+def test_a_dividend_declared_in_an_earlier_8k_is_read_when_the_closing_filing_names_none(tmp_path):
+    """Plains Exploration 2013: the closing 8-K restates the consideration and no dividend; the 8-K of a week before
+    declares $3.00 a share conditioned on the merger's completion."""
+    filings = [_closing_8k(), _earlier_8k("E1", "2018-11-21"), _earlier_8k("E0", "2018-10-15")]
+    answer = {"closing_dividends": [_dividend(3.0, quote="a special one-time cash dividend")]}
+    ext, llm = _earlier_ext(tmp_path, [answer], filings,
+                            {"C1": _USABLE_TEXT, "E1": _PXP_TEXT, "E0": "Results of operations."})
+    assert ext.closing_dividend(_merger_rec()) is None and llm.calls == 0
+    d = ext.earlier_dividend(_merger_rec(), security_name="Plains Exploration")
+    assert d == ClosingDividend(3.0, "8-K:E1", "a special one-time cash dividend")
+    assert llm.systems == [DIVIDEND_PROMPT] and "Plains Exploration (ticker AET)" in llm.users[0]
+    assert ext.earlier_dividend(_merger_rec()) == d and llm.calls == 1           # the second read is the cache's
+    assert [p.name for p in Path(tmp_path).glob("*.json")] == [f"E1_m1_{DIVIDEND_VERSION}_AET.json"]
+
+
+def test_the_earlier_search_leaves_out_the_closing_documents_and_filings_outside_its_sixty_days(tmp_path):
+    # delisting 2018-11-28: the closing 8-K and one that reports the closing without Item 2.01 are the closing
+    # search's; an 8-K filed 61 days before, one filed after the delisting and another form are not read
+    closing_301 = _earlier_8k("C2", "2018-11-27", items="3.01,5.01")
+    filings = [_closing_8k(), closing_301, _earlier_8k("OLD", "2018-09-28"), _earlier_8k("LATE", "2018-11-29"),
+               _earlier_8k("P1", "2018-11-20", form="425")]
+    texts = {a: _PXP_TEXT for a in ("C1", "C2", "OLD", "LATE", "P1")}
+    ext, llm = _earlier_ext(tmp_path, [{"closing_dividends": [_dividend(3.0)]}], filings, texts)
+    assert ext.earlier_dividend(_merger_rec()) is None and llm.calls == 0
+    edge = [_earlier_8k("EDGE", "2018-09-29"), _earlier_8k("DAY", "2018-11-28")]     # both ends are inside
+    ext, llm = _earlier_ext(tmp_path / "edge", [{"closing_dividends": []}], edge, {"EDGE": _PXP_TEXT, "DAY": _PXP_TEXT})
+    assert ext.earlier_dividend(_merger_rec()) is None and llm.calls == 2
+
+
+def test_the_earlier_8ks_are_asked_newest_first_and_the_first_that_states_a_dividend_answers(tmp_path):
+    filings = [_earlier_8k("E1", "2018-11-01"), _earlier_8k("E3", "2018-11-21"), _earlier_8k("E2", "2018-11-10"),
+               _earlier_8k("QUIET", "2018-11-25")]
+    texts = {"E1": _PXP_TEXT, "E2": _PXP_TEXT, "E3": _PXP_TEXT, "QUIET": "The annual meeting was held."}
+    ext, llm = _earlier_ext(tmp_path, [{"closing_dividends": []}, {"closing_dividends": [_dividend(3.0)]},
+                                       {"closing_dividends": [_dividend(9.0)]}], filings, texts)
+    assert ext.earlier_dividend(_merger_rec()).source == "8-K:E2" and llm.calls == 2   # E3 named none; QUIET unsent
+
+
+def test_the_earlier_search_asks_at_most_max_filings_questions(tmp_path):
+    filings = [_earlier_8k(f"E{i}", f"2018-11-{10 + i:02d}") for i in range(5)]
+    ext, llm = _earlier_ext(tmp_path, [{"closing_dividends": []}], filings, {f"E{i}": _PXP_TEXT for i in range(5)})
+    assert ext.earlier_dividend(_merger_rec()) is None and llm.calls == ext.max_filings == 3
+
+
+def test_an_earlier_dividend_is_a_mergers_only_and_a_failed_read_is_a_miss(tmp_path):
+    from delist_detection.outputs.degraded import DegradedWatch
+    filings, texts = [_earlier_8k("E1", "2018-11-21")], {"E1": _PXP_TEXT}
+    ext, llm = _earlier_ext(tmp_path, [{"closing_dividends": [_dividend(3.0)]}], filings, texts)
+    assert ext.earlier_dividend(_merger_rec(bucket=CrspBucket.LIQUIDATION)) is None
+    assert ext.earlier_dividend(_merger_rec(cik=None)) is None and llm.calls == 0
+
+    class _Down:
+        def recent_filings(self, cik):
+            raise requests.ConnectionError("down")
+    assert LLMMergerTermsExtractor(_Down(), llm, model="m1", cache_dir=tmp_path).earlier_dividend(_merger_rec()) is None
+
+    failing, llm = _earlier_ext(tmp_path / "f", [], filings, texts, raises=True)
+    watch = DegradedWatch()
+    assert failing.earlier_dividend(_merger_rec()) is None and llm.calls == 1
+    assert watch.tripped() and not list((tmp_path / "f").glob("*.json"))         # the row says so; nothing is cached
+
+
+# --------------------------------------------------------------------------- #
+# FB-024: a part of the consideration the library reads and does not value
+# --------------------------------------------------------------------------- #
+
+def _noted(note):
+    return MergerTerms("cash", 22.50, None, None, None, "high", "8-K:X", "", package_basis="fixed",
+                       contingent_note=note)
+
+
+@pytest.mark.parametrize("note", [
+    "One CVR per share: right to a portion of net proceeds, if any, from certain coffee business litigation",  # THS
+    "One non-transferable CVR per share: pro rata share of net proceeds, if any, from sale of FCC license WQJQ707",
+    "One Divested Asset Proceed Right per share: share of 70% of net proceeds from monetizing Village Practice "
+    "Management interests, up to $3.00 per right",                                                             # WBA
+    "Each share also received 0.640 of a warrant to purchase one share of Kinder Morgan Class P common stock",  # EP
+    "Contingent Value Rights (CELGZ) are listed, but their terms are not stated in the excerpt",               # CELG
+    "One contingent value right (CVR) issued by CHS per HMA share",
+    "one Casa Ley CVR and one PDC CVR per share",                                                              # SWY
+    "Holders also receive a contingent payment of up to $2.00 per share upon a milestone",
+])
+def test_a_note_of_a_contingent_right_or_a_warrant_is_a_part_the_library_does_not_value(note):
+    assert _noted(note).unvalued_right
+
+
+@pytest.mark.parametrize("note", [
+    "",
+    "Cash in lieu of fractional shares.",
+    "Cash only in lieu of fractional BioNTech ADSs; the excerpt does not state the exchange ratio.",           # CVAC
+    "Electing holders who keep their shares through the merger also receive one special voting share of CNH "
+    "Industrial per CNH Industrial common share received (no cash value).",
+    "Cash is paid in two parts: about $37.35 per unit distributed after the AA sale to KKR, plus $4.11 in the MH "
+    "merger (replacing $3.83 because closing was after July 1, 2022). The $37.35 is an estimate in the filing.",  # MIC
+    "The excerpt does not state the Disney merger consideration paid for the remaining portion of each 21CF share, "
+    "so it is not included.",
+    "Additional payment to the company of up to $10.0 million if certain conditions are achieved.",            # FNP
+    "None", "No contingent value rights or warrants.", "N/A",
+])
+def test_a_note_that_names_no_right_is_no_unvalued_part(note):
+    assert not _noted(note).unvalued_right
+
+
+# --------------------------------------------------------------------------- #
+# FB-023 follow-up: a closing dividend a filing names without an amount
+# --------------------------------------------------------------------------- #
+
+_STUB = "As previously announced, TWO will pay a stub period dividend to holders of TWO common stock"
+_STUB_TEXT = ("The merger consideration is $12.00 per share in cash. " + _STUB + " in connection with the CCM Merger, "
+              "in addition to the regular dividend of $0.34 declared in June.")
+
+
+def test_a_closing_dividend_named_without_an_amount_is_reported_with_no_amount(tmp_path):
+    """Two Harbors 2026: the 8-K names a stub-period dividend "as previously announced" and no amount per share."""
+    ext, llm = _dividend_ext(tmp_path, [{"closing_dividends": [_dividend(None, quote=_STUB)]}], text=_STUB_TEXT)
+    assert ext.closing_dividend(_merger_rec()) == ClosingDividend(None, "8-K:C1", _STUB)
+    # one the stated consideration includes, or an answer with nothing, names none
+    ext, _ = _dividend_ext(tmp_path / "in", [{"closing_dividends": [_dividend(None, included=True)]}], text=_STUB_TEXT)
+    assert ext.closing_dividend(_merger_rec()) is None
+
+
+def test_a_filing_that_states_the_amount_answers_over_one_that_only_names_the_dividend(tmp_path):
+    second = EdgarSubmission(accession="C2", form="8-K", filing_date="2018-11-29", report_date="2018-11-29",
+                             items="3.01,5.01", primary_doc="d.htm")
+    answers = [{"closing_dividends": [_dividend(None, quote=_STUB)]}, {"closing_dividends": [_dividend(0.45)]}]
+    ext, llm = _dividend_ext(tmp_path, answers, text=_STUB_TEXT, filings=[_closing_8k(), second])
+    got = ext.closing_dividend(_merger_rec())
+    assert (got.amount, got.source) == (0.45, "8-K:C2") and llm.calls == 2
+    # the earlier search keeps looking too, and falls back to the first that only names it
+    filings = [_earlier_8k("E2", "2018-11-21"), _earlier_8k("E1", "2018-11-10")]
+    unstated = [{"closing_dividends": [_dividend(None, quote=_STUB)]}, {"closing_dividends": []}]
+    ext, llm = _earlier_ext(tmp_path / "e", unstated, filings, {"E1": _STUB_TEXT, "E2": _STUB_TEXT})
+    assert ext.earlier_dividend(_merger_rec()) == ClosingDividend(None, "8-K:E2", _STUB) and llm.calls == 2
+
+
+_ATH = ("On December 31, 2021, the Board of Directors of the Company declared a cash dividend of $750 million payable "
+        "to holders of the Company's Class A Common Shares, with a record date and payment date following the "
+        "completion of the Mergers.")
+
+
+@pytest.mark.parametrize("quote", [
+    _ATH,
+    "a dividend of $0.50 per share with a record date after the Effective Time",
+    "a special dividend, with record dates that are subsequent to the closing of the merger",
+])
+def test_a_dividend_whose_record_date_follows_the_merger_is_not_the_old_holders(tmp_path, quote):
+    """FB-023's follow-up (Athene 2022): after the merger the acquirer holds every share, so a dividend with a record
+    date after it is paid to the acquirer. The model reported Athene's against the prompt's rule; the entry names
+    no closing dividend, with or without an amount, so the row gets no doubt on any pass."""
+    for amount in (None, 0.5):
+        ext, _ = _dividend_ext(tmp_path / str(amount), [{"closing_dividends": [_dividend(amount, quote=quote)]}],
+                               text=_STUB_TEXT)
+        assert ext.closing_dividend(_merger_rec()) is None
+
+
+@pytest.mark.parametrize("quote", [
+    _STUB,                                                                       # Two Harbors: no record date named
+    "payable to PXP stockholders as of May 30, 2013, the dividend record date. The payment of the dividend is "
+    "conditioned upon the completion of the Merger and will be made immediately prior to or upon such completion",
+    "a dividend with a record date of May 30, 2013, to be paid after the completion of the merger",
+    "payable to holders of record as of the close of business one Business Day prior to the Closing Date",
+    # code review: "after" something that is not the merger's completion
+    "payable to holders of record as of a record date after receipt of stockholder approval and prior to the "
+    "Effective Time",
+])
+def test_a_record_date_before_the_merger_keeps_the_dividend(tmp_path, quote):
+    ext, _ = _dividend_ext(tmp_path, [{"closing_dividends": [_dividend(None, quote=quote)]}], text=_STUB_TEXT)
+    assert ext.closing_dividend(_merger_rec()) == ClosingDividend(None, "8-K:C1", quote)

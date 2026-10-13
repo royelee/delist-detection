@@ -89,9 +89,17 @@ settle a doubt the rules above would otherwise raise; none changes a table row, 
   when it is an `exchange` ending with no successor (`exchange_without_successor`, FB-003: an unlinked rename), when
   its kind rests only on an NT 10-K/Q in the prior year (`kind_by_filing_history_only`, FB-002), or when it is a
   wind-down whose distributions are not read (`value_pending:distributions`, FB-002: no measured value and no fill,
-  the spec's invariant), or, as a security reason, when an observed security has a FIGI and no issuer CIK
+  the spec's invariant) or a merger whose terms nothing states (`value_pending:terms`, FB-016: the same, where it
+  was a par fill on a confirmed row), or when it is a merger whose terms note a contingent value right, a warrant
+  or another contingent part beside what was valued (`value_incomplete:contingent_right`, FB-024: the row keeps its
+  terms and its `dlret`, the value of the valued part) or a merger valued more than 1% under its last close whose
+  filings name a closing dividend and state no amount (`value_incomplete:closing_dividend`, FB-023's follow-up: Two
+  Harbors 2026), or, as a security reason, when an observed security has a
+  FIGI and no issuer CIK
   (`issuer_unresolved`, FB-006: its seeds and endings are uncertain, so a blank `issuer_id` never rides on a
-  confirmed seed; an acquirer the run adds is no claim and is left alone).
+  confirmed seed; an acquirer the run adds is no claim and is left alone), or when an observed security's open
+  interval carries an OTC bankruptcy symbol, five letters ending in Q (`open_under_bankruptcy_ticker:<ticker>`,
+  FB-014: SandRidge's old stock stayed open under SDOCQ with no ending; it left its exchange and nothing says how).
 
 `uncertain_rows` is uncertain.csv: every uncertain security and ending, and
 every seed uncertain for a reason of its own; a seed whose only problem is
@@ -109,12 +117,14 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 
-from ..vocabulary.exit_kind import (CONFLICT, EXCHANGE_PRINTS, GATE_FLAGS, MEASURED, PAYOUT_GATE_FAILED,
-                                    TERMS_GATE_SKIPPED, ContinuationReading, cites_form25, effective_of, end_day_of,
-                                    ending_fields, flag_detail, flag_name, flag_names, flag_tokens, is_continuation,
-                                    is_real_ending, last_endings, linked_by_timing, merger_relabel,
-                                    names_successor_registration, of_row, resolved_from_continued_filings,
-                                    rests_on_continued_filings, rests_on_delinquency)
+from ..vocabulary.exit_kind import (CLOSING_DIVIDEND_UNSTATED, CONFLICT, CONTINGENT_RIGHT_UNVALUED, EXCHANGE_PRINTS,
+                                    GATE_FLAGS, MEASURED, PAYOUT_GATE_FAILED, TERMS_GATE_SKIPPED,
+                                    ContinuationReading, cites_form25,
+                                    effective_of, end_day_of, ending_fields, flag_detail, flag_name, flag_names,
+                                    flag_tokens, is_continuation, is_real_ending, last_endings, linked_by_timing,
+                                    merger_relabel, names_successor_registration, of_row,
+                                    resolved_from_continued_filings, rests_on_continued_filings,
+                                    rests_on_delinquency)
 from .dlret import DlretMethod
 from .run_snapshot import RunSnapshot
 
@@ -272,6 +282,15 @@ def _closed_without_ending(security: Mapping[str, str], intervals: Sequence[Mapp
     return f"closed_no_event:{max(r['valid_to'] for r in intervals)}"
 
 
+def _open_under_bankruptcy_ticker(security: Mapping[str, str], intervals: Sequence[Mapping[str, str]]) -> list[str]:
+    """G (FB-014): `open_under_bankruptcy_ticker:<ticker>` for each open interval of an observed security whose
+    ticker is an OTC bankruptcy symbol (five letters ending in Q)."""
+    if security.get("observed") != "true":
+        return []
+    return [f"open_under_bankruptcy_ticker:{t}" for t in sorted({r["ticker"] for r in intervals if not r["valid_to"]})
+            if len(t) == 5 and t.endswith("Q") and t.isalpha()]
+
+
 # -- the verdicts ---------------------------------------------------------------------------------------------------
 def _security_verdicts(tables: RunSnapshot, evidence: Mapping[str, str],
                        settled: Mapping[str, tuple[Mapping[str, str], bool]] | None = None) -> dict[str, Verdict]:
@@ -315,6 +334,7 @@ def _security_verdicts(tables: RunSnapshot, evidence: Mapping[str, str],
         reasons += [f"ticker_overlap:{ticker}" for ticker in sorted(set(overlaps[sid].values()))]
         if closed := _closed_without_ending(s, intervals[sid], endings[sid]):
             reasons.append(closed)
+        reasons += _open_under_bankruptcy_ticker(s, intervals[sid])
         out[sid] = Verdict(tuple(reasons), tuple(sorted(overlaps[sid])))
     return out
 
@@ -350,11 +370,17 @@ def _own_reasons(row: Mapping[str, str], issuer_cik: str = "", reading: Continua
         reasons.append("assumed_par_after_failed_gate")
     if row["dlret_method"] == DlretMethod.PENDING_RECOVERY.value:   # G
         reasons.append("value_pending:distributions")
+    if row["dlret_method"] == DlretMethod.PENDING_TERMS.value:      # FB-016
+        reasons.append("value_pending:terms")
+    if CONTINGENT_RIGHT_UNVALUED in flags and not is_continuation(row):     # FB-024
+        reasons.append("value_incomplete:contingent_right")
+    if CLOSING_DIVIDEND_UNSTATED in flags and not is_continuation(row):     # FB-023's follow-up
+        reasons.append("value_incomplete:closing_dividend")
     if is_continuation(row):
         if linked_by_timing(row["reason"]) and not confirmed:
             reasons.append("continuation_by_timing_only")
         return reasons
-    # the row's last trade read back (`exit_kind.of_row`): each part of `LastTrade.publishable` that fails is a
+    # the row's last trade read back (`exit_kind.of_row`): each part of `LastTrade.print_confirmed` that fails is a
     # reason of its own
     lt = of_row(row)
     if lt.day is None:
