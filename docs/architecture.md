@@ -206,7 +206,13 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
 - `sources/edgar.py` — throttled, on-disk-cached SEC client. `submissions()`,
   `recent_filings()`, `fetch_filing_text()`/`fetch_filing_raw()` (HTML-stripped
   and raw text caches), `company_tickers()`, and `full_text_search()`, the optional capability
-  `capabilities.FULL_TEXT_SEARCH`, which this adapter offers. Owns `EdgarBlocked`, `resolve_user_agent()`, and
+  `capabilities.FULL_TEXT_SEARCH`, which this adapter offers. `recent_filings()` reads the main file's recent block
+  and then each older page, each filing once. EDGAR moves the oldest rows of the recent block into the first page
+  as the issuer files, so a page cached before the main file was fetched again lacks the rows that moved since
+  (FB-025: new Cigna's 8-K12B of 2018-12-20 was in neither copy, and its handoff fell to timing). A cached page is
+  read as it is only when it was checked against the listing the main file gives for it now (`LISTED_KEY`: row
+  count, first and last date), or, never checked, when it is the oldest page and has the listed row count; any
+  other copy is fetched again, once per listing (`_older_page`). Owns `EdgarBlocked`, `resolve_user_agent()`, and
   `sec_get()`: the one SEC request path (`sec_limiter.throttle`, User-Agent,
   `sec_stats` counting, `retry_request`, `EdgarBlocked` on 403/429) that
   `EdgarClient` and `sources/sec_http.py` share.

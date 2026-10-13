@@ -61,6 +61,9 @@ FETCHED_KEY = "__fetched__"
 # Marks a payload served from cache because the refetch failed. Added to the
 # returned dict only, never written to disk.
 STALE_KEY = "__stale__"
+# On a cached older page of a filing list: its listing in the main file (row count, first and last date) when the
+# page was last checked against it (`EdgarClient._older_page`)
+LISTED_KEY = "__listed__"
 SUBMISSIONS_FRESH_DAYS = 45  # filings this long after the last trade must be in the submissions read
 COMPANY_SEARCH_FRESH_DAYS = 7  # a company-search answer this old is refetched, never trusted forever
 # The forms of the recent filings an --as-of run's submissions copy left out, dated after the run date
@@ -761,10 +764,37 @@ class EdgarClient:
             return []
         out = _submissions_of(sub.get("filings", {}).get("recent", {}))
         # also pull historical files (paginated chunks of older filings)
-        for fchunk in sub.get("filings", {}).get("files", []):
-            url = f"{SEC_HOST}/submissions/{fchunk['name']}"
-            data = self._get_json(url)
+        files = sub.get("filings", {}).get("files", [])
+        for i, fchunk in enumerate(files):
+            out += _submissions_of(self._older_page(fchunk, oldest=i == len(files) - 1))
+        # a main file older than a page still lists the rows that have since moved into the page: each filing once
+        seen: set[str] = set()
+        return [f for f in out if not (f.accession in seen or seen.add(f.accession))]
+
+    def _older_page(self, listed: dict, *, oldest: bool) -> dict:
+        """One older page of a filing list, as the main file lists it (`listed`: its name, row count, first and last
+        date); {} when EDGAR has none. EDGAR moves the oldest rows of the main file's recent block into the first
+        page as the issuer files, and that page hands its own oldest rows on. So a page cached before the main file
+        was fetched again lacks the rows that moved since, and they are in neither copy (new Cigna's 8-K12B of
+        2018-12-20: FB-025). A cached page is current when it was checked against this same listing (`LISTED_KEY`),
+        or, never checked, when it is the oldest page, which only takes rows in, and has the listed row count. Any
+        other copy is fetched again, once per listing. A fetch that fails serves the cached copy as a stale one
+        (`_get_json`), unchecked, so the next read asks again. A prefetch thread reads the cached copy as it is."""
+        url = f"{SEC_HOST}/submissions/{listed['name']}"
+        data = self._get_json(url)
+        if not isinstance(data, dict) or data.get("__not_found__"):
+            return {}
+        now = [listed.get("filingCount"), listed.get("filingFrom"), listed.get("filingTo")]
+        if now[0] is None or filling_only() or data.get(LISTED_KEY) == now:
+            return data
+        whole = LISTED_KEY not in data and oldest and len(data.get("accessionNumber", [])) == now[0]
+        if not whole:
+            data = self._get_json(url, fresh_after=date.max)      # no copy is that fresh: fetched, else served stale
             if not isinstance(data, dict) or data.get("__not_found__"):
-                continue
-            out += _submissions_of(data)
-        return out
+                return {}
+            if data.get(STALE_KEY):
+                return data
+        cp = self._cache_path(url)
+        with self._lock_for(str(cp)):
+            write_atomic(cp, json.dumps({**data, LISTED_KEY: now}))
+        return data
