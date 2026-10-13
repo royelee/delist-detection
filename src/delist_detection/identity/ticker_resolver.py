@@ -257,7 +257,7 @@ class TickerResolver:
         return False
 
     def _still_named(self, memo: TickerResolution, ticker: str, observed_date: str | None,
-                     observed_name: str | None) -> bool:
+                     observed_name: str | None, exclude: Collection[int] = ()) -> bool:
         """Whether a remembered answer still stands. A name-tier answer (`name_search`) stands only while it agrees
         with the tier's first rule, which the index makes deterministic: the one active holder of exactly the
         expected name (`_exact_holder`) is the company. An answer the retired live company search remembered against
@@ -265,7 +265,13 @@ class TickerResolver:
         Group LLC, CIK 1355001, whose name agrees once HOLDINGS and GROUP are left out; the one active holder of
         REALOGY HOLDINGS CORP is CIK 1398987, today's Anywhere Real Estate Inc., which lists the security). Without
         an index, with no exact holder or several, or when the holder could not be read, the remembered answer
-        stands; so does every other tier's."""
+        stands; so does every other tier's.
+
+        And while it agrees with the tier's ranking rule (FB-026): an answer whose company EDGAR does not name with
+        exactly the expected name's words (`_same_words`) is resolved again when the tier now ranks first a company
+        it does name so (BUNGE LIMITED, kept as Bunge Limited Finance Corp before the rule that ranks BUNGE LTD
+        first). Any other remembered answer is one the ranking cannot change, so this asks the tier for few of them
+        and searches nothing."""
         index = self._index()
         if memo.source != "name_search" or index is None:
             return True
@@ -274,7 +280,14 @@ class TickerResolver:
             return True
         self._reset()
         holder = self._exact_holder(index, expected, observed_date)
-        return holder is None or holder == memo.cik or self._rested_on_failure()
+        if holder is not None:
+            return holder == memo.cik or self._rested_on_failure()
+        if memo.cik is None or self._same_words(memo.cik, expected, observed_date):
+            return True
+        ranked = self._name_search(observed_date, expected, exclude)
+        first = ranked[0][0] if ranked else None
+        return first is None or first == memo.cik or not self._same_words(first, expected, observed_date) \
+            or self._rested_on_failure()
 
     def _exact_holder(self, index: CikNameIndex, nm: str, observed_date: str | None) -> int | None:
         """The one CIK whose name is exactly `nm` (as the index compares names) and that filed within
@@ -939,7 +952,7 @@ class TickerResolver:
         memo = self._memo.get(cache_key)
         if memo is not None and self._memo_observed.get(cache_key) == observed_name and \
                 (memo.cik is None or memo.source in _GIVEN_SOURCES or self.issuers.existed_by(memo.cik, since)) and \
-                self._still_named(memo, t, observed_date, observed_name):
+                self._still_named(memo, t, observed_date, observed_name, exclude):
             # A rename built on this answer inherits whether it rests on a failed request.
             self._reset(cache_key in self._degraded)
             return memo

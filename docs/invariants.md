@@ -595,7 +595,12 @@
   listed Anywhere Real Estate Inc.). Of several active holders that carried the name in the years before the date,
   `_exact_holder` takes the one that carried it within 30 days of it (`_one_filer`'s narrowing: Alberto-Culver, ACV
   2010, is the 2006 spin-off, CIK 1368457, not the old registrant renamed New Alberto-Culver LLC, 3327). With no
-  index, no exact holder or several, the remembered answer stands.
+  index the remembered answer stands. With no exact holder or several it stands while it agrees with the tier's
+  ranking rule (FB-026): an answer whose company EDGAR does not name with exactly the expected name's words is
+  resolved again when the tier now ranks first a company it does name so (`BG|2009-02-19|BUNGE LIMITED`, kept as
+  Bunge Limited Finance Corp, 1230396, becomes Bunge Ltd, 1144519). So a change to the ranking takes effect on
+  a warm cache with no new `__version__`, and only the answers it can change are asked again: 107 of the 1,404
+  name-search answers kept for the consumer's seed list, of which two changed, both Bunge's.
 
 ## A merger payout is gated; `delistings.csv` carries both the gated and the raw read
 
