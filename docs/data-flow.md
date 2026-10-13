@@ -895,7 +895,9 @@ ticker and another starting under it within days (CONTEXT.md).
    at 4.25 shares, IGT for cash and stock), or whose payout reconciled
    against timing evidence alone, a
    liquidation/compliance failure/expiration, or a row naming another
-   successor: those stand, with a `handoff_conflict` row. A continuation drops
+   successor: those stand, with a `handoff_conflict` row (and, for a merger on timing
+   whose successor has no issuer, the flag `handoff_unchecked:<successor>`, which makes
+   the ending `uncertain`: nothing could check the handoff, FB-027). A continuation drops
    A's `ended_without_delisting`, the ambiguous Form 25 rows of A and B it
    rests on, and the pair's `ticker_shared` rows. A takeover sets
    `ticker_successor_sec_id` = B on A's delisting nearest the handoff, else

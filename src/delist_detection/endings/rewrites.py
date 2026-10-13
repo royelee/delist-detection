@@ -31,7 +31,8 @@ from enum import Enum
 from typing import TYPE_CHECKING, Protocol
 
 from ..vocabulary.crsp_codes import CONTINUATION_CODE, CrspBucket, bucket_for_code
-from ..vocabulary.exit_kind import CLOSING_DIVIDEND_UNSTATED, CONTINGENT_RIGHT_UNVALUED, GATE_FLAGS, flag_name
+from ..vocabulary.exit_kind import (CLOSING_DIVIDEND_UNSTATED, CONTINGENT_RIGHT_UNVALUED, GATE_FLAGS,
+                                    HANDOFF_UNCHECKED, flag_name)
 
 if TYPE_CHECKING:
     from .delistings import Delisting
@@ -45,6 +46,9 @@ NO_EVIDENCE_DEFAULT = "no_evidence_default"
 # continuation has no value, so it carries none of them. Matched by flag name (`payout_gate_failed:87.69`).
 PAYOUT_FLAGS = GATE_FLAGS | {"llm_election_package", "election_no_default", "merger_at_par", "acquirer_close_lagged",
                              CONTINGENT_RIGHT_UNVALUED, CLOSING_DIVIDEND_UNSTATED}
+# The doubts of a merger row that a continuation does not carry: its value's (`PAYOUT_FLAGS`), and the handoff nobody
+# could check that it stood against (FB-027)
+MERGER_FLAGS = PAYOUT_FLAGS | {HANDOFF_UNCHECKED}
 # The flags a continuation rule leaves on the row it made (published in review_flags).
 R1_CONTINUATION, LINE_CONTINUATION = "r1_continuation", "line_continuation"
 HANDOFF_CONTINUATION = "handoff_continuation"
@@ -114,7 +118,7 @@ def continuation(d: Delisting, successor: str, rule: Rule, *, reason: str | None
         rec.reason = reason
     rec.successor_sec_id = successor
     kept = [f for f in d.flags if f not in (NO_EVIDENCE_DEFAULT, SUCCESSOR_UNKNOWN)
-            and flag_name(f) not in PAYOUT_FLAGS]
+            and flag_name(f) not in MERGER_FLAGS]
     if flag is not None and flag not in kept:
         kept.append(flag)
     rec.evidence["flags"] = kept

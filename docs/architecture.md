@@ -183,7 +183,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   - The last trade's sources, flags and facts (`LastTrade`, `end_day`, `effective_date`, `cites_form25`, and over a
     row `of_row`, `effective_of`, `published`, `end_day_of`; endings/last_trade.py's module entry) and stage 9g's answer,
     `ContinuationReading` (the verdict's input beside the tables).
-- `vocabulary/names.py` — issuer-name tokens and agreement, a leaf (FB-006: `names_agree` and `description_names` share
+- `vocabulary/names.py` — issuer-name tokens and agreement, a leaf (FB-027: `written_out`, two names that are one
+  name word for word, each word the same or one side's written short, no word left out: stricter than
+  `names_agree`, for a lookup that has only the name to go on; FB-006: `names_agree` and `description_names` share
   one word equivalence, `_word_matches`: plural S, in-order abbreviation or truncation of at least four letters on
   either side (never the only word shared), the vendor's `_VENDOR_ABBREVIATIONS` (PPTYS), run-together words; a name
   with no word of three letters compares as one string, `2U INC` and `2U, Inc.`; FB-009: letters and digits run
@@ -331,7 +333,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   client's text cache and Form 25 parsing.
 - `sources/cik_lookup.py` — SEC's company-name index, `cik-lookup-data.txt`, as a local name -> CIK search:
   `CikLookupClient` (the download, cached 30 days under `cache/sec_data/cik_lookup/`) and `CikNameIndex` (exact, then
-  character-prefix matches, and `containing`, the entries holding a whole word, FB-004 part c); the ticker resolver's
+  character-prefix matches, `containing`, the entries holding a whole word, FB-004 part c, and `beginning`, the
+  entries whose name begins with a whole word, an apostrophe aside, FB-027); the ticker resolver's
   name tier and the acquirer ticker read it (the ticker resolver's entry has the rules).
 - `sources/llm_client.py` — the injectable LLM client for JSON extraction: an adapter has `extract(system, user, schema) ->
   dict` and states its `model`; `OpenAIJsonClient` is the one provided, `default_llm_client` builds it from the repo
@@ -727,7 +730,14 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   the others made): the one issuer of the other eras holding a CUSIP of the era's issuer code (its first six
   characters) over the same dates, when it had filed by the era's first sighting; no name check, the code is the
   evidence (FNFV Group, a tracking stock, on Fidelity National Financial's 31620R105; UHALB on U-Haul Holding);
-  eras of two issuers or none give nothing. Rule C also runs over first-pass answers:
+  eras of two issuers or none give nothing. Rule E (FB-027, `successor_registrant`, last, for a derived era the
+  rules above left with no issuer): the company SEC's name list holds under the era's own name written out word
+  for word (`names.written_out`, among the entries beginning with the name's first word,
+  `CikNameIndex.beginning`) that filed an 8-K12B or 8-K12G3 within `line_follow.FILING_DAYS` of the step's first
+  day, through guard G. The fails files write EXXONMOBIL HLDGS CORPORATION and AARONS HLDGS CO INC where the list
+  has EXXONMOBIL HOLDINGS CORP and AARON'S HOLDINGS COMPANY, INC., and the resolver asks the list by exact name
+  and by prefix, so the line after Exxon Mobil's and Aaron's holding-company reorganizations had no issuer. The
+  name alone is never taken, and the resolver and its kept answers are not changed. Rule C also runs over first-pass answers:
   where the CUSIP evidence points elsewhere, the first pass's answer stands
   and the check flag `issuer_cusip_disagrees` names both CIKs. Sub-plan 5h: `check_names` (stage 2b, never
   saved): a first-pass name-search answer is replaced by the one other CIK SEC's name index lists under exactly the
@@ -1089,7 +1099,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   before), `apply_handoffs` (a continuation's missing `exchange_transfer` row
   or its successor, `handoff_continuation`/`handoff_rebucketed`/
   `handoff_conflict`; a takeover's `ticker_successor_sec_id` or
-  `handoff_takeover_no_delisting`; a rule-6 merger, sub-plan 5f, stands as a `handoff_conflict`; every continuation,
+  `handoff_takeover_no_delisting`; a rule-6 merger, sub-plan 5f, stands as a `handoff_conflict`; a merger that
+  stands on timing between two issuers against a successor with no issuer carries `handoff_unchecked:<successor>`,
+  FB-027, which the verdict reads; every continuation,
   the row it writes included, is `rewrites.continuation` with `Rule.HANDOFF`, a rewritten merger's value dropped from
   `payouts=`; the ambiguous Form 25 is the finder's item's typed `filing`),
   `drop_resolved_shared`. Run by

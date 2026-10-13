@@ -30,7 +30,8 @@ from ..vocabulary.crsp_codes import CrspBucket
 from .delistings import Delisting
 from ..sources.edgar import EdgarSubmission
 from ..filings.evidence import names_near
-from ..vocabulary.exit_kind import SUCCESSOR_FORMS, TIMING_CIK, TIMING_CUSIP, continuation_reason, successor_note
+from ..vocabulary.exit_kind import (HANDOFF_UNCHECKED, SUCCESSOR_FORMS, TIMING_CIK, TIMING_CUSIP,
+                                    continuation_reason, successor_note)
 from ..filings.filing_search import successor_query
 from ..sources.ftd import FtdIndex, FtdRow
 from ..identity.carried_price import CARRIED_PRICE, price_carried
@@ -380,7 +381,9 @@ def apply_handoffs(decisions: Sequence[HandoffDecision], delistings: Sequence[De
       between two issuers (`timing:cusip`), or whose payout was reconciled
       (`reconciled`, by delisting key) on timing evidence alone, or that spec 5c's rule 6 made (sub-plan 5f: its
       own-share statement gives another ratio, `end_of_era` `successor_merger`), which stands,
-      with a `handoff_conflict` item; a rewritten merger keeps its
+      with a `handoff_conflict` item, and with the flag `handoff_unchecked:<B>` when it stands on timing between two
+      issuers and B has no issuer (FB-027: no filing of B's could be looked for, and the verdict holds the row
+      uncertain); a rewritten merger keeps its
       old bucket in a `handoff_rebucketed` item. A row that ended A in
       another way (a liquidation, a compliance failure, an expiration), or that
       already names another successor or itself, stands too, with a
@@ -445,6 +448,13 @@ def apply_handoffs(decisions: Sequence[HandoffDecision], delistings: Sequence[De
                 # shares, IGT into IGT PLC for cash and stock): only a filing says
                 # the holders' shares carried over one for one.
                 conflict = "its merger row says holders were paid, and only timing across two issuers says otherwise"
+                successor = securities.get(p.b)
+                if successor is not None and successor.issuer_cik is None:
+                    # FB-027 (Exxon Mobil 2026, Aaron's 2020): with no issuer there was no filing list to look for
+                    # a successor registration in, so nothing checked the handoff: the row stands and says so
+                    d.add_flag(f"{HANDOFF_UNCHECKED}:{p.b}")
+                    conflict += (f"; {p.b} has no issuer, so the handoff could not be checked against a successor "
+                                 f"registration")
             elif bucket is CrspBucket.MERGER and not decision.by_filing and d.key in reconciled:
                 conflict = "its merger row has a reconciled payout and only timing says otherwise"
             elif bucket is CrspBucket.MERGER and (d.record.evidence or {}).get("end_of_era") == "successor_merger":

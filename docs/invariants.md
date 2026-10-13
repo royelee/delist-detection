@@ -281,7 +281,10 @@
   another contingent payment beside the package, flagged `contingent_right_unvalued` by stage 8; the row keeps its
   terms and its `dlret`, which is the value of the valued part, and a `--merger-terms` row takes no such doubt).
   Ruling G (upstream feedback) adds `no_history`,
-  `history_after_last_trade`, `exchange_without_successor` and `kind_by_filing_history_only`, and two security
+  `history_after_last_trade`, `exchange_without_successor` and `kind_by_filing_history_only`; FB-027 adds
+  `handoff_unchecked:<successor>` (a merger left standing against a handoff found by timing whose successor has
+  no issuer, so no filing of the successor's could be looked for; with a known issuer and no successor
+  registration found, the row keeps its verdict); and two security
   reasons, `issuer_unresolved` (FB-006: an observed security with a FIGI and no issuer CIK) and
   `open_under_bankruptcy_ticker` (FB-014: an observed security open under a five-letter ticker ending in Q). A seed whose
   only problem is its security is counted, not listed. Pipeline stages 10e

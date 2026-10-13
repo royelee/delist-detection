@@ -86,6 +86,34 @@ def _run(name: str) -> str:
     return "".join(p for p in parts if p not in _STOP and p != "CO")
 
 
+def plain_words(name: str) -> list[str]:
+    """A name's words in order, each its letters and digits: upper case, an apostrophe and a period dropped (AARON'S
+    is AARONS, N.V. is NV), EDGAR's state tag left out (\\DE\\, /DE/). Nothing else is left out."""
+    text = re.sub(r"['’.]", "", (name or "").upper())
+    text = re.sub(r"\s*[\\/][A-Z]{2}[\\/]?\s*$", "", text)
+    return re.findall(r"[A-Z0-9]+", text)
+
+
+def written_out(a: str, b: str) -> bool:
+    """Whether two names are one name word for word (`plain_words`), in order: as many words, the first one the same,
+    and each other one the same or one side's written short (`_abbreviates`, or the vendor's own abbreviation; the
+    short word has two letters or more): the fails files write HLDGS for HOLDINGS, CO for COMPANY and CORPORATION
+    where SEC's name list has CORP. No word is left out, so a name with a word more or less is another company:
+    EXXONMOBIL HLDGS CORPORATION is EXXONMOBIL HOLDINGS CORP and not EXXONMOBIL CORP, AARONS HLDGS CO INC is AARON'S
+    HOLDINGS COMPANY, INC. and not AARON'S COMPANY, INC., and BUNGE LIMITED is not BUNGE LIMITED FINANCE CORP
+    (FB-027). Stricter than `names_agree` and than `same_letters`, which leave the company-form words out."""
+    wa, wb = plain_words(a), plain_words(b)
+    if not wa or len(wa) != len(wb) or wa[0] != wb[0]:
+        return False
+
+    def one_word(x: str, y: str) -> bool:
+        if x == y or _VENDOR_ABBREVIATIONS.get(x) == y or _VENDOR_ABBREVIATIONS.get(y) == x:
+            return True
+        return min(len(x), len(y)) >= 2 and (_abbreviates(x, y) or _abbreviates(y, x))
+
+    return all(one_word(x, y) for x, y in zip(wa[1:], wb[1:]))
+
+
 # The vendor's abbreviations that are not a word's letters in order (PPTYS has a Y PROPERTIES lacks).
 _VENDOR_ABBREVIATIONS = {"PPTY": "PROPERTY", "PPTYS": "PROPERTIES", "PRPTY": "PROPERTY", "PRPTYS": "PROPERTIES"}
 

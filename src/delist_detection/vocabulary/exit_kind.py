@@ -133,6 +133,10 @@ GATE_FLAGS = frozenset({PAYOUT_GATE_FAILED, LLM_GATE_FAILED, TERMS_GATE_FAILED, 
 CONTINGENT_RIGHT_UNVALUED = "contingent_right_unvalued"
 # FB-023's follow-up: a merger valued under its last close whose filings name a closing dividend and state no amount
 CLOSING_DIVIDEND_UNSTATED = "closing_dividend_unstated"
+# FB-027: a merger row that stands against a handoff by timing whose successor has no issuer, so no filing of the
+# successor's could be looked for (`handoff_unchecked:<the successor's sec_id>`): the handoff stage writes it, the
+# verdict reads it, a continuation drops it
+HANDOFF_UNCHECKED = "handoff_unchecked"
 
 
 def flag_tokens(row: Mapping[str, object]) -> list[str]:

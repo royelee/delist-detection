@@ -100,6 +100,23 @@ class CikNameIndex:
                 out.append(NameHit(cik, name))
         return out
 
+    def beginning(self, word: str) -> list[NameHit]:
+        """The entries whose name begins with the whole word `word` (as the index compares names), in the index's
+        order. A word the index wrote with an apostrophe is two words there (AARON'S is AARON S), so a word ending
+        in S finds those too: AARONS finds AARON'S HOLDINGS COMPANY, INC. and not AARON SCOTT."""
+        w = normalize_name(word)
+        if not w:
+            return []
+        out: list[NameHit] = []
+        for q in dict.fromkeys((w, *([f"{w[:-1]} S"] if len(w) > 3 and w.endswith("S") else []))):
+            for i in range(bisect_left(self._keys, q), len(self._entries)):
+                key, cik, name = self._entries[i]
+                if not key.startswith(q):
+                    break
+                if len(key) == len(q) or key[len(q)] == " ":
+                    out.append(NameHit(cik, name))
+        return out
+
     def search(self, query: str) -> list[NameHit]:
         """`split_search`'s exact matches, then its prefix matches."""
         exact, prefix = self.split_search(query)

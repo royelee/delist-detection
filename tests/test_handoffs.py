@@ -477,6 +477,28 @@ def test_a_merger_row_stands_against_a_cusip_switch_between_two_issuers():
     assert [i.flag for i in out.review] == ["handoff_rebucketed"]
 
 
+def test_a_merger_row_that_stands_against_a_successor_with_no_issuer_is_flagged_unchecked():
+    """FB-027 (consensus of 2026-10-13): Exxon Mobil 2026 and Aaron's 2020. The new line had no issuer, so the stage
+    had no filing list to look for a successor registration in, decided the pair by timing and left the merger
+    standing, `confirmed`. A merger that stands against a handoff nobody could check carries
+    `handoff_unchecked:<the successor>`, which the verdict reads. Where the successor's issuer is known and no
+    registration was found, the row carries nothing (IGT 2015)."""
+    def run(successor):
+        row = _delisting("OLD", "2026-07-12", CrspBucket.MERGER, "2026-06-30", ticker="XOM")
+        p = HandoffPair("XOM", "OLD", "NEW", "2026-06-30", "2026-07-02", "2026-07-02", "2026-06-30")
+        out = apply_handoffs([HandoffDecision(p, "continuation", "timing:cusip", False)], [row],
+                             {"OLD": _sec("OLD"), "NEW": successor}, [])
+        assert row.record.bucket is CrspBucket.MERGER and row.record.successor_sec_id is None
+        (item,) = out.review
+        return row.flags, item.flag, item.reason
+
+    flags, flag, reason = run(Security("NEW", None, "COMMON", "EXXONMOBIL HLDGS CORPORATION", "Common Stock", True, "cusip"))
+    assert flags == ["handoff_unchecked:NEW"] and flag == "handoff_conflict"
+    assert "NEW has no issuer" in reason and "could not be checked" in reason
+    flags, flag, reason = run(_sec("NEW", cik=1))
+    assert flags == [] and flag == "handoff_conflict" and "no issuer" not in reason
+
+
 def test_a_row_that_stands_against_the_handoff_keeps_its_kind_and_not_a_day_on_the_takers_first_day():
     """FB-022 (old Charter 2016): a merger by rule 6 stands against New Charter's continuation, but its closing day
     worked out from the filings, 05-18, is the day New Charter first traded as CHTR: the last trade is 05-17. A
