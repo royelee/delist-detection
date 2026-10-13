@@ -453,3 +453,23 @@ def test_a_single_word_name_has_no_stem():
     idx = _index("ACMEWIDGETS INC:0000000001:", *(f"{n[0]}:{c:010d}:" for c, n in others.items()))
     r = TickerResolver(_Edgar({**others, **dict([ok])}), name_index=idx)
     assert r._index_candidates(idx, "ACMEWIDGS", "2012-06-29") == {}
+
+
+def _bunge(date_):
+    ltd = (1144519, ("BUNGE LTD", [], [_f("L0", "10-K", "2008-03-03"), _f("L1", "10-Q", "2008-11-10"),
+                                       _f("L2", "10-K", "2023-02-24"), _f("L3", "25-NSE", "2023-11-01")]))
+    fin = (1230396, ("BUNGE LIMITED FINANCE CORP", [], [_f("F1", "424B2", "2009-01-05"), _f("F2", "8-K", "2009-02-10"),
+                                                        _f("F3", "8-K", "2023-10-20")]))
+    e = _Edgar(dict([ltd, fin]))
+    idx = _index("BUNGE LIMITED FINANCE CORP:0001230396:", "BUNGE LTD:0001144519:")
+    r = TickerResolver(e, observed_names=lambda t, d=None: "BUNGE LIMITED", name_index=idx)
+    return r.resolve("BG", date_)
+
+
+@pytest.mark.parametrize("day", ["2009-02-19", "2023-11-01"])
+def test_a_company_named_with_the_words_of_the_observed_name_ranks_before_one_with_more_words(day):
+    """Bunge (BG, FB-026): the seed's "BUNGE LIMITED" shares its one word with BUNGE LTD (1144519), the listed
+    company, and with BUNGE LIMITED FINANCE CORP (1230396), a finance subsidiary whose index entry the observed name
+    is a prefix of. The subsidiary won the tie, by its filing dates in 2009 and by the order found in 2023."""
+    res = _bunge(day)
+    assert (res.cik, res.source) == (1144519, "name_search")

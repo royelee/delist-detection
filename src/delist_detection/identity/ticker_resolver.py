@@ -743,7 +743,11 @@ class TickerResolver:
         found = {c: v for c, v in found.items() if c not in exclude}
         order = list(found)
         fit = {c: self._edgar_name_fit(c, nm, observed_date) for c in order}
-        ranked = sorted(order, key=lambda c: (-fit[c][0], found[c][1], order.index(c)))
+        # Among candidates that share as many words, one that EDGAR names with the observed name's words and no
+        # others comes first: "BUNGE LIMITED" is BUNGE LTD, not BUNGE LIMITED FINANCE CORP, which shares the one
+        # word too, files more often and was found first (FB-026)
+        same = {c: self._same_words(c, nm, observed_date) for c in order}
+        ranked = sorted(order, key=lambda c: (-fit[c][0], not same[c], found[c][1], order.index(c)))
         # The best candidate is checked as it always was; one below it only when
         # EDGAR records a name for it that agrees with `nm`: Keurig Green Mountain
         # shares KEURIG with KEURIG DR PEPPER INC, and its 2016 Form 25 alone
@@ -761,6 +765,12 @@ class TickerResolver:
         for n in names:
             candidate_tokens |= name_tokens(n)
         return len(candidate_tokens & name_tokens(expected)), any(names_agree(n, expected) for n in names)
+
+    def _same_words(self, cik: int, expected: str, observed_date: str | None = None) -> bool:
+        """Whether one of the CIK's EDGAR names (current and former) has the expected name's `names.name_tokens`
+        words and no others; False for a name with no such word."""
+        want = name_tokens(expected)
+        return bool(want) and any(name_tokens(n) == want for n in self.issuers.names(cik, about=observed_date))
 
     def _name_match_score(self, cik: int, ticker_name: str, observed_date: str | None = None) -> int:
         """Token-overlap score between the expected name and the CIK's EDGAR names
