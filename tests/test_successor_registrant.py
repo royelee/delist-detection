@@ -5,10 +5,13 @@ INC, the name list has EXXONMOBIL HOLDINGS CORP and AARON'S HOLDINGS COMPANY, IN
 prefix finds neither."""
 from __future__ import annotations
 
+from datetime import date
+
 import pytest
 
 from delist_detection.identity.identity import EraIssuers, last_sightings
 from delist_detection.identity.observations import DerivedFrom, Observation, TickerEra
+from delist_detection.identity.security_master import cusip_handoffs
 from delist_detection.identity.ticker_resolver import TickerResolver
 from delist_detection.sources.cik_lookup import CikNameIndex
 from delist_detection.sources.edgar import EdgarSubmission
@@ -97,6 +100,26 @@ def test_an_apostrophe_and_two_short_words_are_the_same_name():
     filed its 8-K12B on 2020-10-16. AARON'S COMPANY, INC. and AARON'S INC have a word less and are other companies."""
     got = _pass("AAN", "2020-10-19", "AARONS HLDGS CO INC", "00258R109", AAN_ORIGIN, AAN_DAYS)
     assert got == {"AAN@2020-10-19": (1808834, "successor_registrant")}
+
+
+def test_a_later_line_of_the_ticker_does_not_take_the_successor_registrants_line():
+    """Aaron's 2020, as the run of 3b820a3 had it: six weeks after the reorganization the holding company spun off
+    The Aaron's Company, which took the ticker under CUSIP 00258W108 and had been renamed from Aaron's SpinCo a month
+    before. Rule C read the CUSIP change of 2020-12-02 as that company's own after a rename and gave the holding
+    company's line to it. The successor registration at the era's own start is the stronger evidence: rule E answers
+    first, and a link to a later line of the ticker does not take the answer away."""
+    first = _era("AAN", "2020-10-20", "AARONS HLDGS CO INC", "00258R109", AAN_ORIGIN)
+    later = TickerEra("AAN", "2020-12-02", "2020-12-02", [Observation("AAN", "2020-12-02", "AARONS CO INC COM", derived=True)],
+                      ftd_cusips=("00258W108",))
+    rows = ([FtdRow(d, "00258R109", "AAN", "AARONS HLDGS CO INC", 60.0) for d in ("2020-10-20", "2020-11-09", "2020-11-30")]
+            + [FtdRow(d, "00258W108", "AAN", "AARONS CO INC COM", 18.0) for d in ("2020-12-02", "2020-12-14", "2021-01-11")])
+    ftd = FtdIndex(rows, window=(date(2008, 1, 1), date(2026, 9, 25)))        # the run's window: the CUSIP links need it
+    resolver = TickerResolver(_Edgar(), name_index=INDEX)
+    eras = [first, later]
+    assert [(h.kind, h.cusip, h.new_cusip) for h in cusip_handoffs(eras, ftd)] == [("cusip_handoff", "00258R109", "00258W108")]
+    got = EraIssuers(resolver.issuers, resolver.frequency_candidates).infer(
+        eras, ftd, last_sightings(eras, ftd), {first.key: None, later.key: 1821393})
+    assert {k: (v.cik, v.source) for k, v in got.inferred.items()} == {"AAN@2020-10-20": (1808834, "successor_registrant")}
 
 
 def test_the_name_alone_is_not_taken():

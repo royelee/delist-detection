@@ -729,8 +729,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   the others made): the one issuer of the other eras holding a CUSIP of the era's issuer code (its first six
   characters) over the same dates, when it had filed by the era's first sighting; no name check, the code is the
   evidence (FNFV Group, a tracking stock, on Fidelity National Financial's 31620R105; UHALB on U-Haul Holding);
-  eras of two issuers or none give nothing. Rule E (FB-027, `successor_registrant`, last, for a derived era the
-  rules above left with no issuer): the company SEC's name list holds under the era's own name written out word
+  eras of two issuers or none give nothing. Rule E (FB-027, `successor_registrant`, before the others, for a
+  derived era, and never dropped for a link to a later line of the ticker: Aaron's Holdings 2020, whose line rule
+  C gave to the company it spun off six weeks later): the company SEC's name list holds under the era's own name written out word
   for word (`names.written_out`, among the entries beginning with the name's first word,
   `CikNameIndex.beginning`) that filed an 8-K12B or 8-K12G3 within `line_follow.FILING_DAYS` of the step's first
   day, through guard G. The fails files write EXXONMOBIL HLDGS CORPORATION and AARONS HLDGS CO INC where the list

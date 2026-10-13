@@ -1334,9 +1334,12 @@ class EraIssuers:
         whatever the key order (MHP shares its CUSIP with MHFI, whose CUSIP
         switched to SPGI's). At the fixed point every answer is checked again.
 
-        E (`successor_registrant`, FB-027), last, for a derived era the rules above left with no issuer: the
-        company SEC's name list holds under the era's name written out word for word that filed a successor
-        registration at the CUSIP change (`_successor_registrant`), through the guard.
+        E (`successor_registrant`, FB-027), before the others, for a derived era: the company SEC's name list holds
+        under the era's name written out word for word that filed a successor registration at the CUSIP change
+        (`_successor_registrant`), through the guard. Its answer stands whatever the era links to later: six weeks
+        after Aaron's Holdings took over Aaron's line in 2020 it spun off The Aaron's Company, which took the ticker
+        under a new CUSIP and had been renamed from Aaron's SpinCo a month before, and rule C read the holding
+        company's line as that company's own after a rename.
 
         Rule C also runs over the eras the first pass answered (unpinned, with
         enough rows): where it gives another issuer, the first pass's answer
@@ -1350,7 +1353,10 @@ class EraIssuers:
         out: dict[str, InferredIssuer] = {}
         for e in todo:
             self._reset()
-            got = self._named(e, self._frequency_renamed(e, rows[e.key], last_seen[e.key]), last_seen[e.key])
+            # E before the others: a derived era's own successor registration at its start is the strongest evidence
+            # the pass has, and nothing below takes its answer away
+            got = self._named(e, self._successor_registrant(e, rows[e.key]), last_seen[e.key]) \
+                or self._named(e, self._frequency_renamed(e, rows[e.key], last_seen[e.key]), last_seen[e.key])
             if got is not None:
                 out[e.key] = got
             self._mark(e)
@@ -1392,6 +1398,8 @@ class EraIssuers:
             known, issuer_cusips = issuers_now()
             dropped = []
             for key, got in out.items():
+                if got.source == "successor_registrant":      # rule E's answer rests on no link, and a link drops none
+                    continue
                 self._reset()
                 found = self._linked_issuers(links[key], known, ftd, issuer_cusips,
                                              name_class_letter(by_key[key].name))
@@ -1409,8 +1417,6 @@ class EraIssuers:
                 continue
             self._reset()
             got = self._issuer_code(e, eras, known, last_seen)
-            if got is None:                          # E, last: only a derived era, and only what no other rule found
-                got = self._named(e, self._successor_registrant(e, rows[e.key]), last_seen[e.key])
             if got is not None:
                 out[e.key] = got
             self._mark(e)
@@ -1455,7 +1461,8 @@ class EraIssuers:
         out word for word (`names.written_out`, among the entries that begin with the name's first word:
         `CikNameIndex.beginning`), of those the ones that filed a successor registration (8-K12B, 8-K12G3) within
         `FILING_DAYS` of the step's first day, through the guard. The name alone is not taken: a company the list
-        names so that filed no such registration at the change is no answer. No name list, more than
+        names so that filed no such registration at the change is no answer. The rule answers before the others
+        (`infer`). No name list, more than
         `SUCCESSOR_NAMED_MAX` companies of the name, or an era the run did not derive: None."""
         origin, index = era.derived_from, self.issuers.name_index()
         first = parse_day(origin.first) if origin is not None else None

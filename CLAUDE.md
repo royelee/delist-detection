@@ -31,7 +31,7 @@ editable install.
 
 ```bash
 pip install -e .                         # editable install (Python ≥3.10) — once per env
-pytest   # full suite (4406 passed, 35 xfailed: the known-wrong golden cases and the diagnosis truth set's known_wrong cases, all strict; offline, no network)
+pytest   # full suite (4407 passed, 35 xfailed: the known-wrong golden cases and the diagnosis truth set's known_wrong cases, all strict; offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
 pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one test
 python scripts/verify_altair.py          # smoke: ALTR → CRSP 231, high
