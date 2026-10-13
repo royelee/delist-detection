@@ -21,6 +21,8 @@
   file first and the pages in order (`EdgarClient._whole_list`, FB-025), and a fetch that fails is a stale read,
   which flags the row that rested on it. A run never leaves a filing list with fewer filings in its cached copies
   than it found.
+  A cached filing list with no fetch date has no known age: it is fresh for no caller that asks for a fresh copy,
+  and its file time is never read, because a copied cache carries the day of the copy (`edgar._stamped_on`, FB-028).
   The limiter (`sec_limiter.SEC_LIMITER`) is shared by every thread of the process
   and, through `~/.cache/delist_detection/sec_rate.lock`
   (`$DELIST_DETECTION_SEC_RATE_LOCK`), by every SEC client on the machine

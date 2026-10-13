@@ -142,6 +142,17 @@ def submissions_fresh_after(on: date, today: date | None = None) -> date:
     return min(on + timedelta(days=SUBMISSIONS_FRESH_DAYS), today or date.today())
 
 
+def _stamped_on(data: Any) -> date:
+    """The fetch date a cached JSON payload carries (FETCHED_KEY: the run date of the run that fetched it), else
+    `date.min`: a copy with no fetch date has no known age and is fresh for no caller that asks for one. Its file
+    time is not read. A copied cache carries the day of the copy (FB-028: Exxon Mobil's filing list of May 2026
+    under a file time of 2026-10-02, a week after the run date, so no run read its Form 25 of 2026-07-02)."""
+    try:
+        return date.fromisoformat(data.get(FETCHED_KEY)) if isinstance(data, dict) else date.min
+    except (TypeError, ValueError):
+        return date.min
+
+
 def _fetched_on(cp: Path, data: Any) -> date:
     if isinstance(data, dict):
         try:
@@ -460,7 +471,7 @@ class EdgarClient:
                 except json.JSONDecodeError:
                     cp.unlink(missing_ok=True)
                 else:
-                    if fresh_after is None or filling_only() or _fetched_on(cp, cached) >= fresh_after:
+                    if fresh_after is None or filling_only() or _stamped_on(cached) >= fresh_after:
                         SEC_STATS.add(f"cache:{endpoint_of(url)}")
                         return cached
             host = "data.sec.gov" if url.startswith(SEC_HOST) else "www.sec.gov"
