@@ -70,7 +70,7 @@ ending,CZR,BBG0017T9998,2020-07-30,last_trade_not_exchange_print:closing_day;las
 ending,DYN,BBG001D9S707,2010-05-25,continued_filings_rule,
 ending,GRUB,BBG001KWG293,2021-06-25,assumed_par_after_failed_gate,
 ending,SAGE,BBG0025X16Y5,2025-08-10,value_incomplete:contingent_right,
-ending,UNIT,BBG002B67HB2,2025-08-01,assumed_par_after_failed_gate;last_trade_not_exchange_print:closing_day;last_trade_date_unconfirmed,
+ending,UNIT,BBG002B67HB2,2025-08-01,last_trade_not_exchange_print:closing_day;last_trade_date_unconfirmed,
 ending,MNK,BBG002BHBHM1,2020-10-23,last_trade_date_text_conflict,
 ending,BKW,BBG003444577,2014-12-25,assumed_par_after_failed_gate,
 ending,LMCA,BBG003P9ZSL3,2016-04-28,continuation_by_timing_only,
