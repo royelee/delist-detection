@@ -122,6 +122,12 @@ CATALOG: dict[str, FlagInfo] = {
 
     # --- check: a rule could not settle the answer ---
     # merger terms and payouts
+    "contingent_right_unvalued": FlagInfo(
+        "check", "The merger's terms note a contingent value right, a warrant or another contingent payment beside "
+                 "the cash or stock (FB-024). The library does not value it, so the published terms and DLRET are "
+                 "the valued part alone and the ending is uncertain (`value_incomplete:contingent_right`).",
+        "Value the right (its market price on the last trade day, what it later paid, or zero) and supply the "
+        f"whole consideration in --merger-terms; {_accept_if('the valued part alone is the value you want')}."),
     "merger_at_par": FlagInfo(
         "check", "A merger whose consideration was read and never passed the gate, so its DLRET was set to 0 "
                  "(terminal value = last close). A merger whose terms nothing states has no DLRET at all (FB-016).",

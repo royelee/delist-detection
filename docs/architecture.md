@@ -434,7 +434,12 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   Two endings have no value and no fill, each `uncertain` by the verdict's `value_pending`: a wind-down whose
   distributions are not read (`pending_recovery`, FB-002) and a merger whose terms nothing states
   (`pending_terms`, FB-016: `ValueInputs.terms_read` False, from `MergerInputs.read` through
-  `MergerValues.terms_read`; terms the gate refused keep assumed par, which the verdict doubts).
+  `MergerValues.terms_read`; terms the gate refused keep assumed par, which the verdict doubts). A third ending has
+  a value the library knows to be incomplete: a merger whose LLM terms note a contingent value right, a warrant or
+  another contingent payment beside the package (`MergerTerms.unvalued_right`, matched on the note's words) is
+  flagged `contingent_right_unvalued` by stage 8 (`merger_value._flag_unvalued_rights`, which logs every note and
+  how it read it) and is `uncertain` with `value_incomplete:contingent_right` (FB-024); its terms and `dlret`
+  stand as the value of the valued part.
   It loads only the row vocabulary and the leaf enums (`tests/test_import_closure.py`).
 - `outputs/reconstruction.py` — `DelistRecord` (the classifier's hand-off, defined here, below the stages, so the
   table, the merger readers and the handling read it without loading the classifier: architecture step 16),

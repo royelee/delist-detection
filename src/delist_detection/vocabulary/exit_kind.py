@@ -128,6 +128,9 @@ LLM_GATE_FAILED = "llm_gate_failed"
 TERMS_GATE_FAILED = "terms_gate_failed"       # `terms_gate_failed:<why>`
 TERMS_GATE_SKIPPED = "terms_gate_skipped"     # `terms_gate_skipped:<why>`: never a price-side failure
 GATE_FLAGS = frozenset({PAYOUT_GATE_FAILED, LLM_GATE_FAILED, TERMS_GATE_FAILED, TERMS_GATE_SKIPPED})
+# FB-024: a merger's terms note a part the library reads and does not value (a contingent value right, a warrant):
+# stage 8 writes it, the verdict reads it, a continuation drops it with the other value flags
+CONTINGENT_RIGHT_UNVALUED = "contingent_right_unvalued"
 
 
 def flag_tokens(row: Mapping[str, object]) -> list[str]:

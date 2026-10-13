@@ -317,6 +317,16 @@ def test_a_merger_with_no_terms_read_is_uncertain():
     assert _reasons(row) == ("value_pending:terms",)
 
 
+def test_a_merger_with_a_contingent_right_beside_its_cash_is_uncertain_and_keeps_its_value():
+    """FB-024 (consensus of 2026-10-12): TreeHouse 2026 paid $22.50 and a contingent value right. The row keeps the
+    cash and its dlret, the value of the part that was valued, and the verdict says a part is missing. A
+    continuation carries no such doubt."""
+    row = ending("A", "2015-03-13", "merger", flags="contingent_right_unvalued", **GOOD)
+    assert _reasons(row) == ("value_incomplete:contingent_right",) and row["dlret"] == "0.01"
+    plain = ending("A", "2015-03-13", "merger", **GOOD)
+    assert _reasons(plain) == ()
+
+
 def test_an_observed_figi_security_with_no_issuer_is_uncertain():
     """FB-006: AMAT, EXPD, DD: a FIGI confirmed by CUSIP and no issuer CIK. Its seeds and endings are uncertain; a
     placeholder (its own rule) and a security the run added (no observation) are left alone."""

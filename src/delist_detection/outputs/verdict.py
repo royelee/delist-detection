@@ -90,7 +90,10 @@ settle a doubt the rules above would otherwise raise; none changes a table row, 
   its kind rests only on an NT 10-K/Q in the prior year (`kind_by_filing_history_only`, FB-002), or when it is a
   wind-down whose distributions are not read (`value_pending:distributions`, FB-002: no measured value and no fill,
   the spec's invariant) or a merger whose terms nothing states (`value_pending:terms`, FB-016: the same, where it
-  was a par fill on a confirmed row), or, as a security reason, when an observed security has a FIGI and no issuer CIK
+  was a par fill on a confirmed row), or when it is a merger whose terms note a contingent value right, a warrant
+  or another contingent part beside what was valued (`value_incomplete:contingent_right`, FB-024: the row keeps its
+  terms and its `dlret`, the value of the valued part), or, as a security reason, when an observed security has a
+  FIGI and no issuer CIK
   (`issuer_unresolved`, FB-006: its seeds and endings are uncertain, so a blank `issuer_id` never rides on a
   confirmed seed; an acquirer the run adds is no claim and is left alone), or when an observed security's open
   interval carries an OTC bankruptcy symbol, five letters ending in Q (`open_under_bankruptcy_ticker:<ticker>`,
@@ -112,12 +115,13 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 
-from ..vocabulary.exit_kind import (CONFLICT, EXCHANGE_PRINTS, GATE_FLAGS, MEASURED, PAYOUT_GATE_FAILED,
-                                    TERMS_GATE_SKIPPED, ContinuationReading, cites_form25, effective_of, end_day_of,
-                                    ending_fields, flag_detail, flag_name, flag_names, flag_tokens, is_continuation,
-                                    is_real_ending, last_endings, linked_by_timing, merger_relabel,
-                                    names_successor_registration, of_row, resolved_from_continued_filings,
-                                    rests_on_continued_filings, rests_on_delinquency)
+from ..vocabulary.exit_kind import (CONFLICT, CONTINGENT_RIGHT_UNVALUED, EXCHANGE_PRINTS, GATE_FLAGS, MEASURED,
+                                    PAYOUT_GATE_FAILED, TERMS_GATE_SKIPPED, ContinuationReading, cites_form25,
+                                    effective_of, end_day_of, ending_fields, flag_detail, flag_name, flag_names,
+                                    flag_tokens, is_continuation, is_real_ending, last_endings, linked_by_timing,
+                                    merger_relabel, names_successor_registration, of_row,
+                                    resolved_from_continued_filings, rests_on_continued_filings,
+                                    rests_on_delinquency)
 from .dlret import DlretMethod
 from .run_snapshot import RunSnapshot
 
@@ -365,6 +369,8 @@ def _own_reasons(row: Mapping[str, str], issuer_cik: str = "", reading: Continua
         reasons.append("value_pending:distributions")
     if row["dlret_method"] == DlretMethod.PENDING_TERMS.value:      # FB-016
         reasons.append("value_pending:terms")
+    if CONTINGENT_RIGHT_UNVALUED in flags and not is_continuation(row):     # FB-024
+        reasons.append("value_incomplete:contingent_right")
     if is_continuation(row):
         if linked_by_timing(row["reason"]) and not confirmed:
             reasons.append("continuation_by_timing_only")

@@ -683,3 +683,44 @@ def test_an_earlier_dividend_is_a_mergers_only_and_a_failed_read_is_a_miss(tmp_p
     watch = DegradedWatch()
     assert failing.earlier_dividend(_merger_rec()) is None and llm.calls == 1
     assert watch.tripped() and not list((tmp_path / "f").glob("*.json"))         # the row says so; nothing is cached
+
+
+# --------------------------------------------------------------------------- #
+# FB-024: a part of the consideration the library reads and does not value
+# --------------------------------------------------------------------------- #
+
+def _noted(note):
+    return MergerTerms("cash", 22.50, None, None, None, "high", "8-K:X", "", package_basis="fixed",
+                       contingent_note=note)
+
+
+@pytest.mark.parametrize("note", [
+    "One CVR per share: right to a portion of net proceeds, if any, from certain coffee business litigation",  # THS
+    "One non-transferable CVR per share: pro rata share of net proceeds, if any, from sale of FCC license WQJQ707",
+    "One Divested Asset Proceed Right per share: share of 70% of net proceeds from monetizing Village Practice "
+    "Management interests, up to $3.00 per right",                                                             # WBA
+    "Each share also received 0.640 of a warrant to purchase one share of Kinder Morgan Class P common stock",  # EP
+    "Contingent Value Rights (CELGZ) are listed, but their terms are not stated in the excerpt",               # CELG
+    "One contingent value right (CVR) issued by CHS per HMA share",
+    "one Casa Ley CVR and one PDC CVR per share",                                                              # SWY
+    "Holders also receive a contingent payment of up to $2.00 per share upon a milestone",
+])
+def test_a_note_of_a_contingent_right_or_a_warrant_is_a_part_the_library_does_not_value(note):
+    assert _noted(note).unvalued_right
+
+
+@pytest.mark.parametrize("note", [
+    "",
+    "Cash in lieu of fractional shares.",
+    "Cash only in lieu of fractional BioNTech ADSs; the excerpt does not state the exchange ratio.",           # CVAC
+    "Electing holders who keep their shares through the merger also receive one special voting share of CNH "
+    "Industrial per CNH Industrial common share received (no cash value).",
+    "Cash is paid in two parts: about $37.35 per unit distributed after the AA sale to KKR, plus $4.11 in the MH "
+    "merger (replacing $3.83 because closing was after July 1, 2022). The $37.35 is an estimate in the filing.",  # MIC
+    "The excerpt does not state the Disney merger consideration paid for the remaining portion of each 21CF share, "
+    "so it is not included.",
+    "Additional payment to the company of up to $10.0 million if certain conditions are achieved.",            # FNP
+    "None", "No contingent value rights or warrants.", "N/A",
+])
+def test_a_note_that_names_no_right_is_no_unvalued_part(note):
+    assert not _noted(note).unvalued_right

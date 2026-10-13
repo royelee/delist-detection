@@ -418,6 +418,30 @@ def test_a_failed_earlier_read_is_an_error_row_and_the_merger_keeps_its_value():
     assert [(r.sec_id, r.flag) for r in values.review] == [("P", "error")]
 
 
+# --- FB-024: a contingent right beside the package -------------------------------------------------------------------
+
+def _cash_terms(cash, note=""):
+    return MergerTerms("cash", cash, None, None, None, "high", "8-K:0001", "", package_basis="fixed",
+                       contingent_note=note)
+
+
+def test_a_merger_whose_terms_note_a_contingent_right_is_flagged_and_keeps_its_value():
+    """TreeHouse 2026: $22.50 in cash and one CVR. The library values the cash and says a part is not valued."""
+    cvr = "One CVR per share: right to a portion of net proceeds, if any, from certain coffee business litigation"
+    es = [_merger(sec_id, ticker, "2026-02-21", date(2026, 2, 10))
+          for sec_id, ticker in (("T", "THS"), ("F", "FRAC"), ("G", "GIVEN"), ("P", "PLAIN"))]
+    llm = _Terms({"THS": _cash_terms(22.50, cvr), "FRAC": _cash_terms(22.50, "Cash in lieu of fractional shares."),
+                  "GIVEN": _cash_terms(22.50, cvr), "PLAIN": _cash_terms(22.50)})
+    logged = []
+    values = _value(es, llm=llm, payout=_Cash({"THS": 22.50}), closes={e.key: 24.43 for e in es},
+                    caller_terms={"G": {"cash_per_share": 24.0}}, log=logged.append)
+    assert [e.ticker for e in es if "contingent_right_unvalued" in e.flags] == ["THS"]
+    assert values.get(es[0].key).payout == 22.50 and values.table_terms(es[0].key).payout_per_share == 22.50
+    assert [line for line in logged if "contingent note" in line] == [
+        f"T 2026-02-21: contingent note, a right the library does not value: {cvr}",
+        "F 2026-02-21: contingent note, no right: Cash in lieu of fractional shares."]
+
+
 # --- what the later stages read --------------------------------------------------------------------------------------
 
 K = DelistingKey("M", "2018-06-01")

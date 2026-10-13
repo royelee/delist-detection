@@ -50,8 +50,8 @@ from ..endings.delistings import Delisting
 from ..outputs.dlret import STATEMENT_SOURCE, MergerInputs, StatementTerms
 from ..endings.exchange_terms import one_share_no_cash
 from ..sources.fatal import FATAL
-from ..vocabulary.exit_kind import (GATE_FLAGS, LLM_GATE_FAILED, PAYOUT_GATE_FAILED, TERMS_GATE_FAILED,
-                                    TERMS_GATE_SKIPPED, flag_detail, flag_name)
+from ..vocabulary.exit_kind import (CONTINGENT_RIGHT_UNVALUED, GATE_FLAGS, LLM_GATE_FAILED, PAYOUT_GATE_FAILED,
+                                    TERMS_GATE_FAILED, TERMS_GATE_SKIPPED, flag_detail, flag_name)
 from ..sources.ftd import FtdIndex
 from .llm_merger_extractor import MergerTerms
 from ..vocabulary.identifiers import class_letter, normalize_ticker, share_class_from_name
@@ -358,10 +358,30 @@ def value_mergers(delistings: Sequence[Delisting], index: acquirer_line.LineInde
     for e in mergers:
         if e.key in lagged:
             e.add_flag("acquirer_close_lagged")
+    _flag_unvalued_rights(st, mergers, llm_terms, caller_terms)
     legs = _leg_holders(st, mergers, llm_terms, price_tickers)
     records = {e.key: _record(e.key, raw, llm_terms, gated, first, caller_terms, acquirer_ids, price_tickers, legs,
                               asked) for e in mergers}
     return MergerValues(records, caller_terms, added, review + line_review + name_review + acquirer_review)
+
+
+def _flag_unvalued_rights(st: _Stage, mergers: list[Delisting], llm_terms: Mapping[DelistingKey, MergerTerms],
+                          caller_terms: Mapping) -> None:
+    """FB-024: a merger whose LLM terms note a contingent value right, a warrant or another contingent part beside
+    the package (`MergerTerms.unvalued_right`) is flagged `contingent_right_unvalued`: the library values what it
+    read and says a part is missing, so the verdict is uncertain and the value stays (TreeHouse 2026: $22.50 and a
+    CVR the market priced near $1.93). The note is the deal's, whichever reader gave the published cash. A merger
+    the caller gave terms for takes no flag: the caller states the whole value. Every note is logged with how it
+    was read, since the match is on words."""
+    for e in mergers:
+        terms = llm_terms.get(e.key)
+        note = terms.contingent_note.strip() if terms is not None else ""
+        if not note or for_delisting(caller_terms, e.key) is not None:
+            continue
+        if terms.unvalued_right:
+            e.add_flag(CONTINGENT_RIGHT_UNVALUED)
+        how = "a right the library does not value" if terms.unvalued_right else "no right"
+        st.log(f"{e.sec_id} {e.delist_date}: contingent note, {how}: {note}")
 
 
 def _record(key: DelistingKey, raw: Mapping, llm_terms: Mapping, gated: GatedPayouts, first: GatedPayouts,

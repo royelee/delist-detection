@@ -98,6 +98,11 @@ from ..sources.sec_stats import SEC_STATS, filling_only
 # What an answer spells out for "no ticker" ("NULL", "None", "N/A", "-": GRUB 2021's terms): no ticker, so a stock leg
 # with none is reported as `no_acq_ticker`, never as a price missing for "NULL".
 NULL_TICKERS = frozenset({"", "null", "none", "n/a", "n-a", "-"})
+# FB-024: the words of a contingent note that name a part beside the package the library does not value, and a note
+# that opens by saying there is none
+_UNVALUED_RIGHT = re.compile(r"(?i)\bCVRs?\b|\bcontingent (?:value|payment|cash|consideration)|\bwarrants?\b"
+                             r"|\bproceeds? rights?\b")
+_NO_RIGHT = re.compile(r"(?i)(?:no|none|not applicable|n/?a)\b")
 # The package bases of a prompt-v3 answer that names its package (sub-plan 5f, ruling R4); `none` states none.
 PACKAGE_BASES = frozenset({"final_prorated", "default", "fixed"})
 
@@ -167,6 +172,16 @@ class MergerTerms:
     def ticker(self) -> str:
         """The stock leg's acquirer ticker as a symbol to look up (normalized), "" for none."""
         return normalize_ticker(self.acquirer_ticker or "")
+
+    @property
+    def unvalued_right(self) -> bool:
+        """FB-024: whether the answer notes a part of the consideration the library reads and does not value: a
+        contingent value right, a warrant, a proceeds right or another contingent payment (`contingent_note`;
+        TreeHouse 2026: $22.50 in cash "and one contractual contingent value right"). The note is the model's free
+        text, so it is matched on those words; cash in lieu of fractions, an election's alternatives and a note
+        that says there is none are no such part."""
+        note = self.contingent_note.strip()
+        return bool(note) and not _NO_RIGHT.match(note) and bool(_UNVALUED_RIGHT.search(note))
 
     @property
     def is_package(self) -> bool:

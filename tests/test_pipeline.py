@@ -2634,6 +2634,34 @@ def test_a_closing_dividend_is_in_the_value_of_a_merger_and_named_in_its_formula
     assert c["value_formula"] == "(210.10 + 2.50 dividend) / last_close − 1"
 
 
+def test_a_merger_that_paid_a_contingent_right_beside_its_cash_is_uncertain_and_keeps_its_value(fake_edgar, tmp_path):
+    """FB-024 (TreeHouse 2026): the terms note one CVR per share beside the cash. The row keeps the cash and the
+    dlret of the cash, carries the flag, and its verdict is uncertain with `value_incomplete:contingent_right`."""
+    class _LLM:
+        def extract(self, record, security_name=""):
+            return MergerTerms("cash", 210.10, None, "CVS HEALTH", None, "high", "8-K:X", "", package_basis="fixed",
+                               contingent_note="One contractual contingent value right (CVR) per share.")
+
+        def closing_dividend(self, record, security_name=""):
+            return None
+
+        def earlier_dividend(self, record, security_name=""):
+            return None
+
+    index, clients = _clients(fake_edgar)
+    clients.llm_extractor = _LLM()
+    summary = run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+    (d,) = read_table("delistings", table_path(tmp_path, "delistings"))
+    assert (d["payout_per_share"], d["dlret"], d["dlret_method"]) == ("210.100000", "-0.012224", "cash_only")
+    assert "contingent_right_unvalued" in d["review_flags"].split(";")
+    (c,) = read_table("contract_delistings", tmp_path / "contract" / "delistings.csv")
+    assert (c["value_rule"], c["cash_per_share"], c["dlret"], c["verdict"]) == (
+        "cash", "210.100000", "-0.012224", "uncertain")
+    assert [(r["kind"], r["sec_id"], r["reason"]) for r in read_table("uncertain", table_path(tmp_path, "uncertain"))] \
+        == [("ending", "BBG000FJLFX8", "value_incomplete:contingent_right")]
+    assert summary.uncertain == {"seed": 0, "security": 0, "ending": 1}
+
+
 def test_a_sighting_after_the_ending_is_an_uncertain_seed_but_not_an_uncertain_security(fake_edgar, tmp_path):
     index, clients = _clients(fake_edgar, extra_obs=(Observation("AET", "2019-06-28", "AETNA INC", cik=1122304),))
     summary = run(index, clients, AET_TERMS, out_dir=tmp_path, log=lambda *_: None)
