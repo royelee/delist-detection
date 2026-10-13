@@ -14,7 +14,7 @@ from delist_detection.terms.acquirer_line import LineIndex
 from delist_detection.outputs.reconstruction import DelistRecord
 from delist_detection.vocabulary.crsp_codes import CrspBucket
 from delist_detection.endings.delistings import Delisting
-from delist_detection.sources.ftd import FtdIndex
+from delist_detection.sources.ftd import FtdIndex, FtdRow
 from delist_detection.identity.issuer_record import IssuerRecord
 from delist_detection.endings.last_trade import LastTrade
 from delist_detection.terms.llm_merger_extractor import ClosingDividend, MergerTerms
@@ -82,10 +82,10 @@ class _Terms:
 
 def _value(delistings, *, llm=None, payout=None, edgar=None, resolver=None, name_index=None, ftd_client=None,
            securities=None, closes=None, own_closes=None, caller_terms=None, answers=None, workers=1,
-           llm_workers=None, log=None) -> MergerValues:
-    clients = Clients(edgar=edgar, resolver=resolver, classifier=None, figi=None, ftd_client=ftd_client or _NoFtd(),
+           llm_workers=None, log=None, cusips=None, ftd=None, figi=None) -> MergerValues:
+    clients = Clients(edgar=edgar, resolver=resolver, classifier=None, figi=figi, ftd_client=ftd_client or _NoFtd(),
                       payout_extractor=payout, llm_extractor=llm, issuers=IssuerRecord(edgar, name_index=name_index))
-    index = LineIndex(securities or {}, {}, {}, FtdIndex(source=clients.ftd_client))
+    index = LineIndex(securities or {}, {}, cusips or {}, ftd or FtdIndex(source=clients.ftd_client))
     return value_mergers(delistings, index, clients=clients, closes=closes or {}, own_closes=own_closes,
                          caller_terms=caller_terms or {}, answers=answers or PriceAnswers(), tol=0.15,
                          workers=workers, llm_workers=llm_workers, log=log or (lambda *a: None))
@@ -344,6 +344,40 @@ def test_a_restated_merger_keeps_no_dividend():
     values = _values(payout=18.75, dividend=1.75)
     values.restate(K, StatementTerms(1.0, "CNNE", "CANNAE HOLDINGS"), PriceAnswers(), date(2017, 11, 17))
     assert values.get(K).dividend is None and values.table_terms(K).payout_per_share is None
+
+
+# --- the acquirer's price by symbol is never the target's own row (code review of FB-022) -----------------------------
+
+def _rows(*rows):
+    return FtdIndex([FtdRow(day, cusip, symbol, "X", price) for day, cusip, symbol, price in rows])
+
+
+_NO_FIGI = SimpleNamespace(map=lambda jobs: [{} for _ in jobs])      # OpenFIGI knows none of the test's CUSIPs
+
+
+def test_an_acquirer_that_took_the_targets_ticker_is_not_priced_by_the_targets_own_last_row():
+    """Old Charter 2016: New Charter took CHTR. By symbol the row dated the day after the last trade is the old
+    CUSIP's, at the old stock's last close, and the value came out 0.9042 x 203.36 / 203.36 - 1. The acquirer's
+    price is New Charter's own first row under the ticker, a day later, and the row says the close is lagged."""
+    old, new_cusip = "16117M305", "16119P108"
+    e = _merger("OLD", "CHTR", "2016-05-28", date(2016, 5, 17))
+    ftd = _rows(("2016-05-17", old, "CHTR", 203.0), ("2016-05-18", old, "CHTR", 203.36),
+                ("2016-05-18", new_cusip, "CHTRZZZZ", 224.91), ("2016-05-19", new_cusip, "CHTR", 227.41))
+    values = _value([e], llm=_Terms({"CHTR": _stock(0.9042, "CHTR")}), closes={e.key: 203.36},
+                    cusips={"OLD": [old], "NEW": [new_cusip]}, ftd=ftd, figi=_NO_FIGI)
+    assert values.get(e.key).terms["acquirer_price"] == 227.41 and "acquirer_close_lagged" in e.flags
+
+
+def test_a_security_that_goes_on_under_its_own_cusip_is_priced_by_its_own_row():
+    """Disney 2019: the holding-company merger's new shares keep the CUSIP and the ticker, and no other CUSIP holds
+    DIS in the days after the last trade. The security's own row is the price of the share it became."""
+    cusip = "254687106"
+    e = _merger("DIS", "DIS", "2019-03-30", date(2019, 3, 19))
+    ftd = _rows(("2019-03-19", cusip, "DIS", 111.0), ("2019-03-20", cusip, "DIS", 110.0),
+                ("2019-03-21", cusip, "DIS", 109.99))
+    values = _value([e], llm=_Terms({"DIS": _stock(1.0, "DIS")}), closes={e.key: 110.0},
+                    cusips={"DIS": [cusip]}, ftd=ftd, figi=_NO_FIGI)
+    assert values.get(e.key).terms["acquirer_price"] == 110.0 and "acquirer_close_lagged" not in e.flags
 
 
 # --- FB-023: a closing dividend declared in an earlier 8-K -----------------------------------------------------------

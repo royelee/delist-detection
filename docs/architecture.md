@@ -1374,7 +1374,11 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   the gate, passed or not (`acquirer_line`; a merger before the run's fails window reads its lines' rows into a
   private index, `FtdIndex.apart` and `LineIndex.fresh`), stage 8a' (`acquirer_ticker`: a leg with no ticker and no line), the gate
   (`payout_gate`: the terms' ticker price, then the line's, the line's first for a `line_first` leg whose ticker's
-  rows are another line of the issuer's, TWC, VIA, STRZA), the acquirer (`acquirers`: the fails-row acquirer for
+  rows are another line of the issuer's, TWC, VIA, STRZA; the ticker price is the first fails row under the ticker
+  after the last trade day that is not of the target's own CUSIPs, because an acquirer that took the target's
+  ticker trades under a new CUSIP and the old CUSIP's last row is the target's own close, old Charter 2016, and the
+  target's own row only when no other CUSIP holds the ticker in those days, a security that goes on as itself,
+  Disney 2019), the acquirer (`acquirers`: the fails-row acquirer for
   ticker-settled terms, the only source of `AddedAcquirer`s, else the line or holder; a `line_first` leg publishes
   the line, another issuer's ticker security, IPHI, still wins) and its symbol on the price date. The regex read's
   sanity bound and the first gate pass read only the run's own last closes (stage 7's `own`: a `--last-trade-closes`

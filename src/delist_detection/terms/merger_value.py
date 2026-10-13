@@ -760,9 +760,14 @@ def _gate(st: _Stage, mergers: list[Delisting], trade_day: Mapping[DelistingKey,
         # Priced on THAT merger's own last-trade day: many mergers can share a
         # delist_date, so a plain date->day map would misprice one with another's.
         day = trade_day.get(key)
-        # by symbol, a row of the target's own CUSIPs is the target's close and never its acquirer's (old Charter
-        # 2016: New Charter took the ticker, and the old CUSIP's last row is dated the day after the last trade)
-        got = ftd.close_after(day, symbol=ticker, skip=own_cusips.get(key, ())) if day and ticker else None
+        # by symbol, a row of another CUSIP than the target's own first: an acquirer that took the target's ticker
+        # trades under a new CUSIP, and the old CUSIP's last row, dated the day after the last trade, is the target's
+        # own close (old Charter 2016). A target that goes on as itself keeps its CUSIP, and no other holds the
+        # ticker: its own row is the price (Disney 2019)
+        got = None
+        if day and ticker:
+            got = (ftd.close_after(day, symbol=ticker, skip=own_cusips.get(key, ()))
+                   or ftd.close_after(day, symbol=ticker))
         if got is None:
             return None
         if got[2]:
