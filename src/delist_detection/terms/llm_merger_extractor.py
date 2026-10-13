@@ -490,6 +490,13 @@ _DIVIDEND_BUDGET = 15000
 # delisting (Plains Exploration 2013: a week before); the newest `_EARLIER_MAX` of them are read
 _EARLIER_DAYS = timedelta(days=60)
 _EARLIER_MAX = 20
+# FB-023's follow-up: a dividend whose record date follows the merger is paid to the acquirer, which then holds
+# every share (Athene 2022: "with a record date and payment date following the completion of the Mergers"). The
+# words must follow "record date" directly: a record date before the merger with a payment after it is the old
+# holders' dividend
+_RECORD_AFTER_MERGER = re.compile(
+    r"(?i)\brecord dates?(?:\s+and\s+(?:a\s+)?payment dates?)?\s+(?:(?:that|which)\s+(?:is|are|will\s+be)\s+)?"
+    r"(?:following|after|subsequent\s+to)\s")
 
 
 _EXCERPT_KEYWORDS = [
@@ -1090,13 +1097,16 @@ class LLMMergerTermsExtractor:
     @staticmethod
     def _to_dividend(raw: object, filing: EdgarSubmission) -> ClosingDividend | None:
         """A closing-dividend answer as a `ClosingDividend`: the dividends it states an amount for, summed, without
-        those the stated consideration already includes. When it states no amount and names a dividend the
-        consideration does not include, that dividend with no amount. None when nothing is left."""
+        those the stated consideration already includes and those whose quote places the record date after the
+        merger (`_RECORD_AFTER_MERGER`: the acquirer's, whatever the model answered). When it states no amount and
+        names a dividend that is left, that dividend with no amount. None when nothing is left."""
         if not isinstance(raw, dict):
             return None
         parts, named = [], []
         for d in raw.get("closing_dividends") or ():
             if not isinstance(d, dict) or d.get("included_in_consideration"):
+                continue
+            if _RECORD_AFTER_MERGER.search(_text(d.get("quote"))):
                 continue
             amount = _tolerant_float(d.get("amount_per_share"))
             if amount and amount > 0:

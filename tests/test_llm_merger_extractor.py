@@ -756,3 +756,35 @@ def test_a_filing_that_states_the_amount_answers_over_one_that_only_names_the_di
     unstated = [{"closing_dividends": [_dividend(None, quote=_STUB)]}, {"closing_dividends": []}]
     ext, llm = _earlier_ext(tmp_path / "e", unstated, filings, {"E1": _STUB_TEXT, "E2": _STUB_TEXT})
     assert ext.earlier_dividend(_merger_rec()) == ClosingDividend(None, "8-K:E2", _STUB) and llm.calls == 2
+
+
+_ATH = ("On December 31, 2021, the Board of Directors of the Company declared a cash dividend of $750 million payable "
+        "to holders of the Company's Class A Common Shares, with a record date and payment date following the "
+        "completion of the Mergers.")
+
+
+@pytest.mark.parametrize("quote", [
+    _ATH,
+    "a dividend of $0.50 per share with a record date after the Effective Time",
+    "a special dividend, with record dates that are subsequent to the closing of the merger",
+])
+def test_a_dividend_whose_record_date_follows_the_merger_is_not_the_old_holders(tmp_path, quote):
+    """FB-023's follow-up (Athene 2022): after the merger the acquirer holds every share, so a dividend with a record
+    date after it is paid to the acquirer. The model reported Athene's against the prompt's rule; the entry names
+    no closing dividend, with or without an amount, so the row gets no doubt on any pass."""
+    for amount in (None, 0.5):
+        ext, _ = _dividend_ext(tmp_path / str(amount), [{"closing_dividends": [_dividend(amount, quote=quote)]}],
+                               text=_STUB_TEXT)
+        assert ext.closing_dividend(_merger_rec()) is None
+
+
+@pytest.mark.parametrize("quote", [
+    _STUB,                                                                       # Two Harbors: no record date named
+    "payable to PXP stockholders as of May 30, 2013, the dividend record date. The payment of the dividend is "
+    "conditioned upon the completion of the Merger and will be made immediately prior to or upon such completion",
+    "a dividend with a record date of May 30, 2013, to be paid after the completion of the merger",
+    "payable to holders of record as of the close of business one Business Day prior to the Closing Date",
+])
+def test_a_record_date_before_the_merger_keeps_the_dividend(tmp_path, quote):
+    ext, _ = _dividend_ext(tmp_path, [{"closing_dividends": [_dividend(None, quote=quote)]}], text=_STUB_TEXT)
+    assert ext.closing_dividend(_merger_rec()) == ClosingDividend(None, "8-K:C1", quote)

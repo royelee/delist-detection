@@ -590,7 +590,9 @@
   names a closing dividend and states no amount per share gives nothing to count (`ClosingDividend.amount` None);
   when no search finds the amount and the last pass values the merger more than 1% under its close, the row is
   flagged `closing_dividend_unstated` and is `uncertain` with `value_incomplete:closing_dividend`, its terms and
-  `dlret` kept (Two Harbors 2026; Athene 2022, 0.5% under, is not flagged).
+  `dlret` kept (Two Harbors 2026). A dividend whose quoted record date follows the merger is the acquirer's and
+  is dropped when the answer is read, with or without an amount, so it puts no doubt on the row on any pass
+  (Athene 2022: "a record date and payment date following the completion of the Mergers").
 - **A closing dividend is read apart from the package and counts in the value only (FB-021).** It is cash the
   target paid its holders because the deal closed (Extended Stay 2021: $1.75 a share beside the merger's $18.75).
   `LLMMergerTermsExtractor.closing_dividend` reads it with a question of its own, for a merger either reader gave
