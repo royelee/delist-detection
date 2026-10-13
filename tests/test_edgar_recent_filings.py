@@ -127,6 +127,27 @@ def test_a_main_file_this_client_fetched_itself_is_not_fetched_twice(tmp_path):
     assert session.calls == [MAIN, PAGE1]
 
 
+def test_a_main_file_fetched_again_for_its_profile_takes_its_cached_pages_with_it(tmp_path):
+    """McEwen 2026 (FB-028's runs): a stage asked for a fresh copy of the main file and no later stage read the
+    filings, so the run left the new main file beside the page of May: 23 filings of 2012 were in neither copy until
+    the next read. The pages the cache holds are fetched with the main file, so the cache is one list between runs."""
+    old = {**_main(["n1"], (PAGE1, 2)), "__fetched__": "2026-01-01"}
+    client, session = _client(tmp_path, {MAIN: _main(["n2", "n1"], (PAGE1, 3)), PAGE1: _block("k12b", "q", "s4")},
+                              main=old, page1=_block("q", "s4"))
+    client.submissions(42, fresh_after=date(2026, 9, 1))
+    assert session.calls == [MAIN, PAGE1]
+    assert json.loads(client._cache_path(PAGE1).read_text())["accessionNumber"] == ["k12b", "q", "s4"]
+    later, session2 = _client(tmp_path, {})                               # the next run reads it with no request
+    assert _read(later) == ["n2", "n1", "k12b", "q", "s4"] and session2.calls == []
+
+
+def test_a_main_file_fetched_for_its_profile_with_no_page_cached_is_fetched_alone(tmp_path):
+    """A profile read of an issuer whose pages the cache does not hold costs one request: nothing is torn."""
+    client, session = _client(tmp_path, {MAIN: _main(["n1"], (PAGE1, 2)), PAGE1: _block("q", "s4")})
+    assert client.submissions(42)["filings"]["recent"]["accessionNumber"] == ["n1"]
+    assert session.calls == [MAIN]
+
+
 def test_a_main_file_fetched_again_and_found_unchanged_keeps_its_pages(tmp_path):
     """No filing arrived between the two copies, so no row moved: the pages fetched under the first are the second's."""
     served = {MAIN: _main(["n1"], (PAGE1, 2), (PAGE2, 1)), PAGE1: _block("q", "s4"), PAGE2: _block("z")}

@@ -726,6 +726,29 @@ def test_the_delisting_search_reads_a_security_still_seen_at_the_end_about_its_l
     assert want in asked[777]
 
 
+def test_the_delisting_search_reads_a_security_it_leaves_open_as_of_the_run_date(fake_edgar, tmp_path):
+    """FB-028's runs: 18 open securities had no fails row in the 45 days before the run date (White Mountains,
+    Boston Beer, Thomson Reuters), so a copy of their issuer's list fetched two days before it counted as fresh. A
+    security the search finds no ending for, on or after its last sighting, has its issuers read as of the run date
+    and is searched again. One whose ending the search found is not: AET's list is asked for its last sighting
+    only."""
+    index, clients = _clients(fake_edgar)
+    asked: dict[int, list] = {}
+    plain = fake_edgar.submissions
+
+    def _submissions(cik, fresh_after=None):
+        asked.setdefault(int(cik), []).append(fresh_after)
+        return plain(cik, fresh_after) if int(cik) != 777 else {
+            "tickers": ["LIVE"], "exchanges": ["Nasdaq"], "name": "LIVE CO", "formerNames": [], "sic": ""}
+
+    fake_edgar.submissions = _submissions
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+    as_of = clients.as_of or date.today()
+    assert submissions_fresh_after(date(2025, 6, 30), as_of) < as_of       # the case: a sighting older than 45 days
+    assert as_of in asked[777]
+    assert as_of not in asked[1122304]
+
+
 # --- a per-security failure that isn't EdgarBlocked/OpenFigiBlocked is logged, not fatal ---
 
 def test_finder_error_for_one_security_does_not_abort_the_run(fake_edgar, tmp_path, monkeypatch):

@@ -206,6 +206,12 @@ def _search_security(finder: DelistingFinder, registrants: SuccessorRegistrants,
     return found, review, regs, listed
 
 
+def _left_open(found: Sequence[Delisting], last_seen: str | None) -> bool:
+    """Whether the search leaves the security open: it found no ending dated on or after the security's last sighting
+    (none at all, or only ones the security was seen after: Fifth Third's listing transfer of June 2026)."""
+    return not any(not last_seen or e.delist_date >= last_seen for e in found)
+
+
 def _warm_delisting_search(clients: Clients, ordered: list[Security], listing: dict[str, dict],
                            contexts: SecurityContexts, ftd: FtdIndex, workers: int,
                            retired: frozenset[str] = frozenset(), behind_clock: bool = False) -> None:
@@ -391,13 +397,28 @@ def _find_delistings(ctx: _RunContext, securities: dict[str, Security], sec_cusi
             # plus 45 days, or by the run date when that comes first, which is every security still seen at the
             # data's end (FB-028: Exxon Mobil's list was a copy of May 2026, and no run as of 2026-09-25 read its
             # Form 25 of 2026-07-02).
-            for cik in (s.issuer_cik, other_ciks.get(s.sec_id)):
-                if cik is not None and last_seen:
+            ciks = [cik for cik in (s.issuer_cik, other_ciks.get(s.sec_id)) if cik is not None]
+            for cik in ciks:
+                if last_seen:
                     clients.issuers.profile(cik, about=last_seen)
-            found, found_review, regs, listed[s.sec_id] = _search_security(
-                finder, registrants, contexts, s,
-                lambda cik: _listed_now(clients.figi, clients, s, contexts, ftd, listing.get(s.sec_id), retired,
-                                        behind_clock, cik))
+
+            def search() -> tuple[list[Delisting], list[ReviewItem], list[Registrant], bool | None]:
+                return _search_security(
+                    finder, registrants, contexts, s,
+                    lambda cik: _listed_now(clients.figi, clients, s, contexts, ftd, listing.get(s.sec_id), retired,
+                                            behind_clock, cik))
+
+            found, found_review, regs, listed[s.sec_id] = search()
+            # A security the search leaves open is read as of the run date: its last sighting says nothing of how old
+            # a copy may be, since a security with no fails row for 45 days is seen that long before the data's end
+            # (FB-028: 18 open securities of the 2026-09-25 run, White Mountains among them, were read from a copy
+            # fetched two days before it). Its issuers, a successor registrant in force among them, are made current
+            # for the run date and it is searched again.
+            in_force = [*ciks, *(r.cik for r in regs)]
+            if _left_open(found, last_seen) and any(clients.issuers.read_before(c, ctx.as_of) for c in in_force):
+                for cik in in_force:
+                    clients.issuers.profile(cik, about=ctx.as_of)
+                found, found_review, regs, listed[s.sec_id] = search()
             if regs:
                 later[s.sec_id] = regs
         except FATAL:

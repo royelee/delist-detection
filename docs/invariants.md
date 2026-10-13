@@ -19,16 +19,24 @@
   A filing list is a main file and older pages, and its cached copies are read only as one list: each page
   fetched under the copy of the main file it is read with. Any other list is fetched again from the top, the main
   file first and the pages in order (`EdgarClient._whole_list`, FB-025), and a fetch that fails is a stale read,
-  which flags the row that rested on it. A run never leaves a filing list with fewer filings in its cached copies
-  than it found.
+  which flags the row that rested on it. A main file fetched again for its profile alone takes the pages the cache
+  holds with it (`EdgarClient.submissions`, `_holds_a_page`), so a run never leaves a filing list with fewer
+  filings in its cached copies than it found (McEwen, FB-028's runs: a fresh main file beside the page of May,
+  23 filings of 2012 in neither).
   A cached filing list with no fetch date has no known age: it is fresh for no caller that asks for a fresh copy,
   and its file time is never read, because a copied cache carries the day of the copy (`edgar._stamped_on`, FB-028).
   The search for an ending reads an issuer's filings with no day of its own, so stage 5 first makes the issuer's
-  list current for the security's last sighting (`issuers.profile(cik, about=last_seen)`): a security still seen
-  at the data's end is read from a copy fetched on the run date. `run_manifest.json` counts the issuers of the
+  list current for the security's last sighting (`issuers.profile(cik, about=last_seen)`). A security the search
+  then leaves open (`pipeline._left_open`: no ending found on or after its last sighting) has its issuers, a
+  successor registrant in force among them, made current for the run date, and is searched again: the last
+  sighting of a security with no fails row for 45 days says nothing of how old a copy may be. So a run as of D
+  reads no list fetched before D for a security it leaves open. `run_manifest.json` counts the issuers of the
   securities the run leaves open whose list it read from a copy fetched before the run date, or with no fetch
   date (`open_issuers_read_before_as_of`, `pipeline._old_open_issuers`): 0 unless a read failed or a stage read
   an issuer the search did not.
+  A run as of D reads an issuer as it stood on D, however fresh the copy: the filings dated after D are left out,
+  and so is a name taken after D (`edgar._as_filed_by`, `_named_as_on`: a former name that outlasts D is the
+  current name again; Matson, FB-028's runs).
   The limiter (`sec_limiter.SEC_LIMITER`) is shared by every thread of the process
   and, through `~/.cache/delist_detection/sec_rate.lock`
   (`$DELIST_DETECTION_SEC_RATE_LOCK`), by every SEC client on the machine
