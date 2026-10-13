@@ -1,5 +1,4 @@
 sec_id,last_trade_date,truth_file,case,field,truth,library
-,,accuracy_audit.csv,continuation:BBG002W96FT9:2015-10-12,security,GOOG on 2015-10-05,(no single security)
 ,,golden_lifecycles.csv,STN,security,STN on 2008-06-30,(no single security)
 BBG000BBMT95,2019-11-11,accuracy_audit.csv,left_view:CIK931336-COMMON:2013-08-26,ends_after,2019-11-12,2019-11-11
 BBG000BDN878,2019-02-21,diagnosis_truth.csv,BBG000BDN878_2019-03-04,cash_currency,USD,
@@ -72,27 +71,23 @@ BBG000FJJW82,2008-11-21,diagnosis_truth.csv,BBG000FJJW82_2008-12-06,price_ticker
 BBG000FJJW82,2008-11-21,diagnosis_truth.csv,BBG000FJJW82_2008-12-06,stock_ratio,0.4543,
 BBG000FJJW82,2008-11-21,diagnosis_truth.csv,BBG000FJJW82_2008-12-06,value_rule,cash_plus_stock,cash
 BBG000H89QJ6,2016-05-17,diagnosis_truth.csv,BBG000H89QJ6_2016-05-28,stock_ratio,0.48908178,0.540900
-BBG000JBSJZ4,2014-07-01,diagnosis_truth.csv,BBG000JBSJZ4_2014-07-01,internal_last_trade_date,2014-06-30,2014-07-01
 BBG000JXRXK2,2009-01-29,diagnosis_truth.csv,BBG000JXRXK2_2009-06-08,price_ticker,STD,SAN
 BBG000KBQZ88,2015-07-23,diagnosis_truth.csv,CIK1363851-COMMON_2012-07-24,shape,no_ending,ending
 BBG000M34GG1,2022-07-20,diagnosis_truth.csv,BBG000M34GG1_2022-07-31,cash_per_share,4.11,41.460000
-BBG000PYZSR8,2016-05-18,diagnosis_truth.csv,BBG000PYZSR8_2016-05-18,internal_last_trade_date,2016-05-17,2016-05-18
 BBG002B67HB2,2025-08-01,diagnosis_truth.csv,CIK1620280-COMMON_2017-02-28,shape,no_ending,ending
 BBG0038K9G41,2018-03-09,golden_lifecycles.csv,LVNTA,successor_ticker,GLIBA,
-BBG003P9ZSL3,2016-04-18,accuracy_audit.csv,continuation:BBG003P9ZSL3:2016-04-28,ending,present,active
-BBG003P9ZSL3,2016-04-18,diagnosis_truth.csv,BBG003P9ZSL3_2016-04-28,continuation,false,true
-BBG003P9ZSL3,2016-04-18,diagnosis_truth.csv,BBG003P9ZSL3_2016-04-28,internal_last_trade_date,2016-04-15,2016-04-18
-BBG003P9ZSL3,2016-04-18,diagnosis_truth.csv,BBG003P9ZSL3_2016-04-28,legs,3 legs,0 legs
-BBG003P9ZSL3,2016-04-18,diagnosis_truth.csv,BBG003P9ZSL3_2016-04-28,successor_sec_id,,BBG00BFHDCV6
-BBG003P9ZSL3,2016-04-18,diagnosis_truth.csv,BBG003P9ZSL3_2016-04-28,value_rule,basket,continuation
+BBG003P9ZSL3,2016-04-15,accuracy_audit.csv,continuation:BBG003P9ZSL3:2016-04-28,ending,present,active
+BBG003P9ZSL3,2016-04-15,diagnosis_truth.csv,BBG003P9ZSL3_2016-04-28,continuation,false,true
+BBG003P9ZSL3,2016-04-15,diagnosis_truth.csv,BBG003P9ZSL3_2016-04-28,legs,3 legs,0 legs
+BBG003P9ZSL3,2016-04-15,diagnosis_truth.csv,BBG003P9ZSL3_2016-04-28,successor_sec_id,,BBG00BFHDCV6
+BBG003P9ZSL3,2016-04-15,diagnosis_truth.csv,BBG003P9ZSL3_2016-04-28,value_rule,basket,continuation
 BBG004DF9V32,2014-11-12,accuracy_audit.csv,random:ATHL,last_trade_date,2014-11-13,2014-11-12
-BBG005SW6TK5,2016-04-18,accuracy_audit.csv,continuation:BBG005SW6TK5:2016-04-28,ending,present,active
-BBG005SW6TK5,2016-04-18,diagnosis_truth.csv,BBG005SW6TK5_2016-04-28,continuation,false,true
-BBG005SW6TK5,2016-04-18,diagnosis_truth.csv,BBG005SW6TK5_2016-04-28,exit_kind,merger,exchange
-BBG005SW6TK5,2016-04-18,diagnosis_truth.csv,BBG005SW6TK5_2016-04-28,internal_last_trade_date,2016-04-15,2016-04-18
-BBG005SW6TK5,2016-04-18,diagnosis_truth.csv,BBG005SW6TK5_2016-04-28,legs,3 legs,0 legs
-BBG005SW6TK5,2016-04-18,diagnosis_truth.csv,BBG005SW6TK5_2016-04-28,successor_sec_id,,BBG00BFHDFR4
-BBG005SW6TK5,2016-04-18,diagnosis_truth.csv,BBG005SW6TK5_2016-04-28,value_rule,basket,continuation
+BBG005SW6TK5,2016-04-15,accuracy_audit.csv,continuation:BBG005SW6TK5:2016-04-28,ending,present,active
+BBG005SW6TK5,2016-04-15,diagnosis_truth.csv,BBG005SW6TK5_2016-04-28,continuation,false,true
+BBG005SW6TK5,2016-04-15,diagnosis_truth.csv,BBG005SW6TK5_2016-04-28,exit_kind,merger,exchange
+BBG005SW6TK5,2016-04-15,diagnosis_truth.csv,BBG005SW6TK5_2016-04-28,legs,3 legs,0 legs
+BBG005SW6TK5,2016-04-15,diagnosis_truth.csv,BBG005SW6TK5_2016-04-28,successor_sec_id,,BBG00BFHDFR4
+BBG005SW6TK5,2016-04-15,diagnosis_truth.csv,BBG005SW6TK5_2016-04-28,value_rule,basket,continuation
 BBG006F8QZK4,2024-11-26,diagnosis_truth.csv,BBG006F8QZK4_2024-12-07,price_ticker,GEAR,NSTYY
 BBG006LYGNL7,,accuracy_audit.csv,blank_no_value:BBG006LYGNL7:2021-10-16,exit_kind,dropped,merger
 BBG006LYGNL7,,diagnosis_truth.csv,BBG006LYGNL7_2021-10-16,internal_last_trade_date,2021-10-05,
@@ -100,32 +95,26 @@ BBG006LYGNL7,,diagnosis_truth.csv,BBG006LYGNL7_2021-10-16,last_trade_date,2021-1
 BBG006LYGNL7,,diagnosis_truth.csv,BBG006LYGNL7_2021-10-16,price_date,2021-10-06,
 BBG006LYGNL7,,diagnosis_truth.csv,BBG006LYGNL7_2021-10-16,price_sec_id,BBG00ZF0FGT2,
 BBG009XV39D8,2018-04-04,accuracy_audit.csv,blank_no_value:BBG009XV39D8:2018-04-14,ending,present,active
-BBG00BDQ1H13,2022-10-03,diagnosis_truth.csv,BBG00BDQ1H13_2022-10-10,internal_last_trade_date,2022-09-30,2022-10-03
-BBG00BDQ1H13,2022-10-03,diagnosis_truth.csv,BBG00BDQ1H13_2022-10-10,last_trade_date,2022-09-30,2022-10-03
-BBG00BFHD827,2023-08-04,diagnosis_truth.csv,BBG00BFHD827_2023-08-13,continuation,false,true
-BBG00BFHD827,2023-08-04,diagnosis_truth.csv,BBG00BFHD827_2023-08-13,exit_kind,merger,exchange
-BBG00BFHD827,2023-08-04,diagnosis_truth.csv,BBG00BFHD827_2023-08-13,internal_last_trade_date,2023-08-03,2023-08-04
-BBG00BFHD827,2023-08-04,diagnosis_truth.csv,BBG00BFHD827_2023-08-13,legs,2 legs,0 legs
-BBG00BFHD827,2023-08-04,diagnosis_truth.csv,BBG00BFHD827_2023-08-13,successor_sec_id,,BBG01HLM8W28
-BBG00BFHD827,2023-08-04,diagnosis_truth.csv,BBG00BFHD827_2023-08-13,value_rule,basket,continuation
-BBG00BFHD9S7,2023-08-04,diagnosis_truth.csv,BBG00BFHD9S7_2023-08-13,continuation,false,true
-BBG00BFHD9S7,2023-08-04,diagnosis_truth.csv,BBG00BFHD9S7_2023-08-13,exit_kind,merger,exchange
-BBG00BFHD9S7,2023-08-04,diagnosis_truth.csv,BBG00BFHD9S7_2023-08-13,internal_last_trade_date,2023-08-03,2023-08-04
-BBG00BFHD9S7,2023-08-04,diagnosis_truth.csv,BBG00BFHD9S7_2023-08-13,legs,2 legs,0 legs
-BBG00BFHD9S7,2023-08-04,diagnosis_truth.csv,BBG00BFHD9S7_2023-08-13,successor_sec_id,,BBG01HLMB6H5
-BBG00BFHD9S7,2023-08-04,diagnosis_truth.csv,BBG00BFHD9S7_2023-08-13,value_rule,basket,continuation
-BBG00BFHDCV6,2023-08-04,diagnosis_truth.csv,BBG00BFHDCV6_2023-08-13,continuation,false,true
-BBG00BFHDCV6,2023-08-04,diagnosis_truth.csv,BBG00BFHDCV6_2023-08-13,exit_kind,merger,exchange
-BBG00BFHDCV6,2023-08-04,diagnosis_truth.csv,BBG00BFHDCV6_2023-08-13,internal_last_trade_date,2023-08-03,2023-08-04
-BBG00BFHDCV6,2023-08-04,diagnosis_truth.csv,BBG00BFHDCV6_2023-08-13,legs,2 legs,0 legs
-BBG00BFHDCV6,2023-08-04,diagnosis_truth.csv,BBG00BFHDCV6_2023-08-13,successor_sec_id,,BBG01HLMB809
-BBG00BFHDCV6,2023-08-04,diagnosis_truth.csv,BBG00BFHDCV6_2023-08-13,value_rule,basket,continuation
-BBG00BFHDFR4,2023-08-04,diagnosis_truth.csv,BBG00BFHDFR4_2023-08-13,continuation,false,true
-BBG00BFHDFR4,2023-08-04,diagnosis_truth.csv,BBG00BFHDFR4_2023-08-13,exit_kind,merger,exchange
-BBG00BFHDFR4,2023-08-04,diagnosis_truth.csv,BBG00BFHDFR4_2023-08-13,internal_last_trade_date,2023-08-03,2023-08-04
-BBG00BFHDFR4,2023-08-04,diagnosis_truth.csv,BBG00BFHDFR4_2023-08-13,legs,2 legs,0 legs
-BBG00BFHDFR4,2023-08-04,diagnosis_truth.csv,BBG00BFHDFR4_2023-08-13,successor_sec_id,,BBG01HLMBCG3
-BBG00BFHDFR4,2023-08-04,diagnosis_truth.csv,BBG00BFHDFR4_2023-08-13,value_rule,basket,continuation
+BBG00BFHD827,2023-08-03,diagnosis_truth.csv,BBG00BFHD827_2023-08-13,continuation,false,true
+BBG00BFHD827,2023-08-03,diagnosis_truth.csv,BBG00BFHD827_2023-08-13,exit_kind,merger,exchange
+BBG00BFHD827,2023-08-03,diagnosis_truth.csv,BBG00BFHD827_2023-08-13,legs,2 legs,0 legs
+BBG00BFHD827,2023-08-03,diagnosis_truth.csv,BBG00BFHD827_2023-08-13,successor_sec_id,,BBG01HLM8W28
+BBG00BFHD827,2023-08-03,diagnosis_truth.csv,BBG00BFHD827_2023-08-13,value_rule,basket,continuation
+BBG00BFHD9S7,2023-08-03,diagnosis_truth.csv,BBG00BFHD9S7_2023-08-13,continuation,false,true
+BBG00BFHD9S7,2023-08-03,diagnosis_truth.csv,BBG00BFHD9S7_2023-08-13,exit_kind,merger,exchange
+BBG00BFHD9S7,2023-08-03,diagnosis_truth.csv,BBG00BFHD9S7_2023-08-13,legs,2 legs,0 legs
+BBG00BFHD9S7,2023-08-03,diagnosis_truth.csv,BBG00BFHD9S7_2023-08-13,successor_sec_id,,BBG01HLMB6H5
+BBG00BFHD9S7,2023-08-03,diagnosis_truth.csv,BBG00BFHD9S7_2023-08-13,value_rule,basket,continuation
+BBG00BFHDCV6,2023-08-03,diagnosis_truth.csv,BBG00BFHDCV6_2023-08-13,continuation,false,true
+BBG00BFHDCV6,2023-08-03,diagnosis_truth.csv,BBG00BFHDCV6_2023-08-13,exit_kind,merger,exchange
+BBG00BFHDCV6,2023-08-03,diagnosis_truth.csv,BBG00BFHDCV6_2023-08-13,legs,2 legs,0 legs
+BBG00BFHDCV6,2023-08-03,diagnosis_truth.csv,BBG00BFHDCV6_2023-08-13,successor_sec_id,,BBG01HLMB809
+BBG00BFHDCV6,2023-08-03,diagnosis_truth.csv,BBG00BFHDCV6_2023-08-13,value_rule,basket,continuation
+BBG00BFHDFR4,2023-08-03,diagnosis_truth.csv,BBG00BFHDFR4_2023-08-13,continuation,false,true
+BBG00BFHDFR4,2023-08-03,diagnosis_truth.csv,BBG00BFHDFR4_2023-08-13,exit_kind,merger,exchange
+BBG00BFHDFR4,2023-08-03,diagnosis_truth.csv,BBG00BFHDFR4_2023-08-13,legs,2 legs,0 legs
+BBG00BFHDFR4,2023-08-03,diagnosis_truth.csv,BBG00BFHDFR4_2023-08-13,successor_sec_id,,BBG01HLMBCG3
+BBG00BFHDFR4,2023-08-03,diagnosis_truth.csv,BBG00BFHDFR4_2023-08-13,value_rule,basket,continuation
 BBG00DJ2LJF5,2018-12-27,accuracy_audit.csv,continuation:BBG00DJ2LJF5:2019-01-07,ending,present,active
 BBG00DJ2LJF5,2018-12-27,diagnosis_truth.csv,BBG00DJ2LJF5_2019-01-07,cash_currency,USD,
 BBG00DJ2LJF5,2018-12-27,diagnosis_truth.csv,BBG00DJ2LJF5_2019-01-07,cash_per_share,76.97,
