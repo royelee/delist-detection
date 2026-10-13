@@ -67,3 +67,20 @@ def test_a_weak_answer_at_the_first_sighting_is_no_answer():
     lookup = _ByDate({"2015-12-31": (101, "efts_name_mismatch")})
     got = _identify(lookup)
     assert "W@2015-12-31" not in got.issuers or got.issuers["W@2015-12-31"].cik != 101 or got.tier("W@2015-12-31") != "name_search"
+
+
+def test_an_era_with_only_weak_answers_is_asked_at_its_first_sighting_too():
+    """Triad Hospitals (TRI, FB-026): bought in July 2007 and still named by the snapshots of 2008. At the era's two
+    later dates full-text search finds other companies, weakly (TRI-S Security, Tri-Valley), and the fails rows
+    under TRI are Thomson Reuters', so the weak answer is dropped and the seeds were not placed. At the first
+    sighting the name search answers Triad."""
+    lookup = _ByDate({"2015-12-31": (101, "name_search")}, otherwise=(303, "efts_name_mismatch"))
+    got = _identify(lookup)
+    assert got.issuers["W@2015-12-31"].cik == 101 and got.tier("W@2015-12-31") == "name_search"
+
+
+def test_a_weak_answer_at_the_first_sighting_leaves_the_weak_answer_of_the_later_dates():
+    lookup = _ByDate({"2015-12-31": (101, "efts_name_mismatch")}, otherwise=(303, "efts_name_mismatch"))
+    got = _identify(lookup)
+    assert "2015-12-31" in lookup.dates
+    assert "W@2015-12-31" not in got.issuers or got.issuers["W@2015-12-31"].cik != 101
