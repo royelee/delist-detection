@@ -217,30 +217,3 @@ def test_a_run_date_hides_the_filings_made_after_it(tmp_path):
     assert later.submissions(42)["filings"]["recent"]["accessionNumber"] == ["a3", "a2", "a1"]
     assert FILED_AFTER_RUN_DATE not in later.submissions(42)
 
-
-def test_a_run_date_hides_a_name_taken_after_it(tmp_path):
-    """Matson 2026 (FB-028's runs): the list fetched on 2026-10-13 for a run as of 2026-09-25 carried a former-name
-    row SEC added on 2026-10-01, "Matson, Inc." from 2012-07-03 to 2026-10-01, and the row moved the issuer's dates
-    of 2012 in a contract table. A former name that outlasts the run date was the name on that day: it is the
-    current name again and no former one, as a copy fetched that day held it. One taken after the day is left out.
-    The cached copy keeps every name."""
-    recent = {"accessionNumber": ["a2", "a1"], "form": ["8-K", "10-Q"], "filingDate": ["2026-10-01", "2026-08-05"]}
-    former = [{"name": "Matson, Inc.", "from": "2012-07-03T00:00:00.000Z", "to": "2026-10-01T00:00:00.000Z"},
-              {"name": "ALEXANDER & BALDWIN INC", "from": "1994-11-15T00:00:00.000Z", "to": "2012-06-25T00:00:00.000Z"}]
-    cached = {"name": "MATSON, INC.", "formerNames": former, "__fetched__": "2026-09-25",
-              "filings": {"recent": recent, "files": []}}
-    client = EdgarClient(cache_dir=tmp_path, session=_Session(), today=date(2026, 9, 25))
-    cp = client._cache_path(URL)
-    cp.write_text(json.dumps(cached))
-    got = client.submissions(42)
-    assert got["name"] == "Matson, Inc." and got["formerNames"] == former[1:]
-    assert json.loads(cp.read_text()) == cached
-    later = EdgarClient(cache_dir=tmp_path, session=_Session(), today=date(2026, 10, 10))
-    assert later.submissions(42)["name"] == "MATSON, INC." and later.submissions(42)["formerNames"] == former
-    # a name the issuer took only after the run date: not a name yet, and the name before it still the current one
-    renamed = {**cached, "name": "NEWER CO", "formerNames": [
-        {"name": "NEW CO", "from": "2026-09-28T00:00:00.000Z", "to": "2026-10-01T00:00:00.000Z"},
-        {"name": "OLD CO", "from": "2001-01-01T00:00:00.000Z", "to": "2026-09-27T00:00:00.000Z"}]}
-    cp.write_text(json.dumps(renamed))
-    got = client.submissions(42)
-    assert got["name"] == "OLD CO" and got["formerNames"] == []

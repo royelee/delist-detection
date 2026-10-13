@@ -207,9 +207,10 @@ def _search_security(finder: DelistingFinder, registrants: SuccessorRegistrants,
 
 
 def _left_open(found: Sequence[Delisting], last_seen: str | None) -> bool:
-    """Whether the search leaves the security open: it found no ending dated on or after the security's last sighting
-    (none at all, or only ones the security was seen after: Fifth Third's listing transfer of June 2026)."""
-    return not any(not last_seen or e.delist_date >= last_seen for e in found)
+    """Whether the search leaves the security open: it found no real ending dated on or after the security's last
+    sighting (none at all; only ones the security was seen after: Fifth Third's listing transfer of June 2026; or
+    only rows it went on from as itself: Light & Wonder's move off Nasdaq of 2025-11-13, since when it is LNWO)."""
+    return not any(is_real_ending(e) and (not last_seen or e.delist_date >= last_seen) for e in found)
 
 
 def _warm_delisting_search(clients: Clients, ordered: list[Security], listing: dict[str, dict],
@@ -1130,6 +1131,11 @@ def _successor_endings(ctx: _RunContext, finder: DelistingFinder, added: Mapping
     mark = ctx.meter.start()
     for sid, a in sorted(added.items()):
         cik = a.security.issuer_cik
+        if cik is not None:
+            # stage 5 never searches a security the run adds, so nothing made its issuer's list current: each is
+            # read as of the run date (FB-028: new Seagate, new Sinclair, new Gates and new Clear Channel Outdoor
+            # were the open securities still read from a copy older than the run date)
+            clients.issuers.profile(cik, about=ctx.as_of)
         if isinstance(a, AddedAcquirer) or cik is None or sid in securities:
             continue
         rows = list(getattr(a, "rows", []))

@@ -118,15 +118,16 @@ def _filed_by(hits: list[dict], day: date) -> list[dict]:
 
 
 def _as_filed_by(sub: Any, day: date) -> Any:
-    """A submissions JSON as it stood on `day`: its names as they were then (`_named_as_on`), its recent filings dated
-    after `day` dropped, every column cut alike, and the forms left out named under FILED_AFTER_RUN_DATE (a Form 25 among them shows the issuer was still listed
-    on `day`, though the copy's `tickers`/`exchanges` already show the later state: `listing_status`). The cached
-    copy keeps every filing for a later run date. Any other payload is returned as it is."""
+    """A submissions JSON as it stood on `day`: its recent filings dated after `day` dropped, every column cut alike,
+    and the forms left out named under FILED_AFTER_RUN_DATE (a Form 25 among them shows the issuer was still listed
+    on `day`, though the copy's `tickers`/`exchanges` already show the later state: `listing_status`). The names
+    are left as the copy has them: EDGAR lists a current name among the former ones with its first day and the day
+    of the issuer's latest filing (Accenture plc, from 2009-09-01), so a former name that outlasts `day` is no
+    rename after it, and every reader of the names asks them by date. The cached copy keeps every filing for a
+    later run date. Any other payload is returned as it is."""
     recent = sub.get("filings", {}).get("recent") if isinstance(sub, dict) else None
     dates = recent.get("filingDate") if isinstance(recent, dict) else None
     last = day.isoformat()
-    if isinstance(sub, dict):
-        sub = _named_as_on(sub, last)
     if not isinstance(dates, list) or all(d <= last for d in dates):
         return sub
     keep = [i for i, d in enumerate(dates) if d <= last]
@@ -135,23 +136,6 @@ def _as_filed_by(sub: Any, day: date) -> Any:
     forms = recent.get("form") if isinstance(recent.get("form"), list) else []
     later = sorted({forms[i] for i, d in enumerate(dates) if d > last and i < len(forms)})
     return {**sub, "filings": {**sub["filings"], "recent": cut}, FILED_AFTER_RUN_DATE: later}
-
-
-def _named_as_on(sub: dict, last: str) -> dict:
-    """A submissions JSON with the names it had on the day `last` (ISO). A former name whose last day is after it
-    was in force then: when it began by that day it is the current name again and no former one, as a copy fetched
-    that day held it, and when it began later it is left out. `sub` itself when no former name outlasts the day.
-    (FB-028's runs: SEC added "Matson, Inc.", 2012-07-03 to 2026-10-01, to Matson's former names on 2026-10-01, and
-    a run as of 2026-09-25 read it.)"""
-    former = sub.get("formerNames")
-    if not isinstance(former, list):
-        return sub
-    after = [fn for fn in former if isinstance(fn, dict) and str(fn.get("to") or "")[:10] > last]
-    if not after:
-        return sub
-    then = [fn for fn in after if fn.get("name") and str(fn.get("from") or "")[:10] <= last]
-    name = max(then, key=lambda fn: str(fn.get("from") or ""))["name"] if then else sub.get("name")
-    return {**sub, "name": name, "formerNames": [fn for fn in former if not any(fn is a for a in after)]}
 
 
 def submissions_fresh_after(on: date, today: date | None = None) -> date:

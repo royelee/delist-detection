@@ -749,6 +749,23 @@ def test_the_delisting_search_reads_a_security_it_leaves_open_as_of_the_run_date
     assert as_of not in asked[1122304]
 
 
+def test_a_security_that_went_on_after_a_row_is_left_open_by_the_search():
+    """Light & Wonder 2025 (FB-028's runs): its Form 25 row of 2025-11-13 is a move off the exchange that the
+    security went on from, as itself, under LNWO. A row whose successor is the security itself ends nothing, so the
+    search leaves the security open and its issuer is read as of the run date."""
+    from types import SimpleNamespace
+
+    def row(sid, day, successor):
+        return SimpleNamespace(sec_id=sid, delist_date=day, record=SimpleNamespace(successor_sec_id=successor))
+
+    left_open = pipeline._left_open
+    assert left_open([], "2026-08-01") and left_open([], None)
+    assert not left_open([row("A", "2018-12-09", None)], "2018-11-28")           # an ending after the last sighting
+    assert left_open([row("A", "2026-06-05", None)], "2026-09-01")               # seen after it: Fifth Third's transfer
+    assert left_open([row("A", "2025-11-13", "A")], "2025-11-12")                # it went on as itself: LNW to LNWO
+    assert not left_open([row("A", "2025-11-13", "B")], "2025-11-12")            # a continuation into another security
+
+
 # --- a per-security failure that isn't EdgarBlocked/OpenFigiBlocked is logged, not fatal ---
 
 def test_finder_error_for_one_security_does_not_abort_the_run(fake_edgar, tmp_path, monkeypatch):

@@ -27,16 +27,19 @@
   and its file time is never read, because a copied cache carries the day of the copy (`edgar._stamped_on`, FB-028).
   The search for an ending reads an issuer's filings with no day of its own, so stage 5 first makes the issuer's
   list current for the security's last sighting (`issuers.profile(cik, about=last_seen)`). A security the search
-  then leaves open (`pipeline._left_open`: no ending found on or after its last sighting) has its issuers, a
+  then leaves open (`pipeline._left_open`: no real ending found on or after its last sighting) has its issuers, a
   successor registrant in force among them, made current for the run date, and is searched again: the last
   sighting of a security with no fails row for 45 days says nothing of how old a copy may be. So a run as of D
   reads no list fetched before D for a security it leaves open. `run_manifest.json` counts the issuers of the
   securities the run leaves open whose list it read from a copy fetched before the run date, or with no fetch
   date (`open_issuers_read_before_as_of`, `pipeline._old_open_issuers`): 0 unless a read failed or a stage read
   an issuer the search did not.
-  A run as of D reads an issuer as it stood on D, however fresh the copy: the filings dated after D are left out,
-  and so is a name taken after D (`edgar._as_filed_by`, `_named_as_on`: a former name that outlasts D is the
-  current name again; Matson, FB-028's runs).
+  A security the run adds (a successor, an acquirer's line) is never searched by stage 5, so stage 9d reads its
+  issuer as of the run date before it looks for its ending (`_successor_endings`).
+  A run as of D leaves out the filings dated after D (`edgar._as_filed_by`) and reads the names as the copy has
+  them: EDGAR lists a current name among the former ones with its first day (Accenture plc, from 2009-09-01), so
+  a former name that outlasts D is no rename after D. A fresh copy can therefore date a name SEC had not dated
+  before (Matson's "Matson, Inc." from 2012-07-03, added on 2026-10-01), and the issuer dates that rest on it move.
   The limiter (`sec_limiter.SEC_LIMITER`) is shared by every thread of the process
   and, through `~/.cache/delist_detection/sec_rate.lock`
   (`$DELIST_DETECTION_SEC_RATE_LOCK`), by every SEC client on the machine

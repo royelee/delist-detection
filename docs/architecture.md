@@ -220,8 +220,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   again from the top, the main file first and then every page in order, which can hold a filing twice and never
   lose one. `submissions()` fetching a main file again takes the pages the cache holds with it, so the cache is one
   list between runs too (FB-028's runs: McEwen). `submissions()` and `recent_filings()` answer as of the run date
-  (`_as_filed_by`): filings dated after it are left out, and a former name that outlasts it is the current name
-  again (`_named_as_on`: Matson's row of 2026-10-01 in a run as of 2026-09-25). No clock time is written into the cache, so two runs still leave the same bytes. Owns `EdgarBlocked`, `resolve_user_agent()`, and
+  (`_as_filed_by`): filings dated after it are left out, and the names are left as the copy has them. No clock time is written into the cache, so two runs still leave the same bytes. Owns `EdgarBlocked`, `resolve_user_agent()`, and
   `sec_get()`: the one SEC request path (`sec_limiter.throttle`, User-Agent,
   `sec_stats` counting, `retry_request`, `EdgarBlocked` on 403/429) that
   `EdgarClient` and `sources/sec_http.py` share.
