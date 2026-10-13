@@ -635,7 +635,13 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   search answered; the candidates are ranked by the words they share with the observed name, then one that EDGAR
   names with exactly those words before one with more, FB-026: "BUNGE LIMITED" is BUNGE LTD and not BUNGE LIMITED
   FINANCE CORP, then by date and order found, `_name_search` (a remembered answer the ranking now puts behind such
-  a company is resolved again, `_still_named`); `_index_candidates`: the one active holder of the exact
+  a company is resolved again, `_still_named`); where the full-text tier gave only a weak answer (a filer of a Form
+  25 near the date under another name), a candidate replaces it only with its own Form 25 or 15 within 90 days of
+  the date (PEAK, WE) or as a delisted company of exactly the expected name: a Form 25 or 15 in the 1,500 days
+  before the date and no periodic report after it (`_may_replace`, `_delisted_under_the_name`, FB-026: seeds of
+  2008 that still name Triad Hospitals, delisted in July 2007, are Triad's and not TRI-S Security's; a live
+  issuer of the name replaces nothing, BWC), and a remembered weak answer is checked against the same rule
+  (`_still_named`); `_index_candidates`: the one active holder of the exact
   name, else the 25-NSE/25/15-12G form filter's one filer the query names
   (`_one_filer`), else the exact name; when none of those candidates is accepted, the last resort
   `_agreeing_issuer` (FB-004 part c, DD): the one CIK listed under the same name written with its words run

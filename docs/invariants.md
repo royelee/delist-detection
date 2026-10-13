@@ -597,10 +597,20 @@
   2010, is the 2006 spin-off, CIK 1368457, not the old registrant renamed New Alberto-Culver LLC, 3327). With no
   index the remembered answer stands. With no exact holder or several it stands while it agrees with the tier's
   ranking rule (FB-026): an answer whose company EDGAR does not name with exactly the expected name's words is
-  resolved again when the tier now ranks first a company it does name so (`BG|2009-02-19|BUNGE LIMITED`, kept as
-  Bunge Limited Finance Corp, 1230396, becomes Bunge Ltd, 1144519). So a change to the ranking takes effect on
-  a warm cache with no new `__version__`, and only the answers it can change are asked again: 107 of the 1,404
-  name-search answers kept for the consumer's seed list, of which two changed, both Bunge's.
+  resolved again when the tier's answer today is a company it does name so (`BG|2009-02-19|BUNGE LIMITED`, kept
+  as Bunge Limited Finance Corp, 1230396, becomes Bunge Ltd, 1144519). The tier's answer today is the one
+  `resolve` would take: the first candidate in rank that existed by the era's first sighting and passes the tier's
+  check (`_accepts`), so an answer the tier's last resort gave (DuPont 2017) stands. A remembered weak full-text
+  answer (`efts_name_mismatch` from the search's second pass, a filer named without the ticker) stands until the
+  name tier has a company that may replace it (`_may_replace`: its own Form 25 or 15 within 90 days of the date,
+  or a delisted company of exactly the expected name, `_delisted_under_the_name`; FB-026:
+  `TRI|2009-07-02|TRIAD HOSPITALS INC`, kept as TRI-S Security Corp, becomes Triad Hospitals, 1074771). So a
+  change to either rule takes effect on a warm cache with no new `__version__`. The recheck searches nothing: it
+  reads the name index and the issuers' copies, and an issuer it has not read before is one request, once. On the
+  consumer's seed list it reads the tier's ranking for 107 of the 1,404 kept name-search answers (the others are
+  a company of exactly the name's words) and resolves two again, both Bunge's. The older rule of the exact holder
+  (FB-004) resolves a few answers again at every run, and each gets the answer it had (Aaron's Holdings 2020,
+  Ferguson 2024, NorthStar Asset Management 2017, Pulte Homes 2010).
 
 ## A merger payout is gated; `delistings.csv` carries both the gated and the raw read
 
