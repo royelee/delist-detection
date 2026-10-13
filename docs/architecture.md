@@ -980,7 +980,10 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
 - `identity/ticker_evidence.py` — decision 1: what ties a placeholder's ticker to its
   CIK. A resolver tier that names the ticker (`TICKER_TIERS`), else one
   EDGAR full-text search of the CIK's own filings (`full_text_search(...,
-  ciks=)`), cached like every search.
+  ciks=)`), cached like every search. A ticker shorter than three letters is
+  never searched bare; it is searched with an exchange in front, as a
+  company's releases write it (`"NYSE: GM"`, `EXCHANGE_PREFIXES`; FB-003's
+  follow-up: old General Motors, whose CIK the resolver found by name).
 - `identity/issuer_in_force.py` — the issuer CIK on each sighting's date: the era's CIK when its EDGAR name that day agrees
   with the observed name, else the one other CIK SEC's name index lists under that name whose name agreed then
   (MRK 2008: old Merck & Co, CIK 64978). `issuer_changes` dates each change: it sorts sightings by day then CIK

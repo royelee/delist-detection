@@ -10,8 +10,10 @@ share class. Its identity is confirmed when:
   `(TICKER)` token (`efts`), or EDGAR's current ticker map (`company_tickers`);
 - or else EDGAR's full-text search finds the ticker in one of that CIK's own
   filings dated within a year of the era's sightings (`ticker_filing`).
-A ticker shorter than MIN_SEARCH_TICKER is never searched: the phrase would
-match ordinary words in the issuer's own filings.
+A ticker shorter than MIN_SEARCH_TICKER is never searched bare: the phrase would
+match ordinary words in the issuer's own filings. It is searched with an
+exchange in front, the way a company's own releases write it ("NYSE: GM";
+FB-003 follow-up: old General Motors, whose CIK the resolver found by name).
 """
 from __future__ import annotations
 
@@ -23,6 +25,7 @@ TICKER_TIERS = frozenset({"cik_map", "manual", "rename", "efts", "company_ticker
 SEARCH_FORMS = "8-K,10-K,10-Q,DEF 14A,25-NSE,20-F,6-K,40-F"
 SEARCH_PAD_DAYS = 365
 MIN_SEARCH_TICKER = 3
+EXCHANGE_PREFIXES = ("NYSE", "Nasdaq", "NYSE American", "NYSE MKT", "AMEX")   # tried in this order for a short ticker
 
 
 @dataclass(frozen=True)
@@ -37,15 +40,22 @@ def ticker_filing(search: Callable, cik: int, ticker: str, first: str, last: str
     """The accession of a filing by `cik` whose text names `ticker`, filed within
     SEARCH_PAD_DAYS of [first, last], or None. `search` is
     EdgarClient.full_text_search; a hit counts only when its own `ciks` list
-    holds `cik`."""
-    if len(ticker) < MIN_SEARCH_TICKER:
+    holds `cik`. The phrase is the ticker, or for one shorter than
+    MIN_SEARCH_TICKER the ticker after each exchange of EXCHANGE_PREFIXES
+    ("NYSE: GM"), the first that hits answering."""
+    if not ticker:
         return None
     lo = date.fromisoformat(first) - timedelta(days=SEARCH_PAD_DAYS)
     hi = date.fromisoformat(last) + timedelta(days=SEARCH_PAD_DAYS)
-    for hit in search(f'"{ticker}"', SEARCH_FORMS, lo, hi, ciks=(cik,)):
-        src = hit.get("_source", {})
-        if any(int(c) == cik for c in src.get("ciks") or []):
-            return src.get("adsh") or hit.get("_id", "")
+    if len(ticker) >= MIN_SEARCH_TICKER:
+        phrases = [f'"{ticker}"']
+    else:
+        phrases = [f'"{exchange}: {ticker}"' for exchange in EXCHANGE_PREFIXES]
+    for phrase in phrases:
+        for hit in search(phrase, SEARCH_FORMS, lo, hi, ciks=(cik,)):
+            src = hit.get("_source", {})
+            if any(int(c) == cik for c in src.get("ciks") or []):
+                return src.get("adsh") or hit.get("_id", "")
     return None
 
 
