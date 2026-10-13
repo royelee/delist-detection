@@ -477,15 +477,12 @@ def _resolve_issuers(eras: list[TickerEra], ftd: FtdIndex, handoffs: Sequence[Ha
         return at_cap, lookup.resolve(e.ticker, last_seen[e.key], pin=e.cik_pin, name=e.name, since=e.first, **ex)
 
     def first_pass(lookup, e: TickerEra) -> FirstPass:
-        """`choose_first_pass` of the two dates; an era left with no answer, or with a weak one kept aside only, is
-        asked once more at its first sighting, where its observed name was in force from the start (WestRock, WRK
-        2015 to 2024: the company that holds the name at the end, CIK 1732845, was formed in 2018 and is no issuer
-        of an era that began in 2015, and the company that held it then is found by the first date; Triad
-        Hospitals, TRI 2008, FB-026: bought in 2007 and still named by two snapshots of 2008, its later dates find
-        other companies weakly, by full-text search, and the fails rows under the ticker are Thomson Reuters').
-        A strong answer there is the era's; any other leaves what the two dates gave."""
+        """`choose_first_pass` of the two dates; an era left with no answer at all is asked once more at its first
+        sighting, where its observed name was in force from the start (WestRock, WRK 2015 to 2024: the company that
+        holds the name at the end, CIK 1732845, was formed in 2018 and is no issuer of an era that began in 2015, and
+        the company that held it then is found by the first date)."""
         chosen = choose_first_pass(*both(lookup, e))
-        if chosen.answer.cik is not None or e.first >= capped[e.key]:
+        if chosen.answer.cik is not None or chosen.fallback is not None or e.first >= capped[e.key]:
             return chosen
         ex = {"exclude": excluded[e.key]} if e.key in excluded else {}
         at_first = lookup.resolve(e.ticker, e.first, pin=e.cik_pin, name=e.name, since=e.first, **ex)

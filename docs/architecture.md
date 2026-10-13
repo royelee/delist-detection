@@ -649,9 +649,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   (`identity.era_capped_seen`: the last observation, or a later fails row of the era's own within 400 days) and the end of the
   era's own fails rows (`identity.last_sightings`: its own CUSIP's rows under its ticker for as long as they continue, each step at
   most 400 days, stopping before the ticker's next era; one seed in 2008 is asked at the security's real end).
-  `identity.choose_first_pass` picks the answer. An era the two dates leave with no answer, or with a weak one kept
-  aside only, is asked once more at its first sighting, and a strong answer there is the era's (`first_pass`:
-  WestRock 2015; Triad Hospitals 2008, FB-026, whose later dates find other companies weakly). A miss has no CIK; a weak answer is a CIK from one of `WEAK_SOURCES`
+  `identity.choose_first_pass` picks the answer. A miss has no CIK; a weak answer is a CIK from one of `WEAK_SOURCES`
   (`efts_name_mismatch`, `efts_frequency_name_mismatch`, `rename`); any other CIK is strong (`TickerResolution.strong`).
   Both strong and one CIK: the capped date's answer. Both strong and two CIKs: the end of the line's (another company of
   the name answers early: ITC Holdings 2016, Sprint 2020), unless it is `company_tickers` and the capped date's is not (by
