@@ -503,6 +503,18 @@
   names the security counts too, `history.unheld_trading_days`: XOM 2026): then it is still trading and its history stays open. A security whose ending
   went on as itself and whose old registrant a new one replaced (`endings/registrants.py`) is listed through the
   new registrant, and the contract names it as the issuer in force from its registration.
+  A continuation leaves no trading day between its two histories (FB-029, `Histories.handoff_start`): a
+  successor with no history on or before the predecessor's last day starts on the trading day after it, under the
+  ticker and the CUSIP it is first seen with, when that first sighting comes within 10 trading days
+  (`HANDOFF_START_TRADING_DAYS`). The successor's start moves and the predecessor's end, its last trade date,
+  stays. A successor first seen later keeps its own start: across a longer gap nothing says which ticker it
+  traded under. Exxon Mobil 2026: the old line ends on 2026-06-30, the holding company's CUSIP has its first
+  fails row on 2026-07-02, and its history starts on 2026-07-01. When the successor takes a ticker another
+  security of the run still holds on that day, that security keeps it only if it is sighted under it on or after
+  the successor's own first sighting; otherwise its range under the ticker ends the day before the handoff and
+  its next range starts on the handoff day, so no ticker is shared and no day is left out (Ingersoll Rand and
+  Trane, 2020-03-02: IR passes to the former Gardner Denver and Trane is TT from that day, where its last IR
+  fails row is dated 2020-03-02 and its first TT row 2020-03-03).
   A successor's ticker is not its predecessor's (`Histories._successor_starts`, one map shared by the clip check,
   the ranges and the listed answer): when a delisting's successor is another security X that holds ticker T from day F (X's first
   sighting under T on or after the delisting's confirmed last trade day, or from 30 days before its delist date

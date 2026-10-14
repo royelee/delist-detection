@@ -9,13 +9,15 @@ from datetime import date, timedelta
 from delist_detection.identity.added_securities import AddedLineSuccessor
 from delist_detection.vocabulary.crsp_codes import CrspBucket
 from delist_detection.sources.ftd import FtdIndex, FtdRow
-from delist_detection.identity.history import (Ending, Histories, SecurityEnd, Sighting, cusip_sightings,
-                                      filtered_ticker_sightings, is_backfilled, observation_map_rows,
-                                      ranges_from_sightings, ticker_range_review, ticker_sightings)
+from delist_detection.identity.history import (HANDOFF_START_TRADING_DAYS, Ending, Histories, SecurityEnd, Sighting,
+                                      cusip_sightings, filtered_ticker_sightings, is_backfilled,
+                                      observation_map_rows, ranges_from_sightings, ticker_range_review,
+                                      ticker_sightings)
 from delist_detection.endings.last_trade import NO_DAY, UNCONFIRMED, LastTrade
 from delist_detection.identity.observations import Observation, TickerEra
 from delist_detection.identity.security_master import Security
 from delist_detection.outputs.store import DelistingKey
+from delist_detection.vocabulary.trading_calendar import add_trading_days
 
 
 # --- observation_map_rows: one row per observation, its sec_id and status, read from the history's own answer ---
@@ -597,8 +599,8 @@ def _old_ranges(history):
 def test_a_successors_ticker_is_not_the_predecessors_AON_shape():
     """AON 2012: the old CUSIP's fails rows keep coming under TEST after the continuation took the ticker, at
     changing prices. They are the successor's: the continuation ends S (without the successor they would read as S
-    trading on), its TEST range and its CUSIP's end at the last trade, the successor holds TEST from its first day
-    and no ticker is shared."""
+    trading on), its TEST range and its CUSIP's end at the last trade, the successor holds TEST from the trading
+    day after it (FB-029: its first sighting is a day later) and no ticker is shared."""
     fails = _test_fails(3, date(2012, 3, 1)) + _test_fails(20, date(2012, 4, 3), step_days=4)
     history, ending = _successor_history(CrspBucket.EXCHANGE_TRANSFER, date(2012, 3, 30), "2012-04-03", fails)
     assert history.going_on == frozenset()
@@ -606,7 +608,7 @@ def test_a_successors_ticker_is_not_the_predecessors_AON_shape():
     assert _old_ranges(history) == [("TEST", "2012-03-30")]
     assert [r["valid_to"] for r in history.cusip_rows] == ["2012-03-30"]
     assert [(r["sec_id"], r["valid_from"], r["valid_to"]) for r in history.ticker_rows if r["sec_id"] == "BBGNEW"] \
-        == [("BBGNEW", "2012-04-03", None)]
+        == [("BBGNEW", "2012-04-02", None)]
     assert ticker_range_review(history.ticker_rows) == []
     without, _ = _successor_history(CrspBucket.EXCHANGE_TRANSFER, date(2012, 3, 30), "2012-04-03", fails,
                                     successor=None)
@@ -625,6 +627,160 @@ def test_a_successors_ticker_is_not_the_predecessors_STX_shape():
     x = AddedLineSuccessor(Security("BBGNEW", 6, "COMMON", "T", "Common Stock", False, "cusip"), "TEST",
                            "2021-05-19", [])
     assert ticker_range_review(history.ticker_rows + [x.history_row(listed=True, exchange=None)]) == []
+
+
+# --- FB-029: a continuation's successor starts the trading day after the predecessor's last day ---------------------
+
+NEW_CUSIP = "22222T202"
+
+
+def _handoff_history(last_trade_day, new_rows, *, new_observations=(), successor="BBGNEW",
+                     delist_date="2026-07-12"):
+    """S ("BBGOLD", TEST, `OLD_CUSIP`) ends on `last_trade_day` as a continuation into X ("BBGNEW", its own CUSIP
+    `NEW_CUSIP`), an observed security first seen in `new_rows` (its CUSIP's fails rows) and `new_observations`."""
+    old_era = TickerEra("TEST", "2007-12-01", "2026-06-30", [Observation("TEST", "2007-12-01", "TEST CO")])
+    new_era = TickerEra("TEST", "2026-07-01", "2026-09-25",
+                        [Observation("TEST", d, "TEST HOLDINGS") for d in new_observations])
+    securities = {
+        "BBGOLD": Security("BBGOLD", 5, "COMMON", "TEST CO", "Common Stock", True, "cusip", eras=[old_era]),
+        "BBGNEW": Security("BBGNEW", 6, "COMMON", "TEST HOLDINGS", "Common Stock", True, "cusip", eras=[new_era]),
+    }
+    ending = _ending("BBGOLD", delist_date, CrspBucket.EXCHANGE_TRANSFER, last_trade_day, successor=successor,
+                     source="ex99_notice")
+    old_rows = [FtdRow(d, OLD_CUSIP, "TEST", "TEST CO", p) for d, p in (("2026-06-01", 10.0), ("2026-06-15", 11.0))]
+    return _history(securities, old_rows + list(new_rows), [ending],
+                    cusips={"BBGOLD": [OLD_CUSIP], "BBGNEW": [NEW_CUSIP]},
+                    listed={"BBGOLD": False, "BBGNEW": True})
+
+
+def _new_rows(*days):
+    return [FtdRow(d, NEW_CUSIP, "TEST", "TEST HOLDINGS", 10.0 + i) for i, d in enumerate(days)]
+
+
+def _first_days_of(history, sec_id="BBGNEW"):
+    return ([r["valid_from"] for r in history.ticker_rows if r["sec_id"] == sec_id],
+            [r["valid_from"] for r in history.cusip_rows if r["sec_id"] == sec_id])
+
+
+def test_a_continuations_successor_starts_the_trading_day_after_the_predecessors_last_day_XOM_2026():
+    """FB-029, Exxon Mobil 2026: the old line's last trade is 2026-06-30 and the holding company's CUSIP has its
+    first fails row on 2026-07-02 (a row is dated by settlement). The stock traded on 2026-07-01, which belonged to
+    no security. The successor's ticker and CUSIP start on the trading day after the predecessor's last day."""
+    history = _handoff_history(date(2026, 6, 30), _new_rows("2026-07-02", "2026-07-09", "2026-07-16"))
+    assert history.end("BBGOLD").day == "2026-06-30"
+    assert _first_days_of(history) == (["2026-07-01"], ["2026-07-01"])
+    assert [r["valid_to"] for r in history.ticker_rows if r["sec_id"] == "BBGOLD"] == ["2026-06-30"]
+
+
+def test_the_day_after_is_a_trading_day_across_a_weekend_NLSN_2015():
+    """Nielsen 2015: the predecessor's last day is Friday 2015-08-28 and the successor's first row is Thursday
+    2015-09-03, three trading days between. The successor starts on Monday 2015-08-31."""
+    history = _handoff_history(date(2015, 8, 28), _new_rows("2015-09-03", "2015-09-10", "2015-09-17"),
+                               delist_date="2015-09-10")
+    assert _first_days_of(history) == (["2015-08-31"], ["2015-08-31"])
+
+
+def test_a_successor_first_observed_before_its_first_fails_row_starts_both_ranges_at_the_handoff_DELL_2018():
+    """Dell 2018: the caller's observation of 2018-12-31 comes before the CUSIP's first fails row of 2019-01-02, and
+    the predecessor's last day is 2018-12-27. The ticker range and the CUSIP range both start on 2018-12-28."""
+    history = _handoff_history(date(2018, 12, 27), _new_rows("2019-01-02", "2019-01-09", "2019-01-16"),
+                               new_observations=("2018-12-31",), delist_date="2019-01-07")
+    assert _first_days_of(history) == (["2018-12-28"], ["2018-12-28"])
+
+
+def test_a_successor_first_seen_the_day_after_or_before_the_predecessors_last_day_keeps_its_start():
+    """Adjacent already, or with history of its own before the handoff: nothing moves."""
+    adjacent = _handoff_history(date(2026, 6, 30), _new_rows("2026-07-01", "2026-07-09", "2026-07-16"))
+    assert _first_days_of(adjacent) == (["2026-07-01"], ["2026-07-01"])
+    earlier = _handoff_history(date(2026, 6, 30), _new_rows("2026-06-23", "2026-07-09", "2026-07-16"))
+    assert _first_days_of(earlier) == (["2026-06-23"], ["2026-06-23"])
+
+
+def test_a_successor_first_seen_past_the_bound_keeps_its_own_start():
+    """Across more than `HANDOFF_START_TRADING_DAYS` trading days nothing says which ticker the stock traded under:
+    the successor starts where it is first seen. The bound's last day still moves."""
+    last = date(2026, 6, 30)
+    at_bound = add_trading_days(last, HANDOFF_START_TRADING_DAYS + 1).isoformat()
+    past = add_trading_days(last, HANDOFF_START_TRADING_DAYS + 2).isoformat()
+    assert _first_days_of(_handoff_history(last, _new_rows(at_bound, "2026-08-20", "2026-08-27"))) \
+        == (["2026-07-01"], ["2026-07-01"])
+    assert _first_days_of(_handoff_history(last, _new_rows(past, "2026-08-20", "2026-08-27"))) == ([past], [past])
+
+
+def _ir_2020(late_ir_rows=()):
+    """Trane and Ingersoll Rand, 2020-03-02: Gardner Denver (GDI) last trades on 2020-02-28 and continues as
+    Ingersoll Rand under IR, first seen on 2020-03-04. Trane held IR until then: its last IR row is dated
+    2020-03-02 and its first TT row 2020-03-03. `late_ir_rows`: more days Trane's old CUSIP fails under IR."""
+    def sec(sid, cik, name, *eras):
+        return Security(sid, cik, "COMMON", name, "Common Stock", True, "cusip", eras=list(eras))
+
+    def era(ticker, first, last, name):
+        return TickerEra(ticker, first, last, [Observation(ticker, first, name)])
+
+    securities = {
+        "BBGTT": sec("BBGTT", 1, "TRANE TECHNOLOGIES PLC", era("IR", "2008-01-16", "2019-12-31", "INGERSOLL-RAND PLC"),
+                     era("TT", "2020-06-30", "2020-06-30", "TRANE TECHNOLOGIES PLC")),
+        "BBGGDI": sec("BBGGDI", 2, "GARDNER DENVER HOLDINGS INC",
+                      era("GDI", "2017-06-30", "2019-12-31", "GARDNER DENVER HOLDINGS INC")),
+        "BBGIR": sec("BBGIR", 2, "INGERSOLL RAND INC", era("IR", "2020-06-30", "2020-06-30", "INGERSOLL RAND INC")),
+    }
+    rows = [FtdRow(d, "G47791101", "IR", "INGERSOLL-RAND PLC", 130.0 + i)
+            for i, d in enumerate(["2020-02-03", "2020-02-18", "2020-03-02", *late_ir_rows])]
+    rows += [FtdRow(d, "G8994E103", "TT", "TRANE TECHNOLOGIES PLC", 100.0 + i)
+             for i, d in enumerate(["2020-03-03", "2020-03-10", "2020-03-17"])]
+    rows += [FtdRow(d, "36555P107", "GDI", "GARDNER DENVER HOLDINGS INC", 35.0 + i)
+             for i, d in enumerate(["2020-02-03", "2020-02-20"])]
+    rows += [FtdRow(d, "45687V106", "IR", "INGERSOLL RAND INC", 30.0 + i)
+             for i, d in enumerate(["2020-03-04", "2020-03-11", "2020-03-18"])]
+    ending = _ending("BBGGDI", "2020-02-27", CrspBucket.EXCHANGE_TRANSFER, date(2020, 2, 28), successor="BBGIR",
+                     source="ex99_notice")
+    return _history(securities, rows, [ending],
+                    cusips={"BBGTT": ["G47791101", "G8994E103"], "BBGGDI": ["36555P107"], "BBGIR": ["45687V106"]},
+                    listed={"BBGTT": True, "BBGGDI": False, "BBGIR": True})
+
+
+def _ticker_spans(history, sec_id):
+    return [(r["ticker"], r["valid_from"], r["valid_to"]) for r in history.ticker_rows if r["sec_id"] == sec_id]
+
+
+def test_a_ticker_passed_at_a_handoff_leaves_its_old_holder_that_day_IR_2020():
+    """FB-029: Ingersoll Rand starts under IR on 2020-03-02, the trading day after Gardner Denver's last day. Trane's
+    last IR row is dated that day, as late as Ingersoll Rand's own first row of 2020-03-04, so it does not keep
+    the ticker: its IR range ends the day before and its TT range starts on the day the ticker passed. No ticker
+    is shared."""
+    history = _ir_2020()
+    assert _ticker_spans(history, "BBGIR") == [("IR", "2020-03-02", None)]
+    assert _ticker_spans(history, "BBGTT") == [("IR", "2008-01-16", "2020-03-01"), ("TT", "2020-03-02", None)]
+    assert ticker_range_review(history.ticker_rows) == []
+
+
+def test_an_old_holder_still_sighted_after_the_takers_first_sighting_keeps_the_ticker_and_is_flagged():
+    """A holder sighted under the ticker on or after the taker's own first sighting is no late row: nothing is
+    clipped and the shared ticker is flagged, as before."""
+    history = _ir_2020(late_ir_rows=("2020-03-05", "2020-03-12"))
+    assert _ticker_spans(history, "BBGIR") == [("IR", "2020-03-02", None)]
+    assert _ticker_spans(history, "BBGTT")[0] == ("IR", "2008-01-16", "2020-03-02")       # not ended the day before
+    assert {i.flag for i in ticker_range_review(history.ticker_rows)} == {"ticker_shared"}
+
+
+def test_only_a_continuation_starts_a_successor():
+    """An ending with no successor, and one whose successor is the security itself (it went on), move nothing."""
+    rows = _new_rows("2026-07-02", "2026-07-09", "2026-07-16")
+    assert _first_days_of(_handoff_history(date(2026, 6, 30), rows, successor=None)) \
+        == (["2026-07-02"], ["2026-07-02"])
+    assert _first_days_of(_handoff_history(date(2026, 6, 30), rows, successor="BBGOLD")) \
+        == (["2026-07-02"], ["2026-07-02"])
+
+
+def test_handoff_start_answers_for_a_security_the_run_adds():
+    """A successor the run adds has its one row built outside the history (`AddedSecurity.history_row`); the run
+    asks the history where it starts. A day the history knows no handoff for is returned as it is."""
+    history, _ = _successor_history(CrspBucket.EXCHANGE_TRANSFER, date(2012, 3, 30), "2012-04-03",
+                                    _test_fails(3, date(2012, 3, 1)), observed_successor=False)
+    assert history.handoff_start("BBGNEW", "2012-04-03") == "2012-04-02"
+    assert history.handoff_start("BBGNEW", "2012-04-02") == "2012-04-02"
+    assert history.handoff_start("BBGNEW", "2012-06-29") == "2012-06-29"
+    assert history.handoff_start("BBGOTHER", "2012-04-03") == "2012-04-03"
 
 
 def test_a_successor_sighting_before_a_confirmed_last_trade_sets_no_start():

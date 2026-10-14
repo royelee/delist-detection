@@ -890,7 +890,17 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `SUCCESSOR_TICKER_LOOKBACK_DAYS`, 30), and a range carried only to the security's next ticker stops the day before
   another security's first day under it (`_clip_at_takeovers`, over the built ranges: its own last sighting under it
   is earlier, the range is not its security's end; MSG 2015): two conditions, kept apart (the plan's step 5 log says
-  why). A security with an ending that ends it whose ticker a successor took is not listed today (AON 2012). A
+  why). A continuation's successor with no history by its predecessor's last day starts on the trading day after
+  it, its first ticker range and its first CUSIP range both, when its first sighting comes within
+  `HANDOFF_START_TRADING_DAYS`, 10, trading days of that day (`handoff_start`, FB-029: the first sighting is a fails
+  row, dated by settlement, or the caller's observation, so 17 of 93 successors on the full input began one to
+  three trading days late and those days belonged to no security; the predecessor's end does not move; a
+  security the run adds asks the same method for its one row, `pipeline._history_rows`). A range started at a
+  handoff starts before its security's own first sighting, so `_clip_at_takeovers` reads another holder of the
+  ticker as keeping it only when it is sighted under it on or after that first sighting, and starts the clipped
+  holder's next range on the day the ticker passed (Trane 2020: its last IR row is dated 2020-03-02, the day
+  Ingersoll Rand, the former Gardner Denver, took IR; Trane's IR ends the day before and its TT starts that day).
+  A security with an ending that ends it whose ticker a successor took is not listed today (AON 2012). A
   security with no ending that ends it, not listed today, closes at its last sighting - unless that sighting is a
   fails row under an own ticker within `DATA_EDGE_TRADING_DAYS` (2) trading days of `FtdIndex.files_end()`, the fails
   data's last day (FB-004: DIS, whose issuer CIK lists nothing): it is still trading, its history stays open; so is a

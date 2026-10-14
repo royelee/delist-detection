@@ -1419,14 +1419,16 @@ def _history_rows(ctx: _RunContext, history: Histories,
     (`Histories.ticker_rows`/`cusip_rows`: up to the end day of the last delisting that ends it, unless it is listed
     today), then one ticker row for each security the run adds, built directly (`AddedSecurity.history_row`:
     `ranges_from_sightings`' filter that drops single-value FTD sightings would otherwise drop a successor's lone
-    8-K12B-dated sighting), open while OpenFIGI and EDGAR list it today."""
+    8-K12B-dated sighting), open while OpenFIGI and EDGAR list it today. An added security that continues another
+    starts where the history says a continuation's successor starts (`Histories.handoff_start`, FB-029)."""
     clients = ctx.clients
     th_rows = list(history.ticker_rows)
     for sid, a in added.items():
         is_listed = bool(listed_today(clients.figi, sid, edgar=clients.edgar, cik=a.security.issuer_cik,
                                       tickers=[a.ticker]))
         exch = issuer_exchange(clients.edgar, a.security.issuer_cik, a.ticker) if is_listed else None
-        th_rows.append(a.history_row(listed=is_listed, exchange=exch))
+        row = a.history_row(listed=is_listed, exchange=exch)
+        th_rows.append({**row, "valid_from": history.handoff_start(sid, row["valid_from"])})     # FB-029
     return th_rows, list(history.cusip_rows)
 
 

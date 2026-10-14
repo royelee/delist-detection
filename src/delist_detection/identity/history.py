@@ -304,25 +304,41 @@ def _security_rows(sec: Security, sightings: Sequence[Sighting], cusip_sightings
 
 
 def _clip_at_takeovers(th_rows: list[dict], sightings: Mapping[str, Sequence[Sighting]],
-                       ends: Mapping[str, str | None]) -> list[dict]:
+                       ends: Mapping[str, str | None],
+                       first_seen: Mapping[tuple[str, str], str] = {}) -> list[dict]:
     """`th_rows` with a range that runs into another security's first day under its ticker ended the day before it,
     when its own security was last sighted under the ticker before that day and the range does not end at its
     security's end: the range was only carried forward to the security's next ticker (MSG 2015: the old line's MSG
     ran to the day before MSGN's first row, one day into the new MSG's). A ticker a security keeps sighting is never
     clipped (a shared ticker stays `ticker_shared`'s to flag). The second of the two takeover conditions
-    (`Histories`): this one reads the built ranges of every security, the successor's reads the endings."""
+    (`Histories`): this one reads the built ranges of every security, the successor's reads the endings.
+
+    A taker whose range starts at a handoff (`Histories.handoff_start`, FB-029) starts before its own first
+    sighting (`first_seen`: (sec_id, ticker) -> that day). The other security's rows under the ticker in the days
+    between are as late as the taker's own (fails rows are dated by settlement), so it keeps the ticker only if it
+    is sighted under it on or after the taker's first sighting. Clipped for such a taker, its next range starts on
+    the taker's first day: the ticker passed that day, so the security traded under its next one from then (Trane
+    2020: its last IR row is dated 2020-03-02, the day Ingersoll Rand, the former Gardner Denver, took IR; Trane
+    is TT from that day)."""
     first: dict[str, list[tuple[str, str]]] = defaultdict(list)      # ticker -> [(valid_from, sec_id)]
     for r in th_rows:
         first[r["ticker"]].append((r["valid_from"], r["sec_id"]))
     out = []
+    moved: dict[tuple[str, str], str] = {}      # (sec_id, the day after a clipped range's old end) -> the taker's day
     for r in th_rows:
         to = r["valid_to"]
         if to is not None and to != ends.get(r["sec_id"]):
-            later = sorted(f for f, sid in first[r["ticker"]] if sid != r["sec_id"] and r["valid_from"] < f <= to)
-            if later and not any(g.value == r["ticker"] and g.day >= later[0] for g in sightings.get(r["sec_id"], ())):
-                r = {**r, "valid_to": (date.fromisoformat(later[0]) - timedelta(days=1)).isoformat()}
+            later = sorted((f, sid) for f, sid in first[r["ticker"]] if sid != r["sec_id"] and r["valid_from"] < f <= to)
+            if later:
+                day, taker = later[0]
+                seen = first_seen.get((taker, r["ticker"]), day)
+                if not any(g.value == r["ticker"] and g.day >= seen for g in sightings.get(r["sec_id"], ())):
+                    if seen != day:
+                        moved[(r["sec_id"], (date.fromisoformat(to) + timedelta(days=1)).isoformat())] = day
+                    r = {**r, "valid_to": (date.fromisoformat(day) - timedelta(days=1)).isoformat()}
         out.append(r)
-    return out
+    return [{**r, "valid_from": moved[(r["sec_id"], r["valid_from"])]} if (r["sec_id"], r["valid_from"]) in moved else r
+            for r in out]
 
 
 def _overlaps(a: dict, b: dict) -> bool:
@@ -453,6 +469,11 @@ DATA_EDGE_TRADING_DAYS = 2
 # A handoff's window (`handoffs.find_handoffs`) and a successor's: another security's first sighting under a ticker at
 # most this long after the old one's last (COHR: 74); a later one is a recycled ticker.
 TAKEOVER_DAYS = 120
+# A continuation's successor first seen this many trading days after its predecessor's last day, or fewer, starts
+# on the trading day after it (FB-029). The fails files date a row by settlement and hold one only on a day a fail
+# was open, so a new CUSIP's first row comes after its first trade: one to three trading days at the 17 handoffs
+# the rule was written for.
+HANDOFF_START_TRADING_DAYS = 10
 # with no confirmed last trade, a successor's first row may precede the delist date (STX: 9 days)
 SUCCESSOR_TICKER_LOOKBACK_DAYS = 30
 
@@ -567,10 +588,31 @@ class Histories:
                 # history; sighted at the fails data's last day it is still trading, whatever the listing answers
                 # (Disney, FB-004): it stays open.
                 self._ends_of[sid] = SecurityEnd(listed=is_listed or (last is None and self._at_data_edge(sid)))
+        # FB-029: each continuation's successor -> the trading day after its predecessor's last day, ascending
+        handoffs: dict[str, list[str]] = defaultdict(list)
+        for sid, e in self._final.items():
+            day = self._ends_of[sid].day
+            if e.successor and e.successor != sid and day is not None:
+                handoffs[e.successor].append(next_trading_day(date.fromisoformat(day)).isoformat())
+        self._handoffs = {x: sorted(days) for x, days in handoffs.items()}
 
     def end(self, sec_id: str) -> SecurityEnd:
         """Where the security's history ends (a security the history was not built over: open, not listed)."""
         return self._ends_of.get(sec_id, SecurityEnd())
+
+    def handoff_start(self, sec_id: str, first: str) -> str:
+        """The day the history of a security first seen on `first` starts (FB-029). A continuation says the
+        predecessor's shares became the successor's, so a successor with no history by the predecessor's last day
+        starts on the trading day after it, when `first` comes after that day and within
+        `HANDOFF_START_TRADING_DAYS` trading days of it: its first sighting is a fails row, dated by settlement, or
+        the caller's observation, and the stock traded on the days between (XOM 2026: the old line's last trade is
+        2026-06-30, the holding company's first row 2026-07-02). The predecessor's end does not move. Of several
+        predecessors, the first whose handoff fits. Any other security, and a successor first seen later (across a
+        longer gap nothing says which ticker it traded under), starts on `first`."""
+        for day in self._handoffs.get(sec_id, ()):
+            if day < first <= add_trading_days(date.fromisoformat(day), HANDOFF_START_TRADING_DAYS).isoformat():
+                return day
+        return first
 
     @property
     def ticker_rows(self) -> list[dict]:
@@ -585,6 +627,7 @@ class Histories:
     @cached_property
     def _rows(self) -> tuple[list[dict], list[dict]]:
         th_rows, ch_rows = [], []
+        first_seen: dict[tuple[str, str], str] = {}     # a range started at a handoff: its own first sighting
         for sid, s in self._securities.items():
             end = self._ends_of[sid]
             last = self._final.get(sid)
@@ -593,11 +636,22 @@ class Histories:
                 s, self._own(sid), cusip_sightings(s, self._ftd, self._cusips.get(sid, []), starts),
                 listed=end.listed, end=end.day, end_exchange=last.exchange if last else None,
                 exchange_today=lambda ticker, s=s: self._exchange_today(s, ticker), successor_starts=starts)
-            th_rows += th
-            ch_rows += ch
+            started = self._from_handoff(sid, th)
+            first_seen.update({(sid, a["ticker"]): a["valid_from"] for a, b in zip(th, started) if a is not b})
+            th_rows += started
+            ch_rows += self._from_handoff(sid, ch)
         th_rows = _clip_at_takeovers(th_rows, {sid: self._own(sid) for sid in self._securities},
-                                     {sid: e.day for sid, e in self._ends_of.items()})
+                                     {sid: e.day for sid, e in self._ends_of.items()}, first_seen)
         return th_rows, ch_rows
+
+    def _from_handoff(self, sec_id: str, rows: list[dict]) -> list[dict]:
+        """One security's ticker or CUSIP rows with the first of them started where its history starts
+        (`handoff_start`)."""
+        if not rows or sec_id not in self._handoffs:
+            return rows
+        i = min(range(len(rows)), key=lambda i: rows[i]["valid_from"])
+        start = self.handoff_start(sec_id, rows[i]["valid_from"])
+        return rows if start == rows[i]["valid_from"] else [*rows[:i], {**rows[i], "valid_from": start}, *rows[i + 1:]]
 
     def _at_data_edge(self, sec_id: str) -> bool:
         """Whether the security's last fails row under an own ticker (an observation is the caller's snapshot, not
